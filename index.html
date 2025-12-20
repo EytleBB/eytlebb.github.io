@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3ytle's Space</title>
+    <style>
+        /* --- 全局设置 --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #ffffff;
+            overflow: hidden;
+        }
+
+        /* 主容器 */
+        #main-container {
+            width: 100%;
+            height: 200vh;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+        }
+
+        /* --- 核心视觉：蓝紫流动 --- */
+        .blue-purple-text, .btn-style {
+            background: linear-gradient(135deg, #2196f3, #9c27b0, #00bcd4, #3f51b5, #673ab7, #2196f3);
+            background-size: 300% 300%;
+            animation: gradientFlow 8s ease infinite;
+        }
+
+        .text-clip {
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes shimmer {
+            0% { filter: brightness(100%); }
+            100% { filter: brightness(130%) hue-rotate(10deg); }
+        }
+
+        .cursor {
+            display: none;
+            font-weight: 300;
+            margin-left: 2px;
+            background: linear-gradient(to bottom, #2196f3, #9c27b0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: blink 0.8s step-end infinite;
+        }
+        
+        @keyframes blink { from, to { opacity: 1; } 50% { opacity: 0; } }
+
+        /* --- 第一屏 --- */
+        #hero-section {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            padding-left: 10%;
+            position: relative;
+        }
+
+        .title-container h1 { font-size: 6rem; margin: 0; font-weight: 800; line-height: 1.1; letter-spacing: -2px; }
+        .title-container h2 { font-size: 3.5rem; margin: 10px 0 0 0; font-weight: 300; letter-spacing: -1px; }
+
+        /* 底部双箭头 */
+        .bottom-nav-container {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            cursor: pointer; z-index: 10; display: flex; flex-direction: column; align-items: center;
+            opacity: 0.8; transition: opacity 0.3s, transform 0.3s;
+        }
+        .bottom-nav-container:hover { opacity: 1; transform: translateX(-50%) translateY(-5px); }
+        .arrow-shape {
+            width: 30px; height: 30px;
+            border-top: 4px solid #9c27b0; border-left: 4px solid #2196f3;
+            transform: rotate(45deg); margin-bottom: -15px;
+            border-image: linear-gradient(to right, #2196f3, #9c27b0) 1;
+        }
+
+        /* --- 第二屏：资源下载页 --- */
+        #info-section {
+            height: 100vh;
+            background-color: #fcfcfc;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 顶部返回箭头 */
+        .top-nav-container {
+            position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
+            cursor: pointer; padding: 20px; z-index: 10;
+        }
+        .top-nav-container:hover .arrow-down { transform: rotate(225deg) translate(5px, 5px); }
+        .arrow-down {
+            width: 30px; height: 30px;
+            border-top: 4px solid #9c27b0; border-left: 4px solid #2196f3;
+            transform: rotate(225deg);
+            border-image: linear-gradient(to right, #2196f3, #9c27b0) 1;
+            transition: transform 0.3s;
+        }
+
+        /* --- 资源列表容器 --- */
+        #resource-list {
+            display: flex;
+            flex-direction: column;
+            gap: 25px; /* 按钮之间的间距 */
+            width: 80%;
+            max-width: 600px;
+        }
+
+        /* 按钮样式 */
+        .download-card {
+            position: relative;
+            padding: 2px; /* 边框厚度 */
+            border-radius: 12px;
+            /* 这里使用背景渐变来实现彩色边框效果 */
+            background: linear-gradient(135deg, #2196f3, #9c27b0, #00bcd4, #3f51b5); 
+            background-size: 300% 300%;
+            animation: gradientFlow 8s ease infinite;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none; /* 去掉链接下划线 */
+        }
+
+        .download-card:hover {
+            transform: scale(1.02); /* 悬停轻微放大 */
+        }
+
+        /* 按钮内部白色区域 */
+        .card-inner {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-meta {
+            font-size: 0.85rem;
+            color: #666;
+            font-family: monospace; /* 代码风格字体显示日期 */
+        }
+
+        .download-icon {
+            font-size: 1.5rem;
+            font-weight: bold;
+            /* 图标也是渐变色 */
+            background: linear-gradient(135deg, #2196f3, #9c27b0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 手机适配 */
+        @media (max-width: 768px) {
+            .title-container h1 { font-size: 3rem; }
+            .title-container h2 { font-size: 1.8rem; }
+            #hero-section { padding-left: 5%; }
+            .card-inner { padding: 15px 20px; }
+            .file-name { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        
+        <section id="hero-section">
+            <div class="title-container">
+                <h1>
+                    <span id="text-1" class="blue-purple-text text-clip"></span><span id="cursor-1" class="cursor">_</span>
+                </h1>
+                <h2>
+                    <span id="text-2" class="blue-purple-text text-clip"></span><span id="cursor-2" class="cursor">_</span>
+                </h2>
+            </div>
+            <div class="bottom-nav-container" id="goDownBtn">
+                <div class="arrow-shape"></div>
+                <div class="arrow-shape"></div>
+            </div>
+        </section>
+
+        <section id="info-section">
+            <div class="top-nav-container" id="goUpBtn">
+                <div class="arrow-down"></div>
+            </div>
+
+            <div id="resource-list">
+                </div>
+        </section>
+
+    </div>
+
+    <script>
+        // ================= 配置区域 (在这里添加你的文件) =================
+        const resources = [
+            {
+                name: "Minecraft 1.21.8 生存存档",
+                date: "Updated: 2025-05-20 | Size: ~8GB",
+                // 重点：8GB文件请填网盘链接，不要填相对路径
+                url: "https://pan.baidu.com/s/你的网盘链接" 
+            },
+            {
+                name: "730 文件夹",
+                date: "Updated: 2025-12-20",
+                // 小文件可以填相对路径，比如 "./files/730.zip"
+                url: "./files/730.zip" 
+            }
+            // 以后想加新按钮，复制上面的花括号部分粘贴在下面即可
+        ];
+        // =============================================================
+
+        // --- 打字机逻辑 (保持不变) ---
+        const content1 = "This is 3ytle";
+        const content2 = "这里是3e";
+        const typingSpeed = 100; 
+        const restartDelay = 10000; 
+
+        const elText1 = document.getElementById('text-1');
+        const elCursor1 = document.getElementById('cursor-1');
+        const elText2 = document.getElementById('text-2');
+        const elCursor2 = document.getElementById('cursor-2');
+        const mainContainer = document.getElementById('main-container');
+        const resourceListEl = document.getElementById('resource-list');
+
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function typeText(text, textElement, cursorElement) {
+            cursorElement.style.display = 'inline-block';
+            for (let i = 0; i < text.length; i++) {
+                textElement.innerHTML += text.charAt(i);
+                await wait(typingSpeed);
+            }
+        }
+
+        async function runAnimationLoop() {
+            while (true) {
+                elText1.innerHTML = ""; elText2.innerHTML = "";
+                elCursor1.style.display = 'none'; elCursor2.style.display = 'none';
+                await wait(500);
+                await typeText(content1, elText1, elCursor1);
+                elCursor1.style.display = 'none';
+                await typeText(content2, elText2, elCursor2);
+                await wait(restartDelay);
+            }
+        }
+
+        // --- 核心：动态生成下载按钮 ---
+        function renderResources() {
+            resourceListEl.innerHTML = ""; // 清空
+            resources.forEach(item => {
+                // 创建 A 标签
+                const link = document.createElement('a');
+                link.href = item.url;
+                link.className = 'download-card';
+                link.target = "_blank"; // 在新标签页打开
+
+                // 内部 HTML 结构
+                link.innerHTML = `
+                    <div class="card-inner">
+                        <div class="file-info">
+                            <span class="file-name">${item.name}</span>
+                            <span class="file-meta">${item.date}</span>
+                        </div>
+                        <div class="download-icon">↓</div>
+                    </div>
+                `;
+                resourceListEl.appendChild(link);
+            });
+        }
+
+        // 页面加载启动
+        window.onload = () => {
+            runAnimationLoop();
+            renderResources(); // 生成按钮
+        };
+
+        // 导航交互
+        document.getElementById('goDownBtn').addEventListener('click', () => {
+            mainContainer.style.transform = 'translateY(-100vh)';
+        });
+        document.getElementById('goUpBtn').addEventListener('click', () => {
+            mainContainer.style.transform = 'translateY(0)';
+        });
+
+    </script>
+</body>
+</html>
