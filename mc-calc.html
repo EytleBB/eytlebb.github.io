@@ -2,109 +2,81 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Minecraft 要塞定位器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Stronghold Finder (Fixed)</title>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         :root {
-            --mc-bg: #313131;
-            --mc-frame: #4D4D4D;
+            --mc-bg: #202020;
+            --mc-panel: #313131;
+            --mc-btn: #7E7E7E;
             --mc-green: #55FF55;
-            --mc-yellow: #FFFF55;
-            --mc-text: #FFFFFF;
-            --mc-border-light: #7E7E7E;
-            --mc-border-dark: #1E1E1E;
+            --mc-red: #FF5555;
+            --mc-white: #FFFFFF;
         }
-
         body {
             background-color: #121212;
-            color: var(--mc-text);
-            font-family: 'VT323', 'Courier New', monospace;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-
-        .container {
-            background-color: var(--mc-bg);
-            border: 4px solid var(--mc-border-dark);
-            box-shadow: inset 4px 4px 0 var(--mc-border-light);
-            padding: 30px;
-            width: 90%;
-            max-width: 450px;
-        }
-
-        h1 {
-            text-align: center;
-            color: var(--mc-green);
-            text-shadow: 2px 2px #000;
-            margin-top: 0;
-        }
-
-        .input-group {
-            border: 2px solid var(--mc-border-light);
-            padding: 15px;
-            margin-bottom: 20px;
-            background: rgba(0,0,0,0.2);
-        }
-
-        .input-group legend {
-            color: var(--mc-yellow);
-            padding: 0 10px;
-        }
-
-        .row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        label {
-            width: 80px;
-            font-size: 1.2rem;
-        }
-
-        input {
-            background: #000;
-            border: 2px solid var(--mc-border-light);
-            color: var(--mc-green);
-            padding: 5px 10px;
+            color: var(--mc-white);
             font-family: 'VT323', monospace;
-            font-size: 1.2rem;
-            flex-grow: 1;
-            outline: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
         }
-
+        .container {
+            background-color: var(--mc-panel);
+            border: 4px solid #000;
+            padding: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 0 0 4px #555;
+        }
+        h1 { color: var(--mc-green); text-align: center; margin-top: 0; text-shadow: 2px 2px #000; }
+        .row { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
+        .row label { width: 40px; text-align: right; font-size: 1.2rem; }
+        input {
+            flex: 1;
+            background: #000;
+            border: 2px solid #555;
+            color: var(--mc-white);
+            padding: 5px;
+            font-family: inherit;
+            font-size: 1.2rem;
+        }
+        .section-title { color: #FFFF55; border-bottom: 2px solid #555; margin: 15px 0 10px 0; }
+        
         button {
             width: 100%;
-            padding: 12px;
-            background-color: #7E7E7E;
-            color: white;
-            border: 4px solid var(--mc-border-dark);
-            box-shadow: inset -4px -4px 0px #4D4D4D, inset 4px 4px 0px #AAAAAA;
-            cursor: pointer;
-            font-family: 'VT323', monospace;
+            margin-top: 20px;
+            padding: 10px;
+            font-family: inherit;
             font-size: 1.5rem;
+            background: var(--mc-btn);
+            color: #fff;
+            border: 4px solid #000;
+            cursor: pointer;
             text-shadow: 2px 2px #000;
+            box-shadow: inset 4px 4px 0 rgba(255,255,255,0.2), inset -4px -4px 0 rgba(0,0,0,0.2);
         }
-
-        button:active {
-            box-shadow: inset 4px 4px 0px #4D4D4D;
-            transform: translateY(2px);
-        }
-
+        button:active { transform: translateY(2px); }
+        
         #result {
             margin-top: 20px;
             padding: 15px;
-            border: 2px dashed var(--mc-yellow);
-            min-height: 100px;
-            white-space: pre-wrap;
-            font-size: 1.2rem;
-            line-height: 1.4;
+            background: rgba(0,0,0,0.3);
+            border: 2px dashed #777;
+            font-size: 1.3rem;
+            white-space: pre-line;
         }
-
-        .divider { border-top: 2px solid var(--mc-border-light); margin: 10px 0; }
+        
+        /* 可视化画布样式 */
+        #visualizer {
+            margin-top: 20px;
+            background: #000;
+            border: 2px solid var(--mc-green);
+            display: none; /* 默认隐藏，计算成功后显示 */
+        }
     </style>
 </head>
 <body>
@@ -112,27 +84,25 @@
 <div class="container">
     <h1>STRONGHOLD FINDER</h1>
 
-    <div class="input-group">
-        <div style="color: var(--mc-yellow); margin-bottom: 10px;">第一次投掷 (Point 1)</div>
-        <div class="row"><label>X:</label><input type="number" id="x1" step="0.1"></div>
-        <div class="row"><label>Z:</label><input type="number" id="z1" step="0.1"></div>
-        <div class="row"><label>Yaw:</label><input type="number" id="yaw1" step="0.1"></div>
-    </div>
+    <div class="section-title">Point 1 (第一次投掷)</div>
+    <div class="row"><label>X:</label><input type="number" id="x1" placeholder="-123.5"></div>
+    <div class="row"><label>Z:</label><input type="number" id="z1" placeholder="456.2"></div>
+    <div class="row"><label>Yaw:</label><input type="number" id="yaw1" placeholder="-90.5"></div>
 
-    <div class="input-group">
-        <div style="color: var(--mc-yellow); margin-bottom: 10px;">第二次投掷 (Point 2)</div>
-        <div class="row"><label>X:</label><input type="number" id="x2" step="0.1"></div>
-        <div class="row"><label>Z:</label><input type="number" id="z2" step="0.1"></div>
-        <div class="row"><label>Yaw:</label><input type="number" id="yaw2" step="0.1"></div>
-    </div>
+    <div class="section-title">Point 2 (第二次投掷)</div>
+    <div class="row"><label>X:</label><input type="number" id="x2"></div>
+    <div class="row"><label>Z:</label><input type="number" id="z2"></div>
+    <div class="row"><label>Yaw:</label><input type="number" id="yaw2"></div>
 
-    <button onclick="calculate()">[ 开始计算 ]</button>
-
-    <div id="result">等待输入坐标数据...</div>
+    <button onclick="calculate()">[ 计 算 坐 标 ]</button>
+    
+    <div id="result"></div>
+    <canvas id="visualizer" width="460" height="300"></canvas>
 </div>
 
 <script>
     function calculate() {
+        // 1. 获取输入
         const x1 = parseFloat(document.getElementById('x1').value);
         const z1 = parseFloat(document.getElementById('z1').value);
         const yaw1 = parseFloat(document.getElementById('yaw1').value);
@@ -140,43 +110,146 @@
         const z2 = parseFloat(document.getElementById('z2').value);
         const yaw2 = parseFloat(document.getElementById('yaw2').value);
 
-        if (isNaN(x1) || isNaN(z1) || isNaN(yaw1) || isNaN(x2) || isNaN(z2) || isNaN(isNaN(yaw2))) {
-            alert("请输入完整的数值！");
+        const resBox = document.getElementById('result');
+        const canvas = document.getElementById('visualizer');
+
+        if ([x1, z1, yaw1, x2, z2, yaw2].some(isNaN)) {
+            resBox.innerHTML = "<span style='color:var(--mc-red)'>❌ 请填写所有数值！</span>";
             return;
         }
 
-        // MC Yaw 转换
+        // 2. 核心数学逻辑 (修正版)
+        // MC Yaw: 0=South(+Z), 90=West(-X), 180=North(-Z), -90=East(+X)
+        // 转换为弧度
         const r1 = yaw1 * Math.PI / 180;
         const r2 = yaw2 * Math.PI / 180;
 
-        const dx1 = -Math.sin(r1), dz1 = Math.cos(r1);
-        const dx2 = -Math.sin(r2), dz2 = Math.cos(r2);
+        // MC 方向向量 (单位向量)
+        // x增量 = -sin(yaw), z增量 = cos(yaw)
+        const v1x = -Math.sin(r1), v1z = Math.cos(r1);
+        const v2x = -Math.sin(r2), v2z = Math.cos(r2);
 
-        const det = dx2 * dz1 - dx1 * dz2;
+        // 使用二维向量叉乘求交点 (P1 + t*V1 = P2 + u*V2)
+        // t = ((P2 - P1) x V2) / (V1 x V2)
+        // 二维叉乘 A x B = Ax*Bz - Az*Bx
+        
+        const dx = x2 - x1;
+        const dz = z2 - z1;
 
+        // 分母: V1 x V2
+        const det = v1x * v2z - v1z * v2x;
+
+        // 检查平行
         if (Math.abs(det) < 0.0001) {
-            document.getElementById('result').innerHTML = "<span style='color:red'>错误: 轨迹平行，请增加投掷间距。</span>";
+            resBox.innerHTML = "<span style='color:var(--mc-red)'>⚠️ 轨迹平行或重合，无法计算交点。<br>请移动至少100格并确保角度变化明显。</span>";
+            canvas.style.display = 'none';
             return;
         }
 
-        const t1 = ((x2 - x1) * dz2 - (z2 - z1) * dx2) / det;
-        const tx = x1 + t1 * dx1;
-        const tz = z1 + t1 * dz1;
+        // 分子: (P2 - P1) x V2 = dx*v2z - dz*v2x
+        const t = (dx * v2z - dz * v2x) / det;
 
-        const distOw = Math.sqrt(Math.pow(tx - x2, 2) + Math.pow(tz - z2, 2));
-        const nx = tx / 8;
-        const nz = tz / 8;
+        // 3. 计算结果
+        // 目标坐标
+        const targetX = x1 + t * v1x;
+        const targetZ = z1 + t * v1z;
+        
+        // 距离 (相对于玩家当前位置 P2)
+        const dist = Math.sqrt(Math.pow(targetX - x2, 2) + Math.pow(targetZ - z2, 2));
 
-        let resHtml = `
-<span style="color:var(--mc-green)">【主世界 Overworld】</span>
-坐标: X:${Math.round(tx)}  Z:${Math.round(tz)}
-距离: ${Math.round(distOw)} blocks
-<div class="divider"></div>
-<span style="color:var(--mc-green)">【下界 Nether】</span>
-坐标: X:${Math.round(nx)}  Z:${Math.round(nz)}
-距离: ${Math.round(distOw/8)} blocks
+        // 4. 显示结果
+        resBox.innerHTML = `
+            <span style="color:var(--mc-green)">✅ 主世界目标 (Overworld)</span>
+            X: <b>${Math.round(targetX)}</b>
+            Z: <b>${Math.round(targetZ)}</b>
+            距离: ${Math.round(dist)} 格
+            
+            <hr style="border:1px dashed #555">
+            <span style="color:#FF5555">🔥 下界传送门 (Nether)</span>
+            X: <b>${Math.round(targetX / 8)}</b>
+            Z: <b>${Math.round(targetZ / 8)}</b>
         `;
-        document.getElementById('result').innerHTML = resHtml;
+
+        // 5. 调用可视化绘图
+        drawVisuals(x1, z1, x2, z2, targetX, targetZ);
+    }
+
+    function drawVisuals(x1, z1, x2, z2, tx, tz) {
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        canvas.style.display = 'block';
+
+        // 清空画布
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 自动缩放逻辑：找出包含三个点(P1, P2, Target)的边界
+        const padding = 40;
+        const minX = Math.min(x1, x2, tx);
+        const maxX = Math.max(x1, x2, tx);
+        const minZ = Math.min(z1, z2, tz);
+        const maxZ = Math.max(z1, z2, tz);
+
+        const rangeX = maxX - minX || 1;
+        const rangeZ = maxZ - minZ || 1;
+        
+        // 保持比例
+        const scale = Math.min(
+            (canvas.width - padding * 2) / rangeX,
+            (canvas.height - padding * 2) / rangeZ
+        );
+
+        // 坐标映射函数 (将 MC 坐标映射到 Canvas 坐标)
+        // Canvas Y轴向下，MC Z轴向下(南)，所以方向一致，不需要反转Y轴，只需要平移缩放
+        function toCanvas(x, z) {
+            return {
+                x: padding + (x - minX) * scale,
+                y: padding + (z - minZ) * scale
+            };
+        }
+
+        const p1 = toCanvas(x1, z1);
+        const p2 = toCanvas(x2, z2);
+        const pt = toCanvas(tx, tz);
+
+        // 绘制网格背景
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let i=0; i<canvas.width; i+=20) { ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); }
+        for(let i=0; i<canvas.height; i+=20) { ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); }
+        ctx.stroke();
+
+        // 绘制射线 1 (黄色)
+        ctx.strokeStyle = '#FFFF55';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+
+        // 绘制射线 2 (蓝色)
+        ctx.strokeStyle = '#55FFFF';
+        ctx.beginPath();
+        ctx.moveTo(p2.x, p2.y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+
+        // 绘制起点 P1
+        ctx.fillStyle = '#FFFF55';
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillText("P1", p1.x + 5, p1.y - 5);
+
+        // 绘制起点 P2
+        ctx.fillStyle = '#55FFFF';
+        ctx.beginPath(); ctx.arc(p2.x, p2.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillText("P2", p2.x + 5, p2.y - 5);
+
+        // 绘制目标点 Target
+        ctx.fillStyle = '#55FF55';
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI*2); ctx.fill();
+        ctx.font = "16px monospace";
+        ctx.fillText("要塞", pt.x + 10, pt.y);
     }
 </script>
 
