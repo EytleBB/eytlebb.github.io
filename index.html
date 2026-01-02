@@ -217,26 +217,27 @@
 
     </div>
 
-    <script>
+<script>
         // ================= 配置区域 (在这里添加你的文件) =================
         const resources = [
             {
                 name: "Minecraft 1.21.8 生存存档",
                 date: "--",
-                // 重点：8GB文件请填网盘链接，不要填相对路径
-                url: "https://pan.baidu.com/s/你的网盘链接" 
+                url: "https://pan.baidu.com/s/你的网盘链接",
+                icon: "↓"  // 这是一个下载资源，使用向下箭头
             },
             {
                 name: "730 文件夹",
                 date: "Updated: 2025-12-20",
-                // 小文件可以填相对路径，比如 "./files/730.zip"
-                url: "./files/730.zip" 
+                url: "./files/730.zip",
+                icon: "↓"  // 这也是下载资源
             },
             {
                 name: "简单测眼",
-                url: "./mc-calc.html"
+                date: "Web Tool", // 可以改个日期或者备注
+                url: "./mc-calc.html",
+                icon: "→"  // ★ 修改这里：这是一个网页跳转，改为向右箭头，或者填 "" 留空
             }
-            // 以后想加新按钮，复制上面的花括号部分粘贴在下面即可
         ];
         // =============================================================
 
@@ -275,24 +276,25 @@
             }
         }
 
-        // --- 核心：动态生成下载按钮 ---
+        // --- 核心：动态生成下载按钮 (已修改支持自定义图标) ---
         function renderResources() {
             resourceListEl.innerHTML = ""; // 清空
             resources.forEach(item => {
-                // 创建 A 标签
                 const link = document.createElement('a');
                 link.href = item.url;
                 link.className = 'download-card';
-                link.target = "_blank"; // 在新标签页打开
+                link.target = "_blank"; 
 
-                // 内部 HTML 结构
+                // 如果 icon 是空字符串，就不显示那个 div，或者显示空
+                const iconHtml = item.icon ? `<div class="download-icon">${item.icon}</div>` : '';
+
                 link.innerHTML = `
                     <div class="card-inner">
                         <div class="file-info">
                             <span class="file-name">${item.name}</span>
                             <span class="file-meta">${item.date}</span>
                         </div>
-                        <div class="download-icon">↓</div>
+                        ${iconHtml}
                     </div>
                 `;
                 resourceListEl.appendChild(link);
@@ -302,7 +304,7 @@
         // 页面加载启动
         window.onload = () => {
             runAnimationLoop();
-            renderResources(); // 生成按钮
+            renderResources(); 
         };
 
         // 导航交互
@@ -317,4 +319,5 @@
 </body>
 
 </html>
+
 
