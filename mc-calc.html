@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Minecraft 要塞定位器</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --mc-bg: #313131;
+            --mc-frame: #4D4D4D;
+            --mc-green: #55FF55;
+            --mc-yellow: #FFFF55;
+            --mc-text: #FFFFFF;
+            --mc-border-light: #7E7E7E;
+            --mc-border-dark: #1E1E1E;
+        }
+
+        body {
+            background-color: #121212;
+            color: var(--mc-text);
+            font-family: 'VT323', 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: var(--mc-bg);
+            border: 4px solid var(--mc-border-dark);
+            box-shadow: inset 4px 4px 0 var(--mc-border-light);
+            padding: 30px;
+            width: 90%;
+            max-width: 450px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--mc-green);
+            text-shadow: 2px 2px #000;
+            margin-top: 0;
+        }
+
+        .input-group {
+            border: 2px solid var(--mc-border-light);
+            padding: 15px;
+            margin-bottom: 20px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .input-group legend {
+            color: var(--mc-yellow);
+            padding: 0 10px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        label {
+            width: 80px;
+            font-size: 1.2rem;
+        }
+
+        input {
+            background: #000;
+            border: 2px solid var(--mc-border-light);
+            color: var(--mc-green);
+            padding: 5px 10px;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            flex-grow: 1;
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #7E7E7E;
+            color: white;
+            border: 4px solid var(--mc-border-dark);
+            box-shadow: inset -4px -4px 0px #4D4D4D, inset 4px 4px 0px #AAAAAA;
+            cursor: pointer;
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px #000;
+        }
+
+        button:active {
+            box-shadow: inset 4px 4px 0px #4D4D4D;
+            transform: translateY(2px);
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px dashed var(--mc-yellow);
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-size: 1.2rem;
+            line-height: 1.4;
+        }
+
+        .divider { border-top: 2px solid var(--mc-border-light); margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>STRONGHOLD FINDER</h1>
+
+    <div class="input-group">
+        <div style="color: var(--mc-yellow); margin-bottom: 10px;">第一次投掷 (Point 1)</div>
+        <div class="row"><label>X:</label><input type="number" id="x1" step="0.1"></div>
+        <div class="row"><label>Z:</label><input type="number" id="z1" step="0.1"></div>
+        <div class="row"><label>Yaw:</label><input type="number" id="yaw1" step="0.1"></div>
+    </div>
+
+    <div class="input-group">
+        <div style="color: var(--mc-yellow); margin-bottom: 10px;">第二次投掷 (Point 2)</div>
+        <div class="row"><label>X:</label><input type="number" id="x2" step="0.1"></div>
+        <div class="row"><label>Z:</label><input type="number" id="z2" step="0.1"></div>
+        <div class="row"><label>Yaw:</label><input type="number" id="yaw2" step="0.1"></div>
+    </div>
+
+    <button onclick="calculate()">[ 开始计算 ]</button>
+
+    <div id="result">等待输入坐标数据...</div>
+</div>
+
+<script>
+    function calculate() {
+        const x1 = parseFloat(document.getElementById('x1').value);
+        const z1 = parseFloat(document.getElementById('z1').value);
+        const yaw1 = parseFloat(document.getElementById('yaw1').value);
+        const x2 = parseFloat(document.getElementById('x2').value);
+        const z2 = parseFloat(document.getElementById('z2').value);
+        const yaw2 = parseFloat(document.getElementById('yaw2').value);
+
+        if (isNaN(x1) || isNaN(z1) || isNaN(yaw1) || isNaN(x2) || isNaN(z2) || isNaN(isNaN(yaw2))) {
+            alert("请输入完整的数值！");
+            return;
+        }
+
+        // MC Yaw 转换
+        const r1 = yaw1 * Math.PI / 180;
+        const r2 = yaw2 * Math.PI / 180;
+
+        const dx1 = -Math.sin(r1), dz1 = Math.cos(r1);
+        const dx2 = -Math.sin(r2), dz2 = Math.cos(r2);
+
+        const det = dx2 * dz1 - dx1 * dz2;
+
+        if (Math.abs(det) < 0.0001) {
+            document.getElementById('result').innerHTML = "<span style='color:red'>错误: 轨迹平行，请增加投掷间距。</span>";
+            return;
+        }
+
+        const t1 = ((x2 - x1) * dz2 - (z2 - z1) * dx2) / det;
+        const tx = x1 + t1 * dx1;
+        const tz = z1 + t1 * dz1;
+
+        const distOw = Math.sqrt(Math.pow(tx - x2, 2) + Math.pow(tz - z2, 2));
+        const nx = tx / 8;
+        const nz = tz / 8;
+
+        let resHtml = `
+<span style="color:var(--mc-green)">【主世界 Overworld】</span>
+坐标: X:${Math.round(tx)}  Z:${Math.round(tz)}
+距离: ${Math.round(distOw)} blocks
+<div class="divider"></div>
+<span style="color:var(--mc-green)">【下界 Nether】</span>
+坐标: X:${Math.round(nx)}  Z:${Math.round(nz)}
+距离: ${Math.round(distOw/8)} blocks
+        `;
+        document.getElementById('result').innerHTML = resHtml;
+    }
+</script>
+
+</body>
+</html>
