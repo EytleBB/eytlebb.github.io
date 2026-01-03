@@ -236,7 +236,7 @@
                 name: "简单测眼",
                 date: "Web Tool", // 可以改个日期或者备注
                 url: "./mc-calc.html",
-                icon: "→"  // ★ 修改这里：这是一个网页跳转，改为向右箭头，或者填 "" 留空
+                icon: "./images/Eye_of_Ender.png"  // ★ 修改这里：这是一个网页跳转，改为向右箭头，或者填 "" 留空
             }
         ];
         // =============================================================
@@ -278,28 +278,31 @@
 
         // --- 核心：动态生成下载按钮 (已修改支持自定义图标) ---
         function renderResources() {
-            resourceListEl.innerHTML = ""; // 清空
-            resources.forEach(item => {
-                const link = document.createElement('a');
-                link.href = item.url;
-                link.className = 'download-card';
-                link.target = "_blank"; 
+    resourceListEl.innerHTML = ""; 
+    resources.forEach(item => {
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.className = 'download-card';
+        link.target = "_blank"; 
 
-                // 如果 icon 是空字符串，就不显示那个 div，或者显示空
-                const iconHtml = item.icon ? `<div class="download-icon">${item.icon}</div>` : '';
+        // 判断是否填了 icon，如果填了则渲染为 img 标签
+        const iconHtml = item.icon ? 
+            `<div class="download-icon">
+                <img src="${item.icon}" alt="icon" class="card-icon-img">
+            </div>` : '';
 
-                link.innerHTML = `
-                    <div class="card-inner">
-                        <div class="file-info">
-                            <span class="file-name">${item.name}</span>
-                            <span class="file-meta">${item.date}</span>
-                        </div>
-                        ${iconHtml}
-                    </div>
-                `;
-                resourceListEl.appendChild(link);
-            });
-        }
+        link.innerHTML = `
+            <div class="card-inner">
+                <div class="file-info">
+                    <span class="file-name">${item.name}</span>
+                    <span class="file-meta">${item.date}</span>
+                </div>
+                ${iconHtml}
+            </div>
+        `;
+        resourceListEl.appendChild(link);
+    });
+}
 
         // 页面加载启动
         window.onload = () => {
@@ -319,5 +322,6 @@
 </body>
 
 </html>
+
 
 
