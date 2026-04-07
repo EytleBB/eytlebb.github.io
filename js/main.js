@@ -189,7 +189,7 @@ async function renderGallery() {
     const res = await fetch('./images/gallery/index.json');
     if (res.ok) {
       const files = await res.json();
-      DATA.gallery = files.map(f => ({ src: `images/gallery/${f}`, title: '' }));
+      DATA.gallery = files.map(f => ({ src: `images/gallery/${encodeURIComponent(f)}`, title: '' }));
     }
   } catch {}
 
