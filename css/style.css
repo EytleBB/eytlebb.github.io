@@ -652,8 +652,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .plog-body {
-  /* ★ 上传字体后把 'PatchFont' 取消注释 */
-  /* font-family: 'PatchFont', var(--font); */
+  font-family: 'PatchFont', var(--font);
   font-size: 0.95rem;
   line-height: 2;
   color: rgba(220,220,220,0.9);
