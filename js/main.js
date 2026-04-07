@@ -32,14 +32,8 @@ const DATA = {
     // { src: 'images/gallery/1.jpg', title: '截图 1' },
   ],
 
-  // ──────────────────────────────────────────────────────────
-  // 日志日期列表：写了日志就在这里加一个日期字符串
-  // 对应的正文文件放在 logs/YYYY-MM-DD.txt
-  // ──────────────────────────────────────────────────────────
-  patchlog: [
-    '2026-03-17',
-    // '2026-04-15',
-  ],
+  // 由 GitHub Actions 自动维护，无需手动修改
+  patchlog: [],
 
   downloads: [
     {
@@ -291,7 +285,13 @@ const MONTH_EN = ['January','February','March','April','May','June','July','Augu
 const DAY_ZH   = ['一','二','三','四','五','六','日'];
 const DAY_EN   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 
-function renderPatchlog() {
+async function renderPatchlog() {
+  // 从 index.json 加载日志日期列表
+  try {
+    const res = await fetch('./logs/index.json');
+    if (res.ok) DATA.patchlog = await res.json();
+  } catch {}
+
   const now      = new Date();
   const todayStr = fmtDate(now);
 
