@@ -137,6 +137,8 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---- Logo circle ---- */
 .brand-logo-circle {
+  align-self: center;
+  margin-bottom: 4rem;
   width: min(13vw, 180px);
   height: min(13vw, 180px);
   border-radius: 50%;
@@ -679,6 +681,26 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 [data-theme="light"] .plog-body { color: var(--text-dim); }
+
+.patchlog-overlay::-webkit-scrollbar {
+  width: 4px;
+}
+.patchlog-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+.patchlog-overlay::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+}
+.patchlog-overlay::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
+}
+[data-theme="light"] .patchlog-overlay::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
+}
+[data-theme="light"] .patchlog-overlay::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.25);
+}
 
 /* ============================================
    GALLERY — thumbnail grid (col 3)

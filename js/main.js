@@ -210,16 +210,7 @@ function renderGallery() {
 }
 
 function renderEmpty() {
-  colPrimary.innerHTML = `
-    <div class="panel-placeholder">
-      <div class="placeholder-icon">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </div>
-      <p class="placeholder-text">${t('从左侧选择一项', 'Select an item from the left')}</p>
-    </div>
-  `;
+  colPrimary.innerHTML = '';
 }
 
 /* ============================================================
