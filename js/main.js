@@ -181,8 +181,17 @@ function renderDownloads() {
   `;
 }
 
-function renderGallery() {
+async function renderGallery() {
   colGalleryExpanded(false); // reset merged state
+
+  // 从 index.json 加载图片列表（GitHub Actions 自动维护）
+  try {
+    const res = await fetch('./images/gallery/index.json');
+    if (res.ok) {
+      const files = await res.json();
+      DATA.gallery = files.map(f => ({ src: `images/gallery/${f}`, title: '' }));
+    }
+  } catch {}
 
   if (DATA.gallery.length === 0) {
     colPrimary.innerHTML = `
