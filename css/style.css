@@ -577,18 +577,35 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
 }
 
-/* ── 背景图层 ──────────────────────────────────────────────
-   ★ 添加背景图：把图片放到 images/patchlog-bg.jpg
-     然后在下面加一行：background-image: url('../images/patchlog-bg.jpg');
-   ──────────────────────────────────────────────────────── */
+/* ── 背景图层（深色/亮色双图渐变切换）─────────────────── */
 .patchlog-bg {
+  position: absolute;
+  inset: 0;
+  background-color: var(--surface2);
+}
+
+.patchlog-bg::before,
+.patchlog-bg::after {
+  content: '';
   position: absolute;
   inset: 0;
   background-size: cover;
   background-position: center;
-  background-color: var(--surface2);   /* 无图时的占位底色 */
-  background-image: url('../images/patchlog-bg.jpg'); 
+  transition: opacity 0.5s ease;
 }
+
+.patchlog-bg::before {
+  background-image: url('../images/patchlog-bg-night.jpg');
+  opacity: 1;
+}
+
+.patchlog-bg::after {
+  background-image: url('../images/patchlog-bg-light.jpg');
+  opacity: 0;
+}
+
+[data-theme="light"] .patchlog-bg::before { opacity: 0; }
+[data-theme="light"] .patchlog-bg::after  { opacity: 1; }
 
 /* ── 日志内容覆盖层（点击日期后出现）────────────────────── */
 .patchlog-overlay {
