@@ -664,7 +664,8 @@ button { font-family: inherit; cursor: pointer; }
 [data-theme="light"] .plog-close:hover { color: var(--text); border-color: var(--blue); }
 
 .plog-date {
-  font-size: 0.75rem;
+  font-family: 'PatchFont', var(--font);
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--blue);
   letter-spacing: 0.08em;
@@ -845,4 +846,126 @@ button { font-family: inherit; cursor: pointer; }
 .col-primary .panel-label {
   border-bottom-color: var(--blue);
   color: var(--blue);
+}
+
+/* ============================================
+   MOBILE — ≤768px
+   ============================================ */
+@media (max-width: 768px) {
+
+  html, body { overflow: hidden; }
+
+  .layout {
+    flex-direction: column;
+    height: 100dvh;
+    width: 100vw;
+  }
+
+  /* 隐藏装饰列 */
+  .col-fifth { display: none; }
+
+  /* ── COL 1: 顶部 header ── */
+  .col-brand {
+    flex: none;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 1rem;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+  .brand-logo-circle { display: none; }
+  .brand-top { flex-direction: row; gap: 0; align-items: center; }
+  .brand-banner { padding: 0.4rem 0.7rem; }
+  .brand-title { font-size: 0.88rem; }
+  .brand-bottom { flex-direction: row; align-items: center; gap: 0.75rem; }
+
+  /* ── COL 2: 底部导航栏 ── */
+  .col-nav {
+    order: 99;
+    flex: none;
+    height: auto;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-list::-webkit-scrollbar { display: none; }
+  .nav-item {
+    flex: 1;
+    text-align: center;
+    padding: 0.65rem 0.2rem;
+    font-size: 0.7rem;
+    border-left: none;
+    border-top: 2px solid transparent;
+    white-space: nowrap;
+    min-width: fit-content;
+  }
+  .nav-item.active {
+    border-left-color: transparent;
+    border-top-color: var(--orange);
+  }
+
+  /* ── COL 3: 主内容 ── */
+  .col-primary {
+    flex: 1;
+    min-height: 0;
+    border-right: none;
+    overflow-y: auto;
+  }
+
+  /* ── COL 4: 全屏滑入面板 ── */
+  .col-secondary {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    padding: 0;
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
+    border-left: none;
+    overflow-y: auto;
+  }
+  .col-secondary.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* 返回按钮 */
+  .mobile-back {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    transition: color var(--transition);
+  }
+  .mobile-back:hover { color: var(--orange); }
+
+  /* patchlog 覆盖层在手机上填满 secondary */
+  .patchlog-overlay {
+    inset: 0.75rem;
+  }
+
+  /* gallery-expanded / patchlog-expanded 在手机上不影响列宽 */
+  .layout.gallery-expanded .col-secondary,
+  .layout.patchlog-expanded .col-secondary {
+    flex: unset;
+  }
 }

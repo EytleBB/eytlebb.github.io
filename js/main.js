@@ -76,8 +76,11 @@ function t(zhText, enText) {
   return lang === 'zh' ? zhText : (enText || zhText);
 }
 
+function isMobile() { return window.innerWidth <= 768; }
+
 function clearSecondary() {
   colSecondary.innerHTML = '';
+  colSecondary.classList.remove('mobile-open');
 }
 
 function setActiveNav(section) {
@@ -217,9 +220,11 @@ function renderEmpty() {
    RENDERERS — Secondary panel
    ============================================================ */
 function renderSubProjects(proj) {
-  colSecondary.innerHTML = `
-    <p class="panel-label">${proj.name} · ${t('子项目', 'Sub-projects')}</p>
-    <div class="panel-list">
+  const backBtn = isMobile()
+    ? `<button class="mobile-back" id="mobile-back">‹ ${t('返回','Back')}</button>` : '';
+  colSecondary.innerHTML = backBtn + `
+    <p class="panel-label" style="padding:1.75rem 1.4rem 0">${proj.name} · ${t('子项目', 'Sub-projects')}</p>
+    <div class="panel-list" style="padding:0 1.4rem">
       ${proj.sub.map(sub => `
         <a class="panel-item" href="${sub.github}" target="_blank" rel="noopener">
           <span>${sub.name}</span>
@@ -232,17 +237,21 @@ function renderSubProjects(proj) {
       `).join('')}
     </div>
   `;
+  if (isMobile()) {
+    colSecondary.classList.add('mobile-open');
+    document.getElementById('mobile-back').addEventListener('click', clearSecondary);
+  }
 }
 
 /* ---- expand helpers ---- */
 function colGalleryExpanded(on) {
   document.querySelector('.layout').classList.toggle('gallery-expanded', on);
-  if (!on) colSecondary.innerHTML = '';
+  if (!on) { colSecondary.innerHTML = ''; colSecondary.classList.remove('mobile-open'); }
 }
 
 function colPatchlogExpanded(on) {
   document.querySelector('.layout').classList.toggle('patchlog-expanded', on);
-  if (!on) colSecondary.innerHTML = '';
+  if (!on) { colSecondary.innerHTML = ''; colSecondary.classList.remove('mobile-open'); }
 }
 
 function renderGalleryViewer(idx) {
@@ -260,10 +269,10 @@ function renderGalleryViewer(idx) {
       ${img && img.title ? `<p class="gallery-viewer-caption">${img.title}</p>` : ''}
     </div>
   `;
+  if (isMobile()) colSecondary.classList.add('mobile-open');
 
   document.getElementById('gallery-close').addEventListener('click', () => {
     colGalleryExpanded(false);
-    // deselect thumb
     colPrimary.querySelectorAll('.gallery-thumb').forEach(el => el.classList.remove('active'));
   });
 }
@@ -381,6 +390,7 @@ async function handlePatchlogClick(dateStr, el) {
   dateEl.textContent = dateLabel;
   bodyEl.textContent = t('加载中…', 'Loading…');
   overlay.classList.add('visible');
+  if (isMobile()) colSecondary.classList.add('mobile-open');
 
   // fetch the log file
   try {
@@ -396,6 +406,7 @@ function closeLogOverlay() {
   const ov = document.getElementById('patchlog-overlay');
   if (ov) ov.classList.remove('visible');
   colPrimary.querySelectorAll('.cal-day-entry').forEach(d => d.classList.remove('cal-day-active'));
+  if (isMobile()) colSecondary.classList.remove('mobile-open');
 }
 
 /* ============================================================
