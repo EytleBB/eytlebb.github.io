@@ -116,6 +116,7 @@ button { font-family: inherit; cursor: pointer; }
 /* ---- Title banner ---- */
 .brand-banner {
   width: 100%;
+  cursor: pointer;
   border: 2px solid var(--orange);
   border-radius: 0;
   padding: 1rem 1rem;

@@ -514,6 +514,11 @@ themeToggle.addEventListener('click', () => {
   applyTheme();
 });
 
+document.getElementById('home-btn').addEventListener('click', () => {
+  setActiveNav(null);
+  renderEmpty();
+});
+
 // Boot
 applyTheme();
 renderEmpty();
