@@ -11,9 +11,12 @@ const DATA = {
     {
       id: 'csai',
       name: 'CSAI',
-      github: 'https://github.com/EytleBB/CSAI',
+      github: '',
       // sub: []  -- no sub-projects yet; clicking goes straight to GitHub
-      sub: []
+      sub: [
+        { name: 'CS Scout', github: 'https://github.com/EytleBB/CS-Scout' },
+        { name: 'CS Prophet', github: 'https://github.com/EytleBB/CS-Prophet' },
+      ]
     }
   ],
 
