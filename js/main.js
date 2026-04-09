@@ -16,6 +16,7 @@ const DATA = {
       sub: [
         { name: 'CS Scout', github: 'https://github.com/EytleBB/CS-Scout' },
         { name: 'CS Prophet', github: 'https://github.com/EytleBB/CS-Prophet' },
+        { name: 'CS HLTV Downloader', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
       ]
     }
   ],
