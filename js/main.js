@@ -299,6 +299,8 @@ const MONTH_ZH = ['一月','二月','三月','四月','五月','六月','七月'
 const MONTH_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_ZH   = ['一','二','三','四','五','六','日'];
 const DAY_EN   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const DAY_KO   = ['월','화','수','목','금','토','일'];
 
 async function renderPatchlog() {
   // 从 index.json 加载日志日期列表
@@ -348,7 +350,9 @@ function fmtDate(d) {
 function buildMonth(year, month, todayStr) {
   const label = lang === 'zh'
     ? `${year}年 ${MONTH_ZH[month]}`
-    : `${MONTH_EN[month]} ${year}`;
+    : lang === 'ko'
+      ? `${year}년 ${MONTH_KO[month]}`
+      : `${MONTH_EN[month]} ${year}`;
 
   // Monday-first: offset = (getDay()+6)%7
   const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
@@ -356,7 +360,7 @@ function buildMonth(year, month, todayStr) {
   const nowTime     = new Date();
   nowTime.setHours(0,0,0,0);
 
-  const heads = (lang === 'zh' ? DAY_ZH : DAY_EN)
+  const heads = lang === 'zh' ? DAY_ZH : lang === 'ko' ? DAY_KO : DAY_EN
     .map(h => `<div class="cal-head">${h}</div>`).join('');
 
   let cells = '';
@@ -395,7 +399,9 @@ async function handlePatchlogClick(dateStr, el) {
   const dp = dateStr.split('-');
   const dateLabel = lang === 'zh'
     ? `${dp[0]}.${parseInt(dp[1])}.${parseInt(dp[2])}`
-    : `${MONTH_EN[parseInt(dp[1])-1]} ${parseInt(dp[2])}, ${dp[0]}`;
+    : lang === 'ko'
+      ? `${dp[0]}년 ${parseInt(dp[1])}월 ${parseInt(dp[2])}일`
+      : `${MONTH_EN[parseInt(dp[1])-1]} ${parseInt(dp[2])}, ${dp[0]}`;
 
   // show overlay immediately with loading state
   const overlay  = document.getElementById('patchlog-overlay');
