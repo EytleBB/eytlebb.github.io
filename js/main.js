@@ -479,27 +479,30 @@ function handleSection(section) {
    LANGUAGE
    ============================================================ */
 function applyLang() {
-  // Static elements with data-zh / data-en
   document.querySelectorAll('[data-zh]').forEach(el => {
-    // Skip nav items (handled separately to preserve button text)
     if (!el.classList.contains('nav-item')) {
-      el.textContent = lang === 'zh' ? el.dataset.zh : (el.dataset.en || el.dataset.zh);
+      el.textContent = lang === 'zh'
+        ? el.dataset.zh
+        : lang === 'ko'
+          ? (el.dataset.ko || el.dataset.en || el.dataset.zh)
+          : (el.dataset.en || el.dataset.zh);
     }
   });
 
-  // Nav items
   document.querySelectorAll('.nav-item[data-zh]').forEach(btn => {
-    btn.textContent = lang === 'zh' ? btn.dataset.zh : (btn.dataset.en || btn.dataset.zh);
+    btn.textContent = lang === 'zh'
+      ? btn.dataset.zh
+      : lang === 'ko'
+        ? (btn.dataset.ko || btn.dataset.en || btn.dataset.zh)
+        : (btn.dataset.en || btn.dataset.zh);
   });
 
-  // Theme label
   if (theme === 'dark') {
-    themeLabel.textContent = lang === 'zh' ? '暗色模式' : 'Dark Mode';
+    themeLabel.textContent = lang === 'zh' ? '暗色模式' : lang === 'ko' ? '다크 모드' : 'Dark Mode';
   } else {
-    themeLabel.textContent = lang === 'zh' ? '亮色模式' : 'Light Mode';
+    themeLabel.textContent = lang === 'zh' ? '亮色模式' : lang === 'ko' ? '라이트 모드' : 'Light Mode';
   }
 
-  // Re-render active section
   if (activeSection) handleSection(activeSection);
 }
 
@@ -511,11 +514,11 @@ function applyTheme() {
   if (theme === 'dark') {
     iconMoon.style.display = '';
     iconSun.style.display  = 'none';
-    themeLabel.textContent = lang === 'zh' ? '暗色模式' : 'Dark Mode';
+    themeLabel.textContent = lang === 'zh' ? '暗色模式' : lang === 'ko' ? '다크 모드' : 'Dark Mode';
   } else {
     iconMoon.style.display = 'none';
     iconSun.style.display  = '';
-    themeLabel.textContent = lang === 'zh' ? '亮色模式' : 'Light Mode';
+    themeLabel.textContent = lang === 'zh' ? '亮色模式' : lang === 'ko' ? '라이트 모드' : 'Light Mode';
   }
 }
 
