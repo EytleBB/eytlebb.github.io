@@ -59,7 +59,7 @@ const DATA = {
 /* ============================================================
    STATE
    ============================================================ */
-let lang = 'zh';    // 'zh' | 'en'
+let lang = 'zh';    // 'zh' | 'en' | 'ko'
 let theme = 'dark'; // 'dark' | 'light'
 let activeSection = null;
 
@@ -76,8 +76,10 @@ const iconSun      = document.getElementById('icon-sun');
 /* ============================================================
    HELPERS
    ============================================================ */
-function t(zhText, enText) {
-  return lang === 'zh' ? zhText : (enText || zhText);
+function t(zhText, enText, koText) {
+  if (lang === 'zh') return zhText;
+  if (lang === 'ko') return koText || enText || zhText;
+  return enText || zhText;
 }
 
 function isMobile() { return window.innerWidth <= 768; }
