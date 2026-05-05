@@ -103,7 +103,7 @@ function setActiveNav(section) {
    ============================================================ */
 function renderAbout() {
   colPrimary.innerHTML = `
-    <p class="panel-label">${t('概况', 'Overview')}</p>
+    <p class="panel-label">${t('概况', 'Overview', '개요')}</p>
     <div class="about-list">
       <div class="about-row">
         <span class="about-key">Email</span>
@@ -128,7 +128,7 @@ function renderProjects() {
       <button class="panel-item" data-proj="${proj.id}">
         <span>${proj.name}</span>
         <span class="panel-item-right">
-          ${hasSub ? `<span class="item-badge">${proj.sub.length} ${t('子项目','sub')}</span>` : ''}
+          ${hasSub ? `<span class="item-badge">${proj.sub.length} ${t('子项目','sub', '하위')}</span>` : ''}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
@@ -138,8 +138,8 @@ function renderProjects() {
   }).join('');
 
   colPrimary.innerHTML = `
-    <p class="panel-label">${t('项目', 'Projects')}</p>
-    <div class="panel-list">${items || `<p class="placeholder-text">${t('暂无项目','No projects yet')}</p>`}</div>
+    <p class="panel-label">${t('项目', 'Projects', '프로젝트')}</p>
+    <div class="panel-list">${items || `<p class="placeholder-text">${t('暂无项目','No projects yet', '프로젝트 없음')}</p>`}</div>
   `;
 
   colPrimary.querySelectorAll('.panel-item[data-proj]').forEach(btn => {
@@ -160,7 +160,7 @@ function renderTools() {
   `).join('');
 
   colPrimary.innerHTML = `
-    <p class="panel-label">${t('工具', 'Tools')}</p>
+    <p class="panel-label">${t('工具', 'Tools', '도구')}</p>
     <div class="panel-list">${items}</div>
   `;
 }
@@ -182,7 +182,7 @@ function renderDownloads() {
   `).join('');
 
   colPrimary.innerHTML = `
-    <p class="panel-label">${t('下载', 'Downloads')}</p>
+    <p class="panel-label">${t('下载', 'Downloads', '다운로드')}</p>
     ${items}
   `;
 }
@@ -201,10 +201,10 @@ async function renderGallery() {
 
   if (DATA.gallery.length === 0) {
     colPrimary.innerHTML = `
-      <p class="panel-label">${t('画廊', 'Gallery')}</p>
+      <p class="panel-label">${t('画廊', 'Gallery', '갤러리')}</p>
       <div class="panel-placeholder" style="height:auto;padding:3rem 0;">
         <div class="placeholder-icon" style="opacity:0.3;font-size:2rem;">🖼</div>
-        <p class="placeholder-text">${t('暂无图片', 'No images yet')}</p>
+        <p class="placeholder-text">${t('暂无图片', 'No images yet', '이미지 없음')}</p>
       </div>
     `;
     return;
@@ -218,7 +218,7 @@ async function renderGallery() {
   }).join('');
 
   colPrimary.innerHTML = `
-    <p class="panel-label">${t('画廊', 'Gallery')}</p>
+    <p class="panel-label">${t('画廊', 'Gallery', '갤러리')}</p>
     <div class="gallery-grid">${thumbs}</div>
   `;
 
@@ -236,9 +236,9 @@ function renderEmpty() {
    ============================================================ */
 function renderSubProjects(proj) {
   const backBtn = isMobile()
-    ? `<button class="mobile-back" id="mobile-back">‹ ${t('返回','Back')}</button>` : '';
+    ? `<button class="mobile-back" id="mobile-back">‹ ${t('返回','Back', '뒤로')}</button>` : '';
   colSecondary.innerHTML = backBtn + `
-    <p class="panel-label" style="padding:1.75rem 1.4rem 0">${proj.name} · ${t('子项目', 'Sub-projects')}</p>
+    <p class="panel-label" style="padding:1.75rem 1.4rem 0">${proj.name} · ${t('子项目', 'Sub-projects', '하위 프로젝트')}</p>
     <div class="panel-list" style="padding:0 1.4rem">
       ${proj.sub.map(sub => `
         <a class="panel-item" href="${sub.github}" target="_blank" rel="noopener">
@@ -275,11 +275,11 @@ function renderGalleryViewer(idx) {
 
   const imageEl = img && img.src
     ? `<img class="gallery-viewer-img" src="${img.src}" alt="${img.title || ''}" />`
-    : `<div class="gallery-viewer-placeholder"><span>🖼</span><p>${t('暂无图片','No image')}</p></div>`;
+    : `<div class="gallery-viewer-placeholder"><span>🖼</span><p>${t('暂无图片','No image', '이미지 없음')}</p></div>`;
 
   colSecondary.innerHTML = `
     <div class="gallery-viewer">
-      <button class="gallery-close" id="gallery-close">✕ ${t('关闭','Close')}</button>
+      <button class="gallery-close" id="gallery-close">✕ ${t('关闭','Close', '닫기')}</button>
       ${imageEl}
       ${img && img.title ? `<p class="gallery-viewer-caption">${img.title}</p>` : ''}
     </div>
@@ -313,7 +313,7 @@ async function renderPatchlog() {
   const todayStr = fmtDate(now);
 
   // ── 第3列：日历 ──
-  let html = `<p class="panel-label">${t('斑驳日志', 'Patch Log')}</p>`;
+  let html = `<p class="panel-label">${t('斑驳日志', 'Patch Log', '패치 로그')}</p>`;
   let y = 2026, m = 2;
   const endY = now.getFullYear(), endM = now.getMonth();
   while (y < endY || (y === endY && m <= endM)) {
@@ -409,7 +409,7 @@ async function handlePatchlogClick(dateStr, el) {
   const bodyEl   = document.getElementById('plog-body');
 
   dateEl.textContent = dateLabel;
-  bodyEl.textContent = t('加载中…', 'Loading…');
+  bodyEl.textContent = t('加载中…', 'Loading…', '로딩 중…');
   overlay.classList.add('visible');
   if (isMobile()) colSecondary.classList.add('mobile-open');
 
@@ -419,7 +419,7 @@ async function handlePatchlogClick(dateStr, el) {
     if (!res.ok) throw new Error(res.status);
     bodyEl.textContent = await res.text();
   } catch {
-    bodyEl.textContent = t('日志加载失败', 'Failed to load log');
+    bodyEl.textContent = t('日志加载失败', 'Failed to load log', '로그 로드 실패');
   }
 }
 
