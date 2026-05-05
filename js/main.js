@@ -401,11 +401,7 @@ async function handlePatchlogClick(dateStr, el) {
 
   // format date label
   const dp = dateStr.split('-');
-  const dateLabel = lang === 'zh'
-    ? `${dp[0]}.${parseInt(dp[1])}.${parseInt(dp[2])}`
-    : lang === 'ko'
-      ? `${dp[0]}년 ${parseInt(dp[1])}월 ${parseInt(dp[2])}일`
-      : `${MONTH_EN[parseInt(dp[1])-1]} ${parseInt(dp[2])}, ${dp[0]}`;
+  const dateLabel = `${dp[0]}.${parseInt(dp[1])}.${parseInt(dp[2])}`;
 
   // show overlay immediately with loading state
   const overlay  = document.getElementById('patchlog-overlay');
