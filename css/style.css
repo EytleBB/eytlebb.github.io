@@ -32,7 +32,7 @@
   --hover:     rgba(255,255,255,0.03);
   --active-bg: rgba(249,115,22,0.08);
   --radius:    10px;
-  --font: 'Segoe UI', system-ui, -apple-system, 'PingFang SC', sans-serif;
+  --font: 'Segoe UI', system-ui, -apple-system, 'PingFang SC', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
   --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
