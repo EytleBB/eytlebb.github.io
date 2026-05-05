@@ -11,12 +11,14 @@ const DATA = {
     {
       id: 'csai',
       name: 'CSAI',
+      nameEn: 'CSAI',
+      nameKo: 'CSAI',
       github: '',
       // sub: []  -- no sub-projects yet; clicking goes straight to GitHub
       sub: [
-        { name: 'CS Scout', github: 'https://github.com/EytleBB/CS-Scout' },
-        { name: 'CS Prophet', github: 'https://github.com/EytleBB/CS-Prophet' },
-        { name: 'CS HLTV Downloader', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
+        { name: 'CS Scout', nameKo: 'CS 스카우트', github: 'https://github.com/EytleBB/CS-Scout' },
+        { name: 'CS Prophet', nameKo: 'CS 프로핏', github: 'https://github.com/EytleBB/CS-Prophet' },
+        { name: 'CS HLTV Downloader', nameKo: 'CS HLTV 다운로더', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
       ]
     }
   ],
@@ -25,6 +27,7 @@ const DATA = {
     {
       name: 'MC 要塞定位器',
       nameEn: 'MC Stronghold Finder',
+      nameKo: 'MC 요새 찾기',
       url: './mc-calc.html',
       external: false
     }
@@ -49,6 +52,7 @@ const DATA = {
     {
       name: 'Minecraft 1.21.8 生存存档',
       nameEn: 'Minecraft 1.21.8 Survival World',
+      nameKo: 'Minecraft 1.21.8 서바이벌 월드',
       meta: '夸克网盘',
       icon: '⛏️',
       url: 'https://pan.quark.cn/s/364c986a6e70'
@@ -126,7 +130,7 @@ function renderProjects() {
     const hasSub = proj.sub && proj.sub.length > 0;
     return `
       <button class="panel-item" data-proj="${proj.id}">
-        <span>${proj.name}</span>
+        <span>${lang === 'zh' ? proj.name : lang === 'ko' ? (proj.nameKo || proj.nameEn || proj.name) : (proj.nameEn || proj.name)}</span>
         <span class="panel-item-right">
           ${hasSub ? `<span class="item-badge">${proj.sub.length} ${t('子项目','sub', '하위')}</span>` : ''}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -150,7 +154,7 @@ function renderProjects() {
 function renderTools() {
   const items = DATA.tools.map(tool => `
     <a class="panel-item" href="${tool.url}" ${tool.external === false ? '' : 'target="_blank" rel="noopener"'}>
-      <span>${lang === 'zh' ? tool.name : (tool.nameEn || tool.name)}</span>
+      <span>${lang === 'zh' ? tool.name : lang === 'ko' ? (tool.nameKo || tool.nameEn || tool.name) : (tool.nameEn || tool.name)}</span>
       <span class="panel-item-right">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 18 15 12 9 6"></polyline>
@@ -170,7 +174,7 @@ function renderDownloads() {
     <a class="dl-item" href="${dl.url}" target="_blank" rel="noopener">
       <span class="dl-icon">${dl.icon}</span>
       <span class="dl-info">
-        <p class="dl-name">${lang === 'zh' ? dl.name : (dl.nameEn || dl.name)}</p>
+        <p class="dl-name">${lang === 'zh' ? dl.name : lang === 'ko' ? (dl.nameKo || dl.nameEn || dl.name) : (dl.nameEn || dl.name)}</p>
         <p class="dl-meta">${dl.meta}</p>
       </span>
       <svg class="dl-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -242,7 +246,7 @@ function renderSubProjects(proj) {
     <div class="panel-list" style="padding:0 1.4rem">
       ${proj.sub.map(sub => `
         <a class="panel-item" href="${sub.github}" target="_blank" rel="noopener">
-          <span>${sub.name}</span>
+          <span>${lang === 'zh' ? sub.name : lang === 'ko' ? (sub.nameKo || sub.name) : (sub.nameEn || sub.name)}</span>
           <span class="panel-item-right">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="9 18 15 12 9 6"></polyline>
