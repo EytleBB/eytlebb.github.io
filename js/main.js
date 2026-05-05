@@ -364,7 +364,7 @@ function buildMonth(year, month, todayStr) {
   const nowTime     = new Date();
   nowTime.setHours(0,0,0,0);
 
-  const heads = lang === 'zh' ? DAY_ZH : lang === 'ko' ? DAY_KO : DAY_EN
+  const heads = (lang === 'zh' ? DAY_ZH : lang === 'ko' ? DAY_KO : DAY_EN)
     .map(h => `<div class="cal-head">${h}</div>`).join('');
 
   let cells = '';
