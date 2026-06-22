@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -88,7 +93,7 @@ const updaters = [];
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   for (const fn of updaters) fn(dt);
-  renderer.render(scene, camera);
+  composer.render();
 }
 let looping = false;
 function startLoop() {
@@ -97,10 +102,35 @@ function startLoop() {
   renderer.setAnimationLoop(frame);
 }
 
+/* ============================================================
+   POST PIPELINE: AO + subtle bloom + tone-mapped output
+   ============================================================ */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const ssao = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+ssao.kernelRadius = 8;
+ssao.minDistance = 0.004;
+ssao.maxDistance = 0.12;
+composer.addPass(ssao);
+
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.25,  // strength — subtle
+  0.6,   // radius
+  0.9    // threshold — only the brightest fixtures/highlights bloom
+);
+composer.addPass(bloom);
+
+composer.addPass(new OutputPass());
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  ssao.setSize(window.innerWidth, window.innerHeight);
+  bloom.setSize(window.innerWidth, window.innerHeight);
 });
 
 /* ============================================================
@@ -166,6 +196,14 @@ const chunks = [];
 const artMeshes = [];
 let nextImage = 0;
 
+let _loaded = 0;
+const _initialBatch = POOL * ART_PER_SIDE * 2; // both sides
+function _onArtLoaded() {
+  _loaded++;
+  if (_loaded <= _initialBatch) setProgress(Math.min(_loaded, _initialBatch), _initialBatch);
+  if (_loaded === _initialBatch) showGateEnter();
+}
+
 function setArtTexture(slot, imageIndex) {
   const url = IMAGES[imageIndex % IMAGES.length];
   texLoader.load(url, (tex) => {
@@ -178,7 +216,10 @@ function setArtTexture(slot, imageIndex) {
     // fit plane to image aspect (keep height, adjust width)
     const aspect = tex.image.width / tex.image.height;
     slot.picMesh.scale.set(aspect / (ART_W / ART_H), 1, 1);
-  });
+    _onArtLoaded();
+  },
+    undefined,
+    () => { _onArtLoaded(); });
 }
 
 function makeChunk(index) {
@@ -413,8 +454,7 @@ async function boot() {
   buildStructure();   // ceiling
   buildFloor();       // reflective floor
   buildChunks();      // walls + art (+ spotlights)
-  setProgress(0, IMAGES.length);
-  showGateEnter();
+  setProgress(0, _initialBatch);
   gateEnter.addEventListener('click', () => {
     hideGate();
     startLoop();
