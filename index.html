@@ -1,85 +1,67 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>This is Eytle</title>
   <link rel="icon" href="images/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <div class="layout">
+  <!-- Ambient: birch-forest painting → scrim → film grain -->
+  <div class="bg"></div>
+  <div class="scrim"></div>
+  <div class="grain"></div>
 
-    <!-- ============ COL 1: BRAND ============ -->
-    <aside class="col col-brand">
-      <div class="brand-top">
-        <!-- Title banner -->
-        <div class="brand-banner" id="home-btn">
-          <p class="brand-title">This is Eytle</p>
-        </div>
+  <div class="app">
+
+    <!-- ============ RAIL ============ -->
+    <aside class="rail">
+
+      <button class="brand" id="home-btn" title="This is Eytle">
+        <img src="images/logo.png" alt="" />
+        <b>This is <em>Eytle</em></b>
+      </button>
+
+      <div class="lang">
+        <button class="lang-btn on" data-lang="zh">中文</button>
+        <button class="lang-btn" data-lang="en">Eng</button>
+        <button class="lang-btn" data-lang="ko">한국어</button>
       </div>
-      <!-- Logo circle — center of column -->
-      <div class="brand-logo-circle">
-        <img src="images/logo.png" alt="logo" />
-      </div>
-      <div class="brand-bottom">
-        <div class="lang-row">
-          <button class="lang-btn active" data-lang="zh">中文</button>
-          <span class="lang-sep">/</span>
-          <button class="lang-btn" data-lang="en">Eng</button>
-          <span class="lang-sep">/</span>
-          <button class="lang-btn" data-lang="ko">한국어</button>
-        </div>
-        <button class="theme-toggle" id="theme-toggle" title="切换主题">
-          <span class="theme-icon" id="theme-icon">
-            <svg id="icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-            </svg>
-            <svg id="icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-              <circle cx="12" cy="12" r="5"></circle>
-              <line x1="12" y1="1" x2="12" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="23"></line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-              <line x1="1" y1="12" x2="3" y2="12"></line>
-              <line x1="21" y1="12" x2="23" y2="12"></line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-          </span>
-          <span class="theme-label" data-zh="暗色模式" data-en="Dark Mode" data-ko="다크 모드">暗色模式</span>
+
+      <nav id="nav">
+        <button class="nav-i on" data-section="about"    data-zh="概况"      data-en="Overview"  data-ko="개요"><span></span></button>
+        <button class="nav-i"    data-section="projects" data-zh="项目"      data-en="Projects"  data-ko="프로젝트"><span></span></button>
+        <button class="nav-i"    data-section="tools"    data-zh="工具"      data-en="Tools"     data-ko="도구"><span></span></button>
+        <button class="nav-i"    data-section="patchlog" data-zh="Patch Log" data-en="Patch Log" data-ko="Patch Log"><span></span></button>
+        <button class="nav-i"    data-section="gallery"  data-zh="画廊"      data-en="Gallery"   data-ko="갤러리"><span></span></button>
+        <button class="nav-i"    data-section="downloads"data-zh="下载"      data-en="Downloads" data-ko="다운로드"><span></span></button>
+      </nav>
+
+      <div class="rail-foot">
+        <button class="lamp" id="lamp">
+          <span id="lamp-ico">☀</span>
+          <span id="lamp-tx"></span>
         </button>
+        <div class="contact">
+          <a href="mailto:3035986089@qq.com">3035986089@qq.com</a><br />
+          <a href="https://github.com/EytleBB" target="_blank" rel="noopener">github.com/EytleBB</a>
+        </div>
       </div>
+
     </aside>
 
-    <!-- ============ COL 2: NAV ============ -->
-    <nav class="col col-nav">
-      <div class="nav-list">
-        <button class="nav-item" data-section="about" data-zh="概况" data-en="Overview" data-ko="개요">概况</button>
-        <button class="nav-item" data-section="projects" data-zh="项目" data-en="Projects" data-ko="프로젝트">项目</button>
-        <button class="nav-item" data-section="tools" data-zh="工具" data-en="Tools" data-ko="도구">工具</button>
-        <button class="nav-item" data-section="patchlog" data-zh="Patch Log" data-en="Patch Log" data-ko="패치 로그">Patch Log</button>
-        <button class="nav-item" data-section="gallery" data-zh="画廊" data-en="Gallery" data-ko="갤러리">画廊</button>
-        <button class="nav-item" data-section="downloads" data-zh="下载" data-en="Downloads" data-ko="다운로드">下载</button>
-      </div>
-    </nav>
-
-    <!-- ============ COL 3: PRIMARY PANEL ============ -->
-    <div class="col col-primary" id="col-primary">
-    </div>
-
-    <!-- ============ COL 4: SECONDARY PANEL ============ -->
-    <div class="col col-secondary" id="col-secondary"></div>
-
-    <!-- ============ COL 5: DECORATIVE ============ -->
-    <div class="col col-fifth">
-      <div class="deco-content">
-        <div class="deco-dots"></div>
-      </div>
-    </div>
+    <!-- ============ STAGE (re-rendered per section) ============ -->
+    <main class="stage" id="stage"></main>
 
   </div>
+
+  <!-- Lightbox / reader overlays mount here -->
+  <div id="overlay-root"></div>
 
   <script src="js/main.js"></script>
 </body>

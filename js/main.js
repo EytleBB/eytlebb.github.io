@@ -1,5 +1,11 @@
 /* ============================================================
-   DATA
+   This is Eytle — app logic
+   Skin redesigned; skeleton preserved: DATA single source,
+   patch-log calendar + .txt, auto gallery, 3-lang i18n, theme.
+   ============================================================ */
+
+/* ============================================================
+   DATA — single source of truth
    ============================================================ */
 const DATA = {
   about: {
@@ -10,464 +16,465 @@ const DATA = {
   projects: [
     {
       id: 'csai',
-      name: 'CSAI',
-      nameEn: 'CSAI',
-      nameKo: 'CSAI',
-      github: '',
-      // sub: []  -- no sub-projects yet; clicking goes straight to GitHub
+      name: 'CSAI', nameEn: 'CSAI', nameKo: 'CSAI',
+      github: 'https://github.com/EytleBB',
       sub: [
-        { name: 'CS Scout', nameKo: 'CS 스카우트', github: 'https://github.com/EytleBB/CS-Scout' },
-        { name: 'CS Prophet', nameKo: 'CS 프로핏', github: 'https://github.com/EytleBB/CS-Prophet' },
-        { name: 'CS HLTV Downloader', nameKo: 'CS HLTV 다운로더', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
+        { name: 'CS Scout',            nameKo: 'CS 스카우트',  github: 'https://github.com/EytleBB/CS-Scout' },
+        { name: 'CS Prophet',          nameKo: 'CS 프로핏',    github: 'https://github.com/EytleBB/CS-Prophet' },
+        { name: 'CS HLTV Downloader',  nameKo: 'CS HLTV 다운로더', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
       ]
     }
   ],
 
   tools: [
     {
-      name: 'MC 要塞定位器',
-      nameEn: 'MC Stronghold Finder',
-      nameKo: 'MC 요새 찾기',
-      url: './mc-calc.html',
-      external: false
+      name: 'MC 要塞定位器', nameEn: 'MC Stronghold Finder', nameKo: 'MC 요새 찾기',
+      url: './mc-calc.html', external: false,
+      icon: 'images/Eye_of_Ender.png'   // Eye of Ender — ONLY here
     }
   ],
 
-  // Gallery: add entries as { src: 'images/gallery/xxx.jpg', title: '...' }
-  // Leave src empty/null to show placeholder box
-  gallery: [
-    // { src: 'images/gallery/1.jpg', title: '截图 1' },
-  ],
-
-  // 由 GitHub Actions 自动维护，无需手动修改
-  patchlog: [],
+  gallery: [],   // built from images/gallery/index.json (auto-maintained)
+  patchlog: [],  // built from logs/index.json (auto-maintained)
 
   downloads: [
-    {
-      name: '730',
-      meta: 'Updated: 2025-12-20',
-      icon: '📦',
-      url: './files/730.zip'
-    },
+    { name: '730', meta: 'Updated: 2025-12-20', icon: '📦', url: './files/730.zip' },
     {
       name: 'Minecraft 1.21.8 生存存档',
       nameEn: 'Minecraft 1.21.8 Survival World',
       nameKo: 'Minecraft 1.21.8 서바이벌 월드',
-      meta: '夸克网盘',
-      icon: '⛏️',
-      url: 'https://pan.quark.cn/s/364c986a6e70'
+      meta: '夸克网盘', metaEn: 'Quark Drive', metaKo: 'Quark 드라이브',
+      icon: '⛏️', url: 'https://pan.quark.cn/s/364c986a6e70'
     }
   ]
 };
 
 /* ============================================================
+   MESSAGE FORM BACKEND
+   Web3Forms is a static-friendly form→email relay. The access
+   key is a PUBLIC submit token bound to one inbox (spam-filtered),
+   not a secret — safe to ship in a static page. Create a free key
+   at https://web3forms.com and paste it below. Leave '' and the
+   form simply acknowledges locally without sending.
+   ============================================================ */
+const MSG_CONFIG = { web3formsKey: '' };
+
+/* ============================================================
    STATE
    ============================================================ */
-let lang = 'zh';    // 'zh' | 'en' | 'ko'
-let theme = 'dark'; // 'dark' | 'light'
-let activeSection = null;
+let lang  = localStorage.getItem('lang')  || 'zh';     // 'zh' | 'en' | 'ko'
+let theme = localStorage.getItem('theme') || 'night';  // 'night' | 'day'
+if (!['zh', 'en', 'ko'].includes(lang)) lang = 'zh';
+if (!['night', 'day'].includes(theme)) theme = 'night';   // migrate old dark/light
+let activeSection = 'about';
+let galleryLoaded = false;
+let logsLoaded = false;
+
+const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
 /* ============================================================
-   DOM REFS
+   DOM
    ============================================================ */
-const colPrimary   = document.getElementById('col-primary');
-const colSecondary = document.getElementById('col-secondary');
-const themeToggle  = document.getElementById('theme-toggle');
-const themeLabel   = themeToggle.querySelector('.theme-label');
-const iconMoon     = document.getElementById('icon-moon');
-const iconSun      = document.getElementById('icon-sun');
+const stage       = document.getElementById('stage');
+const overlayRoot = document.getElementById('overlay-root');
 
 /* ============================================================
-   HELPERS
+   I18N
    ============================================================ */
-function t(zhText, enText, koText) {
-  if (lang === 'zh') return zhText;
-  if (lang === 'ko') return koText || enText || zhText;
-  return enText || zhText;
+function t(zh, en, ko) {
+  if (lang === 'zh') return zh;
+  if (lang === 'ko') return ko || en || zh;
+  return en || zh;
 }
-
-function isMobile() { return window.innerWidth <= 768; }
-
-function clearSecondary() {
-  colSecondary.innerHTML = '';
-  colSecondary.classList.remove('mobile-open');
+function pick(o, base) {  // localized name from a DATA object
+  if (lang === 'zh') return o[base];
+  if (lang === 'ko') return o[base + 'Ko'] || o[base + 'En'] || o[base];
+  return o[base + 'En'] || o[base];
 }
-
-function setActiveNav(section) {
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.section === section);
-  });
-  activeSection = section;
-  document.querySelector('.layout').classList.remove('gallery-expanded', 'patchlog-expanded');
-  clearSecondary();
-}
+function fmtDot(dateStr) { return dateStr.replace(/-/g, '.'); }  // 2026-06-03 → 2026.06.03
 
 /* ============================================================
-   RENDERERS — Primary panel
+   DATA LOADERS (auto-maintained indexes)
    ============================================================ */
-function renderAbout() {
-  colPrimary.innerHTML = `
-    <p class="panel-label">${t('概况', 'Overview', '개요')}</p>
-    <div class="about-list">
-      <div class="about-row">
-        <span class="about-key">Email</span>
-        <span class="about-val">
-          <a href="mailto:${DATA.about.email}">${DATA.about.email}</a>
-        </span>
-      </div>
-      <div class="about-row">
-        <span class="about-key">GitHub</span>
-        <span class="about-val">
-          <a href="${DATA.about.github}" target="_blank" rel="noopener">${DATA.about.github}</a>
-        </span>
-      </div>
-    </div>
-  `;
-}
-
-function renderProjects() {
-  const items = DATA.projects.map(proj => {
-    const hasSub = proj.sub && proj.sub.length > 0;
-    return `
-      <button class="panel-item" data-proj="${proj.id}">
-        <span>${lang === 'zh' ? proj.name : lang === 'ko' ? (proj.nameKo || proj.nameEn || proj.name) : (proj.nameEn || proj.name)}</span>
-        <span class="panel-item-right">
-          ${hasSub ? `<span class="item-badge">${proj.sub.length} ${t('子项目','sub', '하위')}</span>` : ''}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        </span>
-      </button>
-    `;
-  }).join('');
-
-  colPrimary.innerHTML = `
-    <p class="panel-label">${t('项目', 'Projects', '프로젝트')}</p>
-    <div class="panel-list">${items || `<p class="placeholder-text">${t('暂无项目','No projects yet', '프로젝트 없음')}</p>`}</div>
-  `;
-
-  colPrimary.querySelectorAll('.panel-item[data-proj]').forEach(btn => {
-    btn.addEventListener('click', () => handleProjectClick(btn.dataset.proj));
-  });
-}
-
-function renderTools() {
-  const items = DATA.tools.map(tool => `
-    <a class="panel-item" href="${tool.url}" ${tool.external === false ? '' : 'target="_blank" rel="noopener"'}>
-      <span>${lang === 'zh' ? tool.name : lang === 'ko' ? (tool.nameKo || tool.nameEn || tool.name) : (tool.nameEn || tool.name)}</span>
-      <span class="panel-item-right">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </span>
-    </a>
-  `).join('');
-
-  colPrimary.innerHTML = `
-    <p class="panel-label">${t('工具', 'Tools', '도구')}</p>
-    <div class="panel-list">${items}</div>
-  `;
-}
-
-function renderDownloads() {
-  const items = DATA.downloads.map(dl => `
-    <a class="dl-item" href="${dl.url}" target="_blank" rel="noopener">
-      <span class="dl-icon">${dl.icon}</span>
-      <span class="dl-info">
-        <p class="dl-name">${lang === 'zh' ? dl.name : lang === 'ko' ? (dl.nameKo || dl.nameEn || dl.name) : (dl.nameEn || dl.name)}</p>
-        <p class="dl-meta">${dl.meta}</p>
-      </span>
-      <svg class="dl-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-    </a>
-  `).join('');
-
-  colPrimary.innerHTML = `
-    <p class="panel-label">${t('下载', 'Downloads', '다운로드')}</p>
-    ${items}
-  `;
-}
-
-async function renderGallery() {
-  colGalleryExpanded(false); // reset merged state
-
-  // 从 index.json 加载图片列表（GitHub Actions 自动维护）
+async function loadGallery() {
+  if (galleryLoaded) return;
   try {
     const res = await fetch('./images/gallery/index.json');
     if (res.ok) {
       const files = await res.json();
-      DATA.gallery = files.map(f => ({ src: `images/gallery/${encodeURIComponent(f)}`, title: '' }));
+      DATA.gallery = files.map(f => ({ src: `images/gallery/${encodeURIComponent(f)}` }));
     }
   } catch {}
-
-  if (DATA.gallery.length === 0) {
-    colPrimary.innerHTML = `
-      <p class="panel-label">${t('画廊', 'Gallery', '갤러리')}</p>
-      <div class="panel-placeholder" style="height:auto;padding:3rem 0;">
-        <div class="placeholder-icon" style="opacity:0.3;font-size:2rem;">🖼</div>
-        <p class="placeholder-text">${t('暂无图片', 'No images yet', '이미지 없음')}</p>
-      </div>
-    `;
-    return;
-  }
-
-  const thumbs = DATA.gallery.map((img, i) => {
-    const inner = img.src
-      ? `<img src="${img.src}" alt="${img.title || ''}" loading="lazy" />`
-      : `<div class="gallery-thumb-placeholder">🖼</div>`;
-    return `<div class="gallery-thumb" data-idx="${i}">${inner}</div>`;
-  }).join('');
-
-  colPrimary.innerHTML = `
-    <p class="panel-label">${t('画廊', 'Gallery', '갤러리')}</p>
-    <div class="gallery-grid">${thumbs}</div>
-  `;
-
-  colPrimary.querySelectorAll('.gallery-thumb').forEach(el => {
-    el.addEventListener('click', () => handleGalleryClick(Number(el.dataset.idx)));
-  });
+  galleryLoaded = true;
 }
-
-function renderEmpty() {
-  colPrimary.innerHTML = '';
-}
-
-/* ============================================================
-   RENDERERS — Secondary panel
-   ============================================================ */
-function renderSubProjects(proj) {
-  const backBtn = isMobile()
-    ? `<button class="mobile-back" id="mobile-back">‹ ${t('返回','Back', '뒤로')}</button>` : '';
-  colSecondary.innerHTML = backBtn + `
-    <p class="panel-label" style="padding:1.75rem 1.4rem 0">${proj.name} · ${t('子项目', 'Sub-projects', '하위 프로젝트')}</p>
-    <div class="panel-list" style="padding:0 1.4rem">
-      ${proj.sub.map(sub => `
-        <a class="panel-item" href="${sub.github}" target="_blank" rel="noopener">
-          <span>${lang === 'zh' ? sub.name : lang === 'ko' ? (sub.nameKo || sub.name) : (sub.nameEn || sub.name)}</span>
-          <span class="panel-item-right">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </span>
-        </a>
-      `).join('')}
-    </div>
-  `;
-  if (isMobile()) {
-    colSecondary.classList.add('mobile-open');
-    document.getElementById('mobile-back').addEventListener('click', clearSecondary);
-  }
-}
-
-/* ---- expand helpers ---- */
-function colGalleryExpanded(on) {
-  document.querySelector('.layout').classList.toggle('gallery-expanded', on);
-  if (!on) { colSecondary.innerHTML = ''; colSecondary.classList.remove('mobile-open'); }
-}
-
-function colPatchlogExpanded(on) {
-  document.querySelector('.layout').classList.toggle('patchlog-expanded', on);
-  if (!on) { colSecondary.innerHTML = ''; colSecondary.classList.remove('mobile-open'); }
-}
-
-function renderGalleryViewer(idx) {
-  const img = DATA.gallery[idx];
-  colGalleryExpanded(true);
-
-  const imageEl = img && img.src
-    ? `<img class="gallery-viewer-img" src="${img.src}" alt="${img.title || ''}" />`
-    : `<div class="gallery-viewer-placeholder"><span>🖼</span><p>${t('暂无图片','No image', '이미지 없음')}</p></div>`;
-
-  colSecondary.innerHTML = `
-    <div class="gallery-viewer">
-      <button class="gallery-close" id="gallery-close">✕ ${t('关闭','Close', '닫기')}</button>
-      ${imageEl}
-      ${img && img.title ? `<p class="gallery-viewer-caption">${img.title}</p>` : ''}
-    </div>
-  `;
-  if (isMobile()) colSecondary.classList.add('mobile-open');
-
-  document.getElementById('gallery-close').addEventListener('click', () => {
-    colGalleryExpanded(false);
-    colPrimary.querySelectorAll('.gallery-thumb').forEach(el => el.classList.remove('active'));
-  });
-}
-
-/* ============================================================
-   PATCH LOG — calendar renderer
-   ============================================================ */
-const MONTH_ZH = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-const MONTH_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_ZH   = ['一','二','三','四','五','六','日'];
-const DAY_EN   = ['Mo','Tu','We','Th','Fr','Sa','Su'];
-const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-const DAY_KO   = ['월','화','수','목','금','토','일'];
-
-async function renderPatchlog() {
-  // 从 index.json 加载日志日期列表
+async function loadLogs() {
+  if (logsLoaded) return;
   try {
     const res = await fetch('./logs/index.json');
     if (res.ok) DATA.patchlog = await res.json();
   } catch {}
+  logsLoaded = true;
+}
 
-  const now      = new Date();
-  const todayStr = fmtDate(now);
-
-  // ── 第3列：日历 ──
-  let html = `<p class="panel-label">${t('斑驳日志', 'Patch Log', '패치 로그')}</p>`;
-  let y = 2026, m = 2;
-  const endY = now.getFullYear(), endM = now.getMonth();
-  while (y < endY || (y === endY && m <= endM)) {
-    html += buildMonth(y, m, todayStr);
-    m++;
-    if (m > 11) { m = 0; y++; }
-  }
-  colPrimary.innerHTML = html;
-
-  colPrimary.querySelectorAll('.cal-day-entry').forEach(el => {
-    el.addEventListener('click', () => handlePatchlogClick(el.dataset.date, el));
-  });
-
-  // ── 第4+5列：立即展开，只显示背景 ──
-  colPatchlogExpanded(true);
-  colSecondary.innerHTML = `
-    <div class="patchlog-viewer" id="patchlog-viewer">
-      <div class="patchlog-bg"></div>
-      <div class="patchlog-overlay" id="patchlog-overlay" aria-hidden="true">
-        <button class="plog-close" id="patchlog-close">✕</button>
-        <p class="plog-date" id="plog-date"></p>
-        <div class="plog-body" id="plog-body"></div>
+/* ============================================================
+   RENDER — about / home
+   ============================================================ */
+async function renderAbout() {
+  stage.innerHTML = `
+    <header class="hero">
+      <h1>This is <em>Eytle</em></h1>
+      <div class="url">eytle.cn</div>
+    </header>
+    <section class="grid2">
+      <div class="col-left">
+        <div class="panel plog-card" id="home-plog">
+          <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
+          <div class="r-loading placeholder-text">${t('加载中…','Loading…','로딩 중…')}</div>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">${t('给 Eytle 留言', 'Leave Eytle a message', 'Eytle에게 메시지')}</div>
+          <textarea id="msg-text" class="msg-text" maxlength="140"
+            placeholder="${t('写点什么…','Write something…','내용을 입력하세요…')}"></textarea>
+          <input type="text" id="msg-hp" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <div class="msg-row">
+            <span class="msg-count" id="msg-count">0 / 140</span>
+            <button class="msg-send" id="msg-send">${t('发送','Send','보내기')}</button>
+          </div>
+          <div class="msg-hint" id="msg-hint" aria-live="polite"></div>
+        </div>
       </div>
-    </div>
+      <div class="col-right">
+        <div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+        <div class="gal" id="home-gal"></div>
+      </div>
+    </section>
   `;
 
-  document.getElementById('patchlog-close').addEventListener('click', closeLogOverlay);
+  wireMessageForm();
+
+  // latest patch log (real content, no fabrication)
+  await loadLogs();
+  const card = document.getElementById('home-plog');
+  if (DATA.patchlog.length) {
+    const latest = DATA.patchlog[0];               // index.json is newest-first
+    let body = '';
+    try {
+      const r = await fetch(`./logs/${latest}.txt`);
+      if (r.ok) body = (await r.text()).trim();
+    } catch {}
+    card.innerHTML = `
+      <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
+      <div class="date">${fmtDot(latest)}</div>
+      <p class="txt">${escapeHtml(body)}</p>
+      <button class="more" id="home-plog-more">${t('读全文 →','Read more →','전문 읽기 →')}</button>
+    `;
+    document.getElementById('home-plog-more').addEventListener('click', () => openReader(latest));
+  } else {
+    card.querySelector('.r-loading').textContent = t('暂无随笔','Nothing yet','아직 없음');
+  }
+
+  // gallery preview — newest few, shuffled (concept uses 6)
+  await loadGallery();
+  const gal = document.getElementById('home-gal');
+  if (DATA.gallery.length) {
+    const idx = DATA.gallery.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    gal.innerHTML = idx.slice(0, 6)
+      .map(i => `<img src="${DATA.gallery[i].src}" alt="" loading="lazy" data-idx="${i}" />`).join('');
+    gal.querySelectorAll('img').forEach(im =>
+      im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+  } else {
+    gal.innerHTML = `<p class="placeholder-text">${t('暂无图片','No images yet','이미지 없음')}</p>`;
+  }
+}
+
+/* ============================================================
+   RENDER — projects (with inline sub-projects)
+   ============================================================ */
+function renderProjects() {
+  const items = DATA.projects.map(p => {
+    const hasSub = p.sub && p.sub.length;
+    return `
+      <button class="list-item" data-proj="${p.id}">
+        <span class="label">${escapeHtml(pick(p, 'name'))}</span>
+        <span class="right">
+          ${hasSub ? `<span class="badge">${p.sub.length} ${t('子项目','sub','하위')}</span>` : ''}
+          ${chev()}
+        </span>
+      </button>`;
+  }).join('');
+
+  stage.innerHTML = `
+    <div><div class="eyebrow">${t('项目','Projects','프로젝트')}</div>
+    <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div>
+    <div id="proj-sub"></div></div>`;
+
+  stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
+    btn.addEventListener('click', () => handleProjectClick(btn.dataset.proj)));
+}
+
+function handleProjectClick(id) {
+  const proj = DATA.projects.find(p => p.id === id);
+  if (!proj) return;
+  const sub = document.getElementById('proj-sub');
+  stage.querySelectorAll('.list-item[data-proj]').forEach(b => b.classList.toggle('on', b.dataset.proj === id));
+
+  if (proj.sub && proj.sub.length) {
+    sub.innerHTML = `
+      <div class="list-sub">
+        <div class="eyebrow">${escapeHtml(pick(proj, 'name'))} · ${t('子项目','Sub-projects','하위 프로젝트')}</div>
+        <div class="list">${proj.sub.map(s => `
+          <a class="list-item" href="${s.github}" target="_blank" rel="noopener">
+            <span class="label">${escapeHtml(pick(s, 'name'))}</span>
+            <span class="right">${extIcon()}</span>
+          </a>`).join('')}</div>
+      </div>`;
+  } else {
+    sub.innerHTML = '';
+    window.open(proj.github, '_blank', 'noopener');
+  }
+}
+
+/* ============================================================
+   RENDER — tools
+   ============================================================ */
+function renderTools() {
+  const items = DATA.tools.map(tool => `
+    <a class="list-item" href="${tool.url}" ${tool.external === false ? '' : 'target="_blank" rel="noopener"'}>
+      <span class="label">
+        ${tool.icon ? `<img class="tool-ico" src="${tool.icon}" alt="" />` : ''}
+        ${escapeHtml(pick(tool, 'name'))}
+      </span>
+      <span class="right">${chev()}</span>
+    </a>`).join('');
+
+  stage.innerHTML = `
+    <div><div class="eyebrow">${t('工具','Tools','도구')}</div>
+    <div class="list">${items || placeholder(t('暂无工具','No tools yet','도구 없음'))}</div></div>`;
+}
+
+/* ============================================================
+   RENDER — downloads
+   ============================================================ */
+function renderDownloads() {
+  const items = DATA.downloads.map(dl => `
+    <a class="dl-item" href="${dl.url}" target="_blank" rel="noopener">
+      <span class="dl-ico">${dl.icon}</span>
+      <span class="dl-info">
+        <p class="dl-name">${escapeHtml(pick(dl, 'name'))}</p>
+        <p class="dl-meta">${escapeHtml(pick(dl, 'meta') || dl.meta || '')}</p>
+      </span>
+      <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+    </a>`).join('');
+
+  stage.innerHTML = `<div><div class="eyebrow">${t('下载','Downloads','다운로드')}</div>${items}</div>`;
+}
+
+/* ============================================================
+   RENDER — patch log calendar
+   ============================================================ */
+const MONTH_ZH = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const MONTH_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const DAY_ZH = ['一','二','三','四','五','六','日'];
+const DAY_EN = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+const DAY_KO = ['월','화','수','목','금','토','일'];
+
+async function renderPatchlog() {
+  await loadLogs();
+  const now = new Date();
+  const todayStr = fmtDate(now);
+
+  let months = '';
+  let y = 2026, m = 2;                       // calendar starts 2026-03 (earliest log)
+  const endY = now.getFullYear(), endM = now.getMonth();
+  while (y < endY || (y === endY && m <= endM)) {
+    months += buildMonth(y, m, todayStr);
+    m++; if (m > 11) { m = 0; y++; }
+  }
+
+  stage.innerHTML = `
+    <div><div class="eyebrow">${t('斑驳日志','Patch Log','Patch Log')}</div>
+    <div class="cal-wrap">${months}</div></div>`;
+
+  stage.querySelectorAll('.cal-day-entry').forEach(el =>
+    el.addEventListener('click', () => openReader(el.dataset.date)));
 }
 
 function fmtDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function buildMonth(year, month, todayStr) {
-  const label = lang === 'zh'
-    ? `${year}年 ${MONTH_ZH[month]}`
-    : lang === 'ko'
-      ? `${year}년 ${MONTH_KO[month]}`
-      : `${MONTH_EN[month]} ${year}`;
-
-  // Monday-first: offset = (getDay()+6)%7
-  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const label = lang === 'zh' ? `${year}年 ${MONTH_ZH[month]}`
+              : lang === 'ko' ? `${year}년 ${MONTH_KO[month]}`
+              : `${MONTH_EN[month]} ${year}`;
+  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;   // Monday-first
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const nowTime     = new Date();
-  nowTime.setHours(0,0,0,0);
+  const nowTime = new Date(); nowTime.setHours(0, 0, 0, 0);
 
   const heads = (lang === 'zh' ? DAY_ZH : lang === 'ko' ? DAY_KO : DAY_EN)
     .map(h => `<div class="cal-head">${h}</div>`).join('');
 
   let cells = '';
   for (let i = 0; i < firstOffset; i++) cells += '<div class="cal-day cal-blank"></div>';
-
   for (let d = 1; d <= daysInMonth; d++) {
-    const ds      = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const hasLog  = DATA.patchlog.includes(ds);
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const hasLog = DATA.patchlog.includes(ds);
     const isToday = ds === todayStr;
-    const future  = new Date(year, month, d) > nowTime;
-
+    const future = new Date(year, month, d) > nowTime;
     let cls = 'cal-day';
-    if (hasLog)   cls += ' cal-day-entry';
-    if (isToday)  cls += ' cal-day-today';
-    if (future)   cls += ' cal-day-future';
-
-    cells += hasLog
-      ? `<div class="${cls}" data-date="${ds}">${d}</div>`
-      : `<div class="${cls}">${d}</div>`;
+    if (hasLog) cls += ' cal-day-entry';
+    if (isToday) cls += ' cal-day-today';
+    if (future) cls += ' cal-day-future';
+    cells += hasLog ? `<div class="${cls}" data-date="${ds}">${d}</div>` : `<div class="${cls}">${d}</div>`;
   }
-
-  return `
-    <div class="cal-month">
-      <p class="cal-month-label">${label}</p>
-      <div class="cal-grid">${heads}${cells}</div>
-    </div>
-  `;
-}
-
-async function handlePatchlogClick(dateStr, el) {
-  // highlight selected day
-  colPrimary.querySelectorAll('.cal-day-entry').forEach(d => d.classList.remove('cal-day-active'));
-  el.classList.add('cal-day-active');
-
-  // format date label
-  const dp = dateStr.split('-');
-  const dateLabel = `${dp[0]}.${parseInt(dp[1])}.${parseInt(dp[2])}`;
-
-  // show overlay immediately with loading state
-  const overlay  = document.getElementById('patchlog-overlay');
-  const dateEl   = document.getElementById('plog-date');
-  const bodyEl   = document.getElementById('plog-body');
-
-  dateEl.textContent = dateLabel;
-  bodyEl.textContent = t('加载中…', 'Loading…', '로딩 중…');
-  overlay.classList.add('visible');
-  if (isMobile()) colSecondary.classList.add('mobile-open');
-
-  // fetch the log file
-  try {
-    const res = await fetch(`./logs/${dateStr}.txt`);
-    if (!res.ok) throw new Error(res.status);
-    bodyEl.textContent = await res.text();
-  } catch {
-    bodyEl.textContent = t('日志加载失败', 'Failed to load log', '로그 로드 실패');
-  }
-}
-
-function closeLogOverlay() {
-  const ov = document.getElementById('patchlog-overlay');
-  if (ov) ov.classList.remove('visible');
-  colPrimary.querySelectorAll('.cal-day-entry').forEach(d => d.classList.remove('cal-day-active'));
-  if (isMobile()) colSecondary.classList.remove('mobile-open');
+  return `<div class="cal-month"><p class="cal-month-label">${label}</p><div class="cal-grid">${heads}${cells}</div></div>`;
 }
 
 /* ============================================================
-   HANDLERS
+   RENDER — gallery grid
    ============================================================ */
-function handleGalleryClick(idx) {
-  colPrimary.querySelectorAll('.gallery-thumb').forEach((el, i) => {
-    el.classList.toggle('active', i === idx);
-  });
-  renderGalleryViewer(idx);
+async function renderGallery() {
+  await loadGallery();
+  if (!DATA.gallery.length) {
+    stage.innerHTML = `<div><div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+      ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
+    return;
+  }
+  stage.innerHTML = `
+    <div><div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+    <div class="gallery-grid">${DATA.gallery.map((img, i) =>
+      `<img src="${img.src}" alt="" loading="lazy" data-idx="${i}" />`).join('')}</div></div>`;
+  stage.querySelectorAll('.gallery-grid img').forEach(im =>
+    im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
 }
 
-function handleProjectClick(projId) {
-  const proj = DATA.projects.find(p => p.id === projId);
-  if (!proj) return;
+/* ============================================================
+   OVERLAYS — patch reader + gallery lightbox
+   ============================================================ */
+function mountOverlay(inner, extraClass) {
+  overlayRoot.innerHTML = `
+    <div class="overlay ${extraClass || ''}" id="ov">
+      <button class="ov-close" id="ov-close">✕ ${t('关闭','Close','닫기')}</button>
+      ${inner}
+    </div>`;
+  const ov = document.getElementById('ov');
+  const close = () => { overlayRoot.innerHTML = ''; document.removeEventListener('keydown', onEsc); };
+  function onEsc(e) { if (e.key === 'Escape') close(); }
+  document.getElementById('ov-close').addEventListener('click', close);
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', onEsc);
+  return close;
+}
 
-  colPrimary.querySelectorAll('.panel-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.proj === projId);
-  });
-
-  if (proj.sub && proj.sub.length > 0) {
-    renderSubProjects(proj);
-  } else {
-    // No sub-projects: open GitHub directly
-    window.open(proj.github, '_blank', 'noopener');
-    clearSecondary();
+async function openReader(dateStr) {
+  mountOverlay(`
+    <div class="reader" role="dialog" aria-modal="true">
+      <div class="r-date">${fmtDot(dateStr)}</div>
+      <div class="r-body" id="r-body">${t('加载中…','Loading…','로딩 중…')}</div>
+    </div>`, 'reader-ov');
+  const body = document.getElementById('r-body');
+  try {
+    const r = await fetch(`./logs/${dateStr}.txt`);
+    if (!r.ok) throw new Error(r.status);
+    body.textContent = (await r.text()).trim();
+  } catch {
+    body.textContent = t('日志加载失败','Failed to load log','로그 로드 실패');
   }
 }
 
-function handleSection(section) {
-  setActiveNav(section);
+function openLightbox(idx) {
+  const img = DATA.gallery[idx];
+  if (!img) return;
+  mountOverlay(`<div class="lightbox"><img src="${img.src}" alt="" /></div>`, 'lightbox-ov');
+}
 
+/* ============================================================
+   MESSAGE FORM
+   ============================================================ */
+function wireMessageForm() {
+  const box = document.getElementById('msg-text');
+  const cnt = document.getElementById('msg-count');
+  const btn = document.getElementById('msg-send');
+  const hint = document.getElementById('msg-hint');
+  const hp = document.getElementById('msg-hp');
+  if (!box) return;
+
+  const upd = () => { cnt.textContent = `${box.value.length} / 140`; };
+  box.addEventListener('input', upd); upd();
+
+  btn.addEventListener('click', async () => {
+    const text = box.value.trim();
+    if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.focus(); return; }
+    if (hp.value) return;   // honeypot tripped → silently drop
+
+    if (!MSG_CONFIG.web3formsKey) {        // no backend configured → acknowledge locally
+      hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
+      box.value = ''; upd(); return;
+    }
+
+    btn.disabled = true;
+    hint.textContent = t('发送中…','Sending…','보내는 중…');
+    try {
+      const res = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          access_key: MSG_CONFIG.web3formsKey,
+          subject: 'eytle.cn 留言',
+          message: text,
+          from_page: 'eytle.cn',
+          botcheck: hp.value
+        })
+      });
+      const data = await res.json();
+      if (data.success) { hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨'); box.value = ''; upd(); }
+      else throw new Error(data.message || 'failed');
+    } catch {
+      hint.textContent = t('发送失败，请稍后再试','Send failed, try again later','전송 실패, 나중에 다시 시도');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+/* ============================================================
+   SMALL HTML HELPERS
+   ============================================================ */
+function chev() {
+  return `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+}
+function extIcon() {
+  return `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+}
+function placeholder(txt) { return `<p class="placeholder-text">${escapeHtml(txt)}</p>`; }
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+function go(section) {
+  if (!navMap.includes(section)) section = 'about';
+  activeSection = section;
+  if (location.hash.slice(1) !== section) history.replaceState(null, '', '#' + section);
+  document.querySelectorAll('.nav-i').forEach(b => b.classList.toggle('on', b.dataset.section === section));
+  overlayRoot.innerHTML = '';
   switch (section) {
     case 'about':     renderAbout();     break;
     case 'projects':  renderProjects();  break;
     case 'tools':     renderTools();     break;
-    case 'gallery':   renderGallery();   break;
     case 'patchlog':  renderPatchlog();  break;
+    case 'gallery':   renderGallery();   break;
     case 'downloads': renderDownloads(); break;
-    default: renderEmpty();
+    default:          renderAbout();
   }
 }
 
@@ -475,76 +482,46 @@ function handleSection(section) {
    LANGUAGE
    ============================================================ */
 function applyLang() {
-  document.querySelectorAll('[data-zh]').forEach(el => {
-    if (!el.classList.contains('nav-item')) {
-      el.textContent = lang === 'zh'
-        ? el.dataset.zh
-        : lang === 'ko'
-          ? (el.dataset.ko || el.dataset.en || el.dataset.zh)
-          : (el.dataset.en || el.dataset.zh);
-    }
+  document.querySelectorAll('.nav-i').forEach((b, i) => {
+    b.querySelector('span').textContent =
+      lang === 'zh' ? b.dataset.zh : lang === 'ko' ? (b.dataset.ko || b.dataset.en) : b.dataset.en;
   });
-
-  document.querySelectorAll('.nav-item[data-zh]').forEach(btn => {
-    btn.textContent = lang === 'zh'
-      ? btn.dataset.zh
-      : lang === 'ko'
-        ? (btn.dataset.ko || btn.dataset.en || btn.dataset.zh)
-        : (btn.dataset.en || btn.dataset.zh);
-  });
-
-  if (theme === 'dark') {
-    themeLabel.textContent = lang === 'zh' ? '暗色模式' : lang === 'ko' ? '다크 모드' : 'Dark Mode';
-  } else {
-    themeLabel.textContent = lang === 'zh' ? '亮色模式' : lang === 'ko' ? '라이트 모드' : 'Light Mode';
-  }
-
-  if (activeSection) handleSection(activeSection);
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  document.documentElement.lang = lang === 'zh' ? 'zh' : lang;
+  lampLabel();
+  go(activeSection);   // re-render active section in new language
 }
 
 /* ============================================================
-   THEME
+   THEME — "lights on / off"
    ============================================================ */
+function lampLabel() {
+  const night = document.documentElement.getAttribute('data-theme') === 'night';
+  document.getElementById('lamp-ico').textContent = night ? '☀' : '☾';
+  document.getElementById('lamp-tx').textContent =
+    { zh: night ? '开灯' : '关灯', en: night ? 'Lights on' : 'Lights off', ko: night ? '불 켜기' : '불 끄기' }[lang];
+}
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme);
-  if (theme === 'dark') {
-    iconMoon.style.display = '';
-    iconSun.style.display  = 'none';
-    themeLabel.textContent = lang === 'zh' ? '暗色模式' : lang === 'ko' ? '다크 모드' : 'Dark Mode';
-  } else {
-    iconMoon.style.display = 'none';
-    iconSun.style.display  = '';
-    themeLabel.textContent = lang === 'zh' ? '亮色模式' : lang === 'ko' ? '라이트 모드' : 'Light Mode';
-  }
+  lampLabel();
 }
 
 /* ============================================================
    INIT
    ============================================================ */
-document.querySelectorAll('.nav-item').forEach(btn => {
-  btn.addEventListener('click', () => handleSection(btn.dataset.section));
+document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () => go(b.dataset.section)));
+document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => {
+  lang = b.dataset.lang; localStorage.setItem('lang', lang); applyLang();
+}));
+document.getElementById('lamp').addEventListener('click', () => {
+  theme = theme === 'night' ? 'day' : 'night';
+  localStorage.setItem('theme', theme); applyTheme();
 });
-
-document.querySelectorAll('.lang-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    lang = btn.dataset.lang;
-    document.querySelectorAll('.lang-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.lang === lang);
-    });
-    applyLang();
-  });
-});
-
-themeToggle.addEventListener('click', () => {
-  theme = theme === 'dark' ? 'light' : 'dark';
-  applyTheme();
-});
-
-document.getElementById('home-btn').addEventListener('click', () => {
-  setActiveNav(null);
-  renderEmpty();
-});
+document.getElementById('home-btn').addEventListener('click', () => go('about'));
+window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s && s !== activeSection) go(s); });
 
 // Boot
+const initial = location.hash.slice(1);
+if (navMap.includes(initial)) activeSection = initial;
 applyTheme();
-renderEmpty();
+applyLang();   // sets nav labels + renders the active section
