@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -72,6 +73,12 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05070a);
 scene.fog = new THREE.Fog(0x05070a, 14, 42);
 
+/* ---- IBL: subtle reflections + ambient fill for PBR ---- */
+const _pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.25; // keep it a fill, not a key light
+scene.add(new THREE.AmbientLight(0x223040, 0.15));
+
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, EYE_Y, 0);
 
@@ -94,6 +101,35 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+/* ============================================================
+   ARCHITECTURE: materials + corridor shell
+   ============================================================ */
+const CEIL_Y = 4;
+const CHUNK_LEN = 8;
+const ART_PER_SIDE = 1;
+
+const mats = {
+  wall: new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.92, metalness: 0.0 }),
+  ceiling: new THREE.MeshStandardMaterial({ color: 0x0c0e12, roughness: 0.95, metalness: 0.0 }),
+  frame: new THREE.MeshPhysicalMaterial({
+    color: 0x1a1d22, roughness: 0.35, metalness: 0.2, clearcoat: 0.6, clearcoatRoughness: 0.3
+  }),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, roughness: 0.06, metalness: 0, transmission: 0,
+    transparent: true, opacity: 0.06, clearcoat: 1, clearcoatRoughness: 0.05
+  }),
+};
+
+// A very long ceiling slab; the floor is added in Task 6 (reflective).
+function buildStructure() {
+  const LEN = 400; // long enough to feel endless before chunk recycling matters
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(HALL_HALF_WIDTH * 2, LEN), mats.ceiling);
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.set(0, CEIL_Y, -LEN / 2 + 4);
+  ceil.receiveShadow = true;
+  scene.add(ceil);
+}
 
 /* ============================================================
    FIRST-PERSON CONTROLS + MOVEMENT
@@ -155,18 +191,6 @@ controls.addEventListener('unlock', () => {
 });
 canvas.addEventListener('click', () => { if (!controls.isLocked) controls.lock(); });
 
-/* --- TEMP (removed in Task 4): proof-of-render cube --- */
-const _tmpLight = new THREE.DirectionalLight(0xffffff, 2.5);
-_tmpLight.position.set(3, 6, 2);
-scene.add(_tmpLight, new THREE.AmbientLight(0x223344, 0.6));
-const _tmpCube = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshStandardMaterial({ color: 0x8899aa, roughness: 0.5, metalness: 0.1 })
-);
-_tmpCube.position.set(0, EYE_Y, -4);
-scene.add(_tmpCube);
-updaters.push((dt) => { _tmpCube.rotation.y += dt * 0.6; });
-
 /* ---- boot ---- */
 async function boot() {
   try {
@@ -177,6 +201,7 @@ async function boot() {
   }
   // Temporary Task-1 proof: confirm Three loaded and list parsed.
   console.log('[museum] THREE', THREE.REVISION, 'images', IMAGES.length);
+  buildStructure();
   setProgress(0, IMAGES.length);
   showGateEnter();
   gateEnter.addEventListener('click', () => {
