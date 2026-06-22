@@ -132,6 +132,102 @@ function buildStructure() {
 }
 
 /* ============================================================
+   CHUNK SYSTEM: walls, framed art, recycling
+   ============================================================ */
+const POOL = 7;
+const ART_W = 1.6, ART_H = 1.1;
+const ART_Y = 1.7;                 // center height of artwork
+const texLoader = new THREE.TextureLoader();
+const chunks = [];
+const artMeshes = [];
+let nextImage = 0;
+
+function setArtTexture(slot, imageIndex) {
+  const url = IMAGES[imageIndex % IMAGES.length];
+  texLoader.load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const old = slot.picMesh.material.map;
+    slot.picMesh.material.map = tex;
+    slot.picMesh.material.needsUpdate = true;
+    if (old) old.dispose();
+    // fit plane to image aspect (keep height, adjust width)
+    const aspect = tex.image.width / tex.image.height;
+    slot.picMesh.scale.set(aspect / (ART_W / ART_H), 1, 1);
+  });
+}
+
+function makeChunk(index) {
+  const group = new THREE.Group();
+  const slots = [];
+
+  // two side walls (one per side), full chunk length
+  for (const side of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_LEN, CEIL_Y), mats.wall);
+    wall.position.set(side * HALL_HALF_WIDTH, CEIL_Y / 2, 0);
+    wall.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+    wall.receiveShadow = true;
+    group.add(wall);
+
+    // artwork slots along this wall
+    for (let a = 0; a < ART_PER_SIDE; a++) {
+      const pivot = new THREE.Group();
+      const zOff = -CHUNK_LEN / 2 + CHUNK_LEN * (a + 0.5) / ART_PER_SIDE;
+      pivot.position.set(side * (HALL_HALF_WIDTH - 0.05), ART_Y, zOff);
+      pivot.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+
+      // frame (slightly larger box behind the picture)
+      const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(ART_W + 0.16, ART_H + 0.16, 0.08), mats.frame);
+      frame.position.z = -0.04;
+      frame.castShadow = true; frame.receiveShadow = true;
+
+      // picture plane
+      const picMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(ART_W, ART_H),
+        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9, metalness: 0 }));
+      picMesh.userData.pickable = true;
+
+      // glass pane in front (subtle glare)
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(ART_W, ART_H), mats.glass);
+      glass.position.z = 0.02;
+
+      pivot.add(frame, picMesh, glass);
+      group.add(pivot);
+      artMeshes.push(picMesh);
+      slots.push({ pivot, picMesh, frame, glass, side, /* light filled in Task 6 */ });
+    }
+  }
+  scene.add(group);
+  return { group, slots };
+}
+
+function buildChunks() {
+  for (let i = 0; i < POOL; i++) {
+    const c = makeChunk(i);
+    c.z = -i * CHUNK_LEN;          // chunk 0 starts at origin, extends forward
+    c.group.position.z = c.z;
+    for (const slot of c.slots) setArtTexture(slot, nextImage++);
+    chunks.push(c);
+  }
+}
+
+function recycleChunks() {
+  // furthest-back chunk (largest z) jumps ahead of the furthest-forward (smallest z)
+  // when the player has walked past it.
+  const playerZ = camera.position.z;
+  for (const c of chunks) {
+    if (c.z - playerZ > CHUNK_LEN * 1.5) {     // chunk is well behind the player
+      const minZ = Math.min(...chunks.map(k => k.z));
+      c.z = minZ - CHUNK_LEN;
+      c.group.position.z = c.z;
+      for (const slot of c.slots) setArtTexture(slot, nextImage++);
+    }
+  }
+}
+updaters.push(recycleChunks);
+
+/* ============================================================
    FIRST-PERSON CONTROLS + MOVEMENT
    ============================================================ */
 const FORWARD_MIN_Z = 1.5;
@@ -201,7 +297,8 @@ async function boot() {
   }
   // Temporary Task-1 proof: confirm Three loaded and list parsed.
   console.log('[museum] THREE', THREE.REVISION, 'images', IMAGES.length);
-  buildStructure();
+  buildStructure();   // long ceiling
+  buildChunks();      // walls + art pool
   setProgress(0, IMAGES.length);
   showGateEnter();
   gateEnter.addEventListener('click', () => {
