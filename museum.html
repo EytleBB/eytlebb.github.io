@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Museum · This is Eytle</title>
+  <link rel="icon" href="images/favicon.png" />
+  <link rel="stylesheet" href="css/museum.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="scene-canvas"></canvas>
+
+  <div id="crosshair" hidden></div>
+
+  <button id="exit-btn" hidden>✕</button>
+
+  <div id="hud" hidden>
+    <span class="hud-keys">WASD</span>
+    <span class="hud-sep">·</span>
+    <span class="hud-tip" id="hud-tip"></span>
+  </div>
+
+  <div id="gate">
+    <div class="gate-inner">
+      <h1 id="gate-title">This is Eytle</h1>
+      <p id="gate-sub"></p>
+      <div id="gate-progress"></div>
+      <button id="gate-enter" hidden></button>
+      <button id="gate-back" hidden></button>
+    </div>
+  </div>
+
+  <script type="module" src="js/museum.js"></script>
+</body>
+</html>
