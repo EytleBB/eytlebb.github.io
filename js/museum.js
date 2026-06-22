@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -94,6 +95,66 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+/* ============================================================
+   FIRST-PERSON CONTROLS + MOVEMENT
+   ============================================================ */
+const FORWARD_MIN_Z = 1.5;
+const WALK_SPEED = 3.2;          // m/s
+const controls = new PointerLockControls(camera, document.body);
+let roamEnabled = true;
+
+const keys = { f: false, b: false, l: false, r: false };
+function onKey(e, down) {
+  switch (e.code) {
+    case 'KeyW': case 'ArrowUp':    keys.f = down; break;
+    case 'KeyS': case 'ArrowDown':  keys.b = down; break;
+    case 'KeyA': case 'ArrowLeft':  keys.l = down; break;
+    case 'KeyD': case 'ArrowRight': keys.r = down; break;
+  }
+}
+document.addEventListener('keydown', e => onKey(e, true));
+document.addEventListener('keyup',   e => onKey(e, false));
+
+function clampToHall(pos) {
+  const m = 0.4; // keep off the walls
+  if (pos.x >  HALL_HALF_WIDTH - m) pos.x =  HALL_HALF_WIDTH - m;
+  if (pos.x < -HALL_HALF_WIDTH + m) pos.x = -HALL_HALF_WIDTH + m;
+  if (pos.z >  FORWARD_MIN_Z) pos.z = FORWARD_MIN_Z; // can't walk behind start
+  pos.y = EYE_Y;
+}
+
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+updaters.push((dt) => {
+  if (!roamEnabled || !controls.isLocked) return;
+  camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
+  _right.crossVectors(_fwd, camera.up).normalize();
+  const step = WALK_SPEED * dt;
+  const p = camera.position;
+  if (keys.f) p.addScaledVector(_fwd,  step);
+  if (keys.b) p.addScaledVector(_fwd, -step);
+  if (keys.r) p.addScaledVector(_right,  step);
+  if (keys.l) p.addScaledVector(_right, -step);
+  clampToHall(p);
+});
+
+/* ---- chrome + lock lifecycle ---- */
+const hud = document.getElementById('hud');
+const crosshair = document.getElementById('crosshair');
+const exitBtn = document.getElementById('exit-btn');
+document.getElementById('hud-tip').textContent =
+  T('Esc 退出 · 点击画作聚焦', 'Esc to exit · click a piece to focus', 'Esc 종료 · 작품 클릭');
+exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
+
+controls.addEventListener('lock', () => {
+  crosshair.hidden = false; hud.hidden = false; exitBtn.hidden = false;
+});
+controls.addEventListener('unlock', () => {
+  crosshair.hidden = true;
+  // re-show a minimal hint to click back in (re-lock on canvas click)
+});
+canvas.addEventListener('click', () => { if (!controls.isLocked) controls.lock(); });
+
 /* --- TEMP (removed in Task 4): proof-of-render cube --- */
 const _tmpLight = new THREE.DirectionalLight(0xffffff, 2.5);
 _tmpLight.position.set(3, 6, 2);
@@ -121,6 +182,7 @@ async function boot() {
   gateEnter.addEventListener('click', () => {
     hideGate();
     startLoop();
+    controls.lock();
   }, { once: true });
 }
 boot();
