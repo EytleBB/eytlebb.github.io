@@ -316,6 +316,64 @@ updaters.push((dt) => {
   clampToHall(p);
 });
 
+/* ============================================================
+   CLICK-TO-FOCUS
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const _center = new THREE.Vector2(0, 0); // crosshair = screen center
+let focusState = null;   // null | { phase:'toArt'|'returning', t, fromPos, fromQuat, toPos, toQuat }
+let roamReturn = null;   // { pos, quat } — the roam pose to glide back to
+
+function focusOn(mesh) {
+  // target: stand back from the piece, looking straight at it
+  const worldPos = new THREE.Vector3();
+  mesh.getWorldPosition(worldPos);
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  const toPos = worldPos.clone().addScaledVector(normal, 1.6);
+  toPos.y = worldPos.y;
+
+  const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
+  const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+
+  roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
+  focusState = {
+    phase: 'toArt', t: 0,
+    fromPos: camera.position.clone(),
+    fromQuat: camera.quaternion.clone(),
+    toPos, toQuat,
+  };
+  roamEnabled = false;
+}
+
+function unfocus() {
+  if (!focusState || focusState.phase === 'returning' || !roamReturn) return;
+  focusState = {
+    phase: 'returning', t: 0,
+    fromPos: camera.position.clone(),
+    fromQuat: camera.quaternion.clone(),
+    toPos: roamReturn.pos.clone(),
+    toQuat: roamReturn.quat.clone(),
+  };
+}
+
+const _q = new THREE.Quaternion();
+updaters.push((dt) => {
+  if (!focusState || focusState.t >= 1) return;   // null, or already settled
+  focusState.t = Math.min(1, focusState.t + dt / 0.6); // ~0.6s
+  const e = focusState.t * focusState.t * (3 - 2 * focusState.t); // smoothstep
+  camera.position.lerpVectors(focusState.fromPos, focusState.toPos, e);
+  _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
+  camera.quaternion.copy(_q);
+  if (focusState.t >= 1 && focusState.phase === 'returning') {
+    // arrived back at the roam pose → resume roaming
+    roamEnabled = true;
+    focusState = null;
+    roamReturn = null;
+  }
+  // phase 'toArt' settles with focusState kept (t===1); the guard above
+  // then early-returns each later frame until the user unfocuses.
+});
+
 /* ---- chrome + lock lifecycle ---- */
 const hud = document.getElementById('hud');
 const crosshair = document.getElementById('crosshair');
@@ -331,7 +389,16 @@ controls.addEventListener('unlock', () => {
   crosshair.hidden = true;
   // re-show a minimal hint to click back in (re-lock on canvas click)
 });
-canvas.addEventListener('click', () => { if (!controls.isLocked) controls.lock(); });
+canvas.addEventListener('click', () => {
+  if (!controls.isLocked) { controls.lock(); return; }
+  if (focusState) { unfocus(); return; }      // click again to leave focus (or interrupt inbound tween)
+  raycaster.setFromCamera(_center, camera);
+  const hit = raycaster.intersectObjects(artMeshes, false)[0];
+  if (hit && hit.distance < 7) focusOn(hit.object);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && focusState) { unfocus(); }
+});
 
 /* ---- boot ---- */
 async function boot() {
