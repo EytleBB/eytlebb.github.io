@@ -75,6 +75,13 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  renderer.setAnimationLoop(null);
+  gate.style.display = 'flex';
+  fail('渲染上下文丢失，请刷新页面。', 'Rendering context lost — please reload.', '렌더링 컨텍스트가 손실되었습니다. 새로고침하세요.');
+}, false);
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05070a);
 scene.fog = new THREE.Fog(0x05070a, 14, 42);

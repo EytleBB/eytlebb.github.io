@@ -59,3 +59,13 @@ Home overview has a "给 Eytle 留言" box (140-char limit + live count, fixed h
 ## `mc-calc.html`
 
 Self-contained Minecraft stronghold finder tool. Separate page, no shared JS with `main.js`.
+
+## `museum.html`
+
+Self-contained first-person 3D museum (Three.js via jsDelivr importmap, pinned
+to `0.169.0`). Reads the same `images/gallery/index.json` as the grid. On the
+gallery nav click, `main.js` routes capable desktops here via `isMuseumCapable()`;
+mobile / touch / unsupported devices keep the existing grid + lightbox. The museum
+is a fixed dark dramatic hall — it does NOT follow the night/day theme. Exit
+returns to `index.html` (never `#gallery`, to avoid a relaunch loop). No shared JS
+with `main.js`. Logic lives in `js/museum.js`, styling in `css/museum.css`.

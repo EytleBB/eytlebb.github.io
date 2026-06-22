@@ -72,6 +72,17 @@ let logsLoaded = false;
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
+/* Desktop capability gate for the 3D museum (mobile/unsupported → grid). */
+function isMuseumCapable() {
+  try {
+    if (!window.matchMedia('(pointer: fine)').matches) return false;
+    if (window.innerWidth < 900) return false;
+    if (!('requestPointerLock' in Element.prototype)) return false;
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2'));
+  } catch { return false; }
+}
+
 /* ============================================================
    DOM
    ============================================================ */
@@ -509,7 +520,11 @@ function applyTheme() {
 /* ============================================================
    INIT
    ============================================================ */
-document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () => go(b.dataset.section)));
+document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () => {
+  const section = b.dataset.section;
+  if (section === 'gallery' && isMuseumCapable()) { location.href = 'museum.html'; return; }
+  go(section);
+}));
 document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => {
   lang = b.dataset.lang; localStorage.setItem('lang', lang); applyLang();
 }));
