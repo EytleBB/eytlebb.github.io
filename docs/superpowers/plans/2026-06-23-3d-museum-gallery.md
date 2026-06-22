@@ -853,8 +853,15 @@ Raycast from the crosshair on click; if an artwork is hit, smoothly tween the ca
 - Modify: `js/museum.js`
 
 **Interfaces:**
-- Consumes: `THREE`, `camera`, `controls`, `roamEnabled`, `artMeshes`, `updaters`, `clampToHall`, `EYE_Y`
+- Consumes: `THREE`, `camera`, `controls`, `roamEnabled`, `artMeshes`, `updaters`, `canvas`
 - Produces: focus state machine; toggles `roamEnabled`
+
+State design (avoids the sentinel-string bug): `focusState` is always either
+`null` (roaming/settled-roam) or a tween object `{ phase, t, fromPos, fromQuat,
+toPos, toQuat }` where `phase` is `'toArt'` or `'returning'`. The roam pose to
+return to is saved separately in `roamReturn` at focus time, so it survives even
+after the inbound tween settles. "Focused and settled" = a `focusState` whose
+`phase === 'toArt'` and `t === 1`.
 
 - [ ] **Step 1: Add the focus state + raycaster**
 
@@ -864,7 +871,8 @@ Raycast from the crosshair on click; if an artwork is hit, smoothly tween the ca
    ============================================================ */
 const raycaster = new THREE.Raycaster();
 const _center = new THREE.Vector2(0, 0); // crosshair = screen center
-let focusState = null; // { from:{pos,quat}, toPos, toQuat, t } or 'focused'
+let focusState = null;   // null | { phase:'toArt'|'returning', t, fromPos, fromQuat, toPos, toQuat }
+let roamReturn = null;   // { pos, quat } — the roam pose to glide back to
 
 function focusOn(mesh) {
   // target: stand back from the piece, looking straight at it
@@ -877,22 +885,24 @@ function focusOn(mesh) {
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
   const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
 
+  roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
   focusState = {
+    phase: 'toArt', t: 0,
     fromPos: camera.position.clone(),
     fromQuat: camera.quaternion.clone(),
-    toPos, toQuat, t: 0, returning: false,
+    toPos, toQuat,
   };
   roamEnabled = false;
 }
 
 function unfocus() {
-  if (!focusState || focusState.returning) return;
+  if (!focusState || focusState.phase === 'returning' || !roamReturn) return;
   focusState = {
+    phase: 'returning', t: 0,
     fromPos: camera.position.clone(),
     fromQuat: camera.quaternion.clone(),
-    toPos: focusState.fromPos.clone(),   // original roam position
-    toQuat: focusState.fromQuat.clone(),
-    t: 0, returning: true,
+    toPos: roamReturn.pos.clone(),
+    toQuat: roamReturn.quat.clone(),
   };
 }
 ```
@@ -902,27 +912,30 @@ function unfocus() {
 ```js
 const _q = new THREE.Quaternion();
 updaters.push((dt) => {
-  if (!focusState || focusState.t >= 1 && !focusState.returning && focusState === 'focused') return;
-  if (typeof focusState !== 'object') return;
+  if (!focusState || focusState.t >= 1) return;   // null, or already settled
   focusState.t = Math.min(1, focusState.t + dt / 0.6); // ~0.6s
   const e = focusState.t * focusState.t * (3 - 2 * focusState.t); // smoothstep
   camera.position.lerpVectors(focusState.fromPos, focusState.toPos, e);
   _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
   camera.quaternion.copy(_q);
-  if (focusState.t >= 1) {
-    if (focusState.returning) { roamEnabled = true; focusState = null; }
-    else { focusState = 'focused'; }
+  if (focusState.t >= 1 && focusState.phase === 'returning') {
+    // arrived back at the roam pose → resume roaming
+    roamEnabled = true;
+    focusState = null;
+    roamReturn = null;
   }
+  // phase 'toArt' settles with focusState kept (t===1); the guard above
+  // then early-returns each later frame until the user unfocuses.
 });
 ```
 
 - [ ] **Step 3: Hook click + Esc**
 
-Replace the existing `canvas.addEventListener('click', ...)` from Task 3 with:
+**Delete** the Task-3 line `canvas.addEventListener('click', () => { if (!controls.isLocked) controls.lock(); });` and replace it with the handler below (it subsumes the old lock-on-click behavior). `canvas` is the existing module-scoped const from Task 2.
 ```js
 canvas.addEventListener('click', () => {
   if (!controls.isLocked) { controls.lock(); return; }
-  if (focusState) { unfocus(); return; }      // click again to leave focus
+  if (focusState) { unfocus(); return; }      // click again to leave focus (or interrupt inbound tween)
   raycaster.setFromCamera(_center, camera);
   const hit = raycaster.intersectObjects(artMeshes, false)[0];
   if (hit && hit.distance < 7) focusOn(hit.object);
@@ -931,7 +944,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && focusState) { unfocus(); }
 });
 ```
-Note: while focused we keep the pointer locked so look stays steady; movement is off via `roamEnabled`.
+Note: while focused we keep the pointer locked so look stays steady; WASD movement is off via `roamEnabled` until the return tween completes.
 
 - [ ] **Step 4: Verify in browser**
 
