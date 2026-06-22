@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -121,7 +122,7 @@ const mats = {
   }),
 };
 
-// A very long ceiling slab; the floor is added in Task 6 (reflective).
+// A very long ceiling slab; the floor is added below (reflective).
 function buildStructure() {
   const LEN = 400; // long enough to feel endless before chunk recycling matters
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(HALL_HALF_WIDTH * 2, LEN), mats.ceiling);
@@ -131,10 +132,33 @@ function buildStructure() {
   scene.add(ceil);
 }
 
+/* ---- polished reflective floor ---- */
+function buildFloor() {
+  const LEN = 400;
+  const geo = new THREE.PlaneGeometry(HALL_HALF_WIDTH * 2, LEN);
+  const reflector = new Reflector(geo, {
+    color: 0x0a0c10,
+    textureWidth: Math.min(window.innerWidth, 1024) * renderer.getPixelRatio(),
+    textureHeight: Math.min(window.innerHeight, 1024) * renderer.getPixelRatio(),
+  });
+  reflector.rotation.x = -Math.PI / 2;
+  reflector.position.set(0, 0.001, -LEN / 2 + 4);
+  scene.add(reflector);
+
+  // a rough dark overlay so it reads polished, not a mirror
+  const overlay = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    color: 0x070809, roughness: 0.45, metalness: 0.4, transparent: true, opacity: 0.78 }));
+  overlay.rotation.x = -Math.PI / 2;
+  overlay.position.set(0, 0.002, -LEN / 2 + 4);
+  overlay.receiveShadow = true;
+  scene.add(overlay);
+}
+
 /* ============================================================
    CHUNK SYSTEM: walls, framed art, recycling
    ============================================================ */
 const POOL = 7;
+const SHADOW_CHUNKS = 3;
 const ART_W = 1.6, ART_H = 1.1;
 const ART_Y = 1.7;                 // center height of artwork
 const texLoader = new THREE.TextureLoader();
@@ -193,9 +217,24 @@ function makeChunk(index) {
       glass.position.z = 0.02;
 
       pivot.add(frame, picMesh, glass);
+
+      // dedicated track spotlight aimed at this piece
+      const spot = new THREE.SpotLight(0xfff2dd, 16, 9, Math.PI / 7, 0.5, 1.4);
+      spot.position.set(side * (HALL_HALF_WIDTH - 1.1), CEIL_Y - 0.15, zOff);
+      const spotTarget = new THREE.Object3D();
+      spotTarget.position.set(side * HALL_HALF_WIDTH, ART_Y, zOff);
+      spot.target = spotTarget;
+      spot.castShadow = true;
+      spot.shadow.mapSize.set(1024, 1024);
+      spot.shadow.camera.near = 0.5;
+      spot.shadow.camera.far = 9;
+      spot.shadow.bias = -0.0006;
+      spot.shadow.normalBias = 0.02;
+      group.add(spot, spotTarget);
+
       group.add(pivot);
       artMeshes.push(picMesh);
-      slots.push({ pivot, picMesh, frame, glass, side, /* light filled in Task 6 */ });
+      slots.push({ pivot, picMesh, frame, glass, side, spot, spotTarget });
     }
   }
   scene.add(group);
@@ -226,6 +265,13 @@ function recycleChunks() {
   }
 }
 updaters.push(recycleChunks);
+updaters.push(() => {
+  const pz = camera.position.z;
+  for (const c of chunks) {
+    const near = Math.abs(c.z - pz) <= CHUNK_LEN * SHADOW_CHUNKS;
+    for (const slot of c.slots) if (slot.spot) slot.spot.castShadow = near;
+  }
+});
 
 /* ============================================================
    FIRST-PERSON CONTROLS + MOVEMENT
@@ -297,8 +343,9 @@ async function boot() {
   }
   // Temporary Task-1 proof: confirm Three loaded and list parsed.
   console.log('[museum] THREE', THREE.REVISION, 'images', IMAGES.length);
-  buildStructure();   // long ceiling
-  buildChunks();      // walls + art pool
+  buildStructure();   // ceiling
+  buildFloor();       // reflective floor
+  buildChunks();      // walls + art (+ spotlights)
   setProgress(0, IMAGES.length);
   showGateEnter();
   gateEnter.addEventListener('click', () => {
