@@ -51,6 +51,61 @@ async function loadImageList() {
   IMAGES = files.map(f => `images/gallery/${encodeURIComponent(f)}`);
 }
 
+/* ============================================================
+   RENDERER · SCENE · CAMERA · LOOP
+   ============================================================ */
+const EYE_Y = 1.6;
+const HALL_HALF_WIDTH = 3;
+
+const canvas = document.getElementById('scene-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070a);
+scene.fog = new THREE.Fog(0x05070a, 14, 42);
+
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, EYE_Y, 0);
+
+const clock = new THREE.Clock();
+const updaters = [];
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  for (const fn of updaters) fn(dt);
+  renderer.render(scene, camera);
+}
+let looping = false;
+function startLoop() {
+  if (looping) return;
+  looping = true;
+  renderer.setAnimationLoop(frame);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* --- TEMP (removed in Task 4): proof-of-render cube --- */
+const _tmpLight = new THREE.DirectionalLight(0xffffff, 2.5);
+_tmpLight.position.set(3, 6, 2);
+scene.add(_tmpLight, new THREE.AmbientLight(0x223344, 0.6));
+const _tmpCube = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshStandardMaterial({ color: 0x8899aa, roughness: 0.5, metalness: 0.1 })
+);
+_tmpCube.position.set(0, EYE_Y, -4);
+scene.add(_tmpCube);
+updaters.push((dt) => { _tmpCube.rotation.y += dt * 0.6; });
+
 /* ---- boot ---- */
 async function boot() {
   try {
@@ -65,7 +120,7 @@ async function boot() {
   showGateEnter();
   gateEnter.addEventListener('click', () => {
     hideGate();
-    // scene + controls wired in later tasks
+    startLoop();
   }, { once: true });
 }
 boot();
