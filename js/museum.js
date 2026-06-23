@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -150,8 +151,8 @@ const mats = {
   endWall: new THREE.MeshStandardMaterial({ color: 0x1f2c47, roughness: 0.9, metalness: 0.0 }),
   // gilt bronze frame — ties to the amber accent
   frame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.5, metalness: 0.45 }),
-  // polished dark floor — env reflection gives sheen without a second render pass
-  floor: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.3, metalness: 0.55 }),
+  // rough overlay laid over the planar mirror → reads as polished stone, not glass
+  floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.34, metalness: 0.5, transparent: true, opacity: 0.6 }),
   // glowing ceiling-cove strip (emissive → light line + bloom)
   cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.5 }),
 };
@@ -230,11 +231,21 @@ function buildHall() {
   ceil.position.set(0, CEIL_Y, midZ);
   scene.add(ceil);
 
-  // glossy floor (env-reflective, single pass)
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mats.floor);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, midZ);
-  scene.add(floor);
+  // high-quality reflective floor: a true planar mirror (Reflector) with a rough
+  // semi-transparent overlay so it reads as polished stone rather than glass
+  const fgeo = new THREE.PlaneGeometry(width, len);
+  const reflector = new Reflector(fgeo, {
+    color: 0x0a0f1a,
+    textureWidth: Math.min(window.innerWidth, 1024) * renderer.getPixelRatio(),
+    textureHeight: Math.min(window.innerHeight, 1024) * renderer.getPixelRatio(),
+  });
+  reflector.rotation.x = -Math.PI / 2;
+  reflector.position.set(0, 0.001, midZ);
+  scene.add(reflector);
+  const overlay = new THREE.Mesh(fgeo, mats.floorOverlay);
+  overlay.rotation.x = -Math.PI / 2;
+  overlay.position.set(0, 0.002, midZ);
+  scene.add(overlay);
 
   // side walls + ceiling coves
   for (const side of [-1, 1]) {
