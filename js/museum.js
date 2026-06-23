@@ -89,6 +89,7 @@ scene.fog = new THREE.Fog(0x05070a, 14, 42);
 /* ---- IBL: subtle reflections + ambient fill for PBR ---- */
 const _pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+_pmrem.dispose();                  // env texture stays valid; free the generator's render target
 scene.environmentIntensity = 0.25; // keep it a fill, not a key light
 scene.add(new THREE.AmbientLight(0x223040, 0.15));
 
@@ -456,8 +457,6 @@ async function boot() {
     fail('画廊暂无图片或加载失败。', 'Gallery is empty or failed to load.', '갤러리가 비어 있거나 로드에 실패했습니다.');
     return;
   }
-  // Temporary Task-1 proof: confirm Three loaded and list parsed.
-  console.log('[museum] THREE', THREE.REVISION, 'images', IMAGES.length);
   buildStructure();   // ceiling
   buildFloor();       // reflective floor
   buildChunks();      // walls + art (+ spotlights)
