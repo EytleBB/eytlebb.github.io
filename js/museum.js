@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -271,8 +270,11 @@ function buildHall() {
    FIRST-PERSON CONTROLS + MOVEMENT (with Shift run)
    ============================================================ */
 const WALK_SPEED = 3.2, RUN_SPEED = 6.5;   // m/s
-const controls = new PointerLockControls(camera, document.body);
+const LOOK_SENS = 0.0022;
+const MAX_DELTA = 90;                        // clamp a single mouse event → no spike snaps
+let yaw = Math.PI, pitch = 0;                // start facing -Z (into the hall)
 let roamEnabled = true;
+const isLocked = () => document.pointerLockElement === canvas;
 
 const keys = { f: false, b: false, l: false, r: false, run: false };
 function onKey(e, down) {
@@ -286,6 +288,17 @@ function onKey(e, down) {
 }
 document.addEventListener('keydown', e => onKey(e, true));
 document.addEventListener('keyup',   e => onKey(e, false));
+
+// hand-rolled mouse-look with PER-EVENT delta clamp: a single huge movementX
+// (driver spike / first event after (re)lock) can no longer throw the view
+document.addEventListener('mousemove', (e) => {
+  if (!isLocked() || focusState) return;     // focus tween owns the camera
+  const dx = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementX || 0));
+  const dy = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementY || 0));
+  yaw   -= dx * LOOK_SENS;
+  pitch -= dy * LOOK_SENS;
+  pitch = Math.max(-1.2, Math.min(1.2, pitch));
+});
 
 function clampToHall(pos) {
   const m = 0.4; // keep off the walls
@@ -305,7 +318,14 @@ updaters.push((dt) => {
   warmA.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z - 3.5);
   warmB.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z + 3.5);
 
-  if (!roamEnabled || !controls.isLocked) return;
+  // rebuild orientation from yaw/pitch unless a focus tween drives the camera
+  if (!focusState) {
+    camera.rotation.set(0, 0, 0, 'YXZ');
+    camera.rotateY(yaw);
+    camera.rotateX(pitch);
+  }
+
+  if (!roamEnabled || !isLocked()) return;
   camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
   _right.crossVectors(_fwd, camera.up).normalize();
   const step = (keys.run ? RUN_SPEED : WALK_SPEED) * dt;
@@ -324,6 +344,7 @@ const raycaster = new THREE.Raycaster();
 const _center = new THREE.Vector2(0, 0); // crosshair = screen center
 let focusState = null;   // null | { phase:'toArt'|'returning', t, fromPos, fromQuat, toPos, toQuat }
 let roamReturn = null;   // { pos, quat } — the roam pose to glide back to
+let savedYaw = Math.PI, savedPitch = 0;   // look angles to restore after focus
 
 function focusOn(mesh) {
   const worldPos = new THREE.Vector3();
@@ -335,6 +356,7 @@ function focusOn(mesh) {
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
   const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
 
+  savedYaw = yaw; savedPitch = pitch;
   roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
   focusState = {
     phase: 'toArt', t: 0,
@@ -356,6 +378,10 @@ function unfocus() {
   };
 }
 function cancelFocus() {  // hard reset (used when pausing)
+  if (focusState || roamReturn) {        // only when actually focused
+    if (roamReturn) camera.position.copy(roamReturn.pos);
+    yaw = savedYaw; pitch = savedPitch;
+  }
   focusState = null;
   roamReturn = null;
   roamEnabled = true;
@@ -370,22 +396,25 @@ updaters.push((dt) => {
   _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
   camera.quaternion.copy(_q);
   if (focusState.t >= 1 && focusState.phase === 'returning') {
+    yaw = savedYaw; pitch = savedPitch;   // hand control back to mouse-look
     roamEnabled = true;
     focusState = null;
     roamReturn = null;
   }
 });
 
-/* ---- lock lifecycle: the #enter overlay IS the pause menu ---- */
-controls.addEventListener('lock', () => { document.body.classList.add('locked'); });
-controls.addEventListener('unlock', () => {
-  document.body.classList.remove('locked');
-  cancelFocus();                         // resume cleanly next time
-  if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
+/* ---- pointer-lock lifecycle: the #enter overlay IS the pause menu ---- */
+document.addEventListener('pointerlockchange', () => {
+  const locked = isLocked();
+  document.body.classList.toggle('locked', locked);
+  if (!locked) {
+    cancelFocus();                       // resume cleanly next time
+    if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
+  }
 });
 
 canvas.addEventListener('click', () => {
-  if (!controls.isLocked) return;        // (clicks on the overlay handle locking)
+  if (!isLocked()) return;               // (clicks on the overlay handle locking)
   if (focusState) { unfocus(); return; } // click again to leave focus
   raycaster.setFromCamera(_center, camera);
   const hit = raycaster.intersectObjects(artMeshes, false)[0];
@@ -396,7 +425,7 @@ canvas.addEventListener('click', () => {
 function enterPlay() {
   if (!preloaded) return;
   entered = true;
-  controls.lock();
+  canvas.requestPointerLock();
 }
 enterEl.addEventListener('click', enterPlay);
 
