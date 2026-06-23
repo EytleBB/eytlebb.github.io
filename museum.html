@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Museum · This is Eytle</title>
+  <title>画廊 · This is Eytle</title>
   <link rel="icon" href="images/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/museum.css" />
   <script type="importmap">
   {
@@ -18,24 +21,19 @@
 <body>
   <canvas id="scene-canvas"></canvas>
 
-  <div id="crosshair" hidden></div>
+  <div class="reticle" id="reticle"></div>
+  <div id="title"></div>
+  <div id="hud"></div>
+  <button id="exit-btn" title="退出">✕</button>
 
-  <button id="exit-btn" hidden>✕</button>
-
-  <div id="hud" hidden>
-    <span class="hud-keys">WASD</span>
-    <span class="hud-sep">·</span>
-    <span class="hud-tip" id="hud-tip"></span>
-  </div>
-
-  <div id="gate">
-    <div class="gate-inner">
-      <h1 id="gate-title">This is Eytle</h1>
-      <p id="gate-sub"></p>
-      <div id="gate-progress"></div>
-      <button id="gate-enter" hidden></button>
-      <button id="gate-back" hidden></button>
-    </div>
+  <!-- start screen + pause menu (one element; reappears on Esc) -->
+  <div id="enter">
+    <h1>画廊 <em>Gallery</em></h1>
+    <div class="sub" id="enter-sub"></div>
+    <button class="go" id="enter-go" disabled></button>
+    <div class="keys" id="enter-keys"></div>
+    <div class="prog" id="enter-prog"></div>
+    <button class="back" id="enter-back"></button>
   </div>
 
   <script type="module" src="js/museum.js"></script>

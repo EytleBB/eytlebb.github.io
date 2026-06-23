@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { Reflector } from 'three/addons/objects/Reflector.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -15,37 +14,44 @@ const lang = (() => {
 document.documentElement.lang = lang;
 const T = (zh, en, ko) => (lang === 'en' ? en : lang === 'ko' ? ko : zh);
 
-/* ---- gate DOM ---- */
-const gate = document.getElementById('gate');
-const gateSub = document.getElementById('gate-sub');
-const gateProgress = document.getElementById('gate-progress');
-const gateEnter = document.getElementById('gate-enter');
-const gateBack = document.getElementById('gate-back');
-document.getElementById('gate-title').innerHTML = 'This is <em>Eytle</em>';
-gateSub.textContent = T(
-  'WASD 移动 · 鼠标转动视角 · 点击锁定指针 · 点击画作聚焦 · Esc 退出',
-  'WASD to move · mouse to look · click to lock pointer · click a piece to focus · Esc to exit',
-  'WASD 이동 · 마우스 시점 · 클릭하여 잠금 · 작품 클릭 시 포커스 · Esc 종료'
-);
-gateBack.textContent = T('返回', 'Back', '돌아가기');
-gateBack.addEventListener('click', () => { location.href = 'index.html'; });
+/* ---- overlay / chrome DOM ---- */
+const enterEl = document.getElementById('enter');
+const enterGo = document.getElementById('enter-go');
+const enterSub = document.getElementById('enter-sub');
+const enterKeys = document.getElementById('enter-keys');
+const enterProg = document.getElementById('enter-prog');
+const enterBack = document.getElementById('enter-back');
+const titleEl = document.getElementById('title');
+const hudEl = document.getElementById('hud');
+const exitBtn = document.getElementById('exit-btn');
 
+enterSub.textContent = T('一座灯光下的私人博物馆', 'A private museum under gallery light', '갤러리 조명 아래의 개인 미술관');
+enterKeys.textContent = T('WASD 移动 · 鼠标转视角 · Shift 快走 · ESC 暂停',
+  'WASD move · mouse look · Shift run · ESC pause', 'WASD 이동 · 마우스 시점 · Shift 달리기 · ESC 일시정지');
+enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
+titleEl.textContent = T('画廊 — This is Eytle', 'Gallery — This is Eytle', '갤러리 — This is Eytle');
+hudEl.innerHTML = T(
+  '<b>WASD</b> 移动 · 鼠标 转视角 · <b>Shift</b> 快走 · <b>ESC</b> 暂停',
+  '<b>WASD</b> move · mouse look · <b>Shift</b> run · <b>ESC</b> pause',
+  '<b>WASD</b> 이동 · 마우스 시점 · <b>Shift</b> 달리기 · <b>ESC</b> 일시정지'
+);
+exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
+enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = 'index.html'; });
+
+let preloaded = false, entered = false;
 function setProgress(loaded, total) {
-  gateProgress.textContent = T(
-    `加载中 ${loaded} / ${total}`, `Loading ${loaded} / ${total}`, `로딩 중 ${loaded} / ${total}`
-  );
+  enterProg.textContent = T(`加载中 ${loaded} / ${total}`, `Loading ${loaded} / ${total}`, `로딩 중 ${loaded} / ${total}`);
 }
-function showGateEnter() {
-  gateProgress.textContent = '';
-  gateEnter.textContent = T('点击进入', 'Enter', '입장');
-  gateEnter.hidden = false;
+function readyToEnter() {
+  preloaded = true;
+  enterProg.textContent = '';
+  enterGo.textContent = T('点击进入', 'Enter', '입장');
+  enterGo.disabled = false;
 }
-function hideGate() { gate.style.display = 'none'; }
 function fail(zh, en, ko) {
-  gateSub.textContent = T(zh, en, ko);
-  gateProgress.textContent = '';
-  gateEnter.hidden = true;
-  gateBack.hidden = false;
+  enterSub.textContent = T(zh, en, ko);
+  enterProg.textContent = '';
+  enterGo.hidden = true;
 }
 
 /* ---- gallery list ---- */
@@ -71,29 +77,33 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMappingExposure = 1.1;
+// no shadow maps — dropped for smoothness (was the source of the view-snap hitch)
 
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   renderer.setAnimationLoop(null);
-  gate.style.display = 'flex';
+  document.body.classList.remove('locked');
   fail('渲染上下文丢失，请刷新页面。', 'Rendering context lost — please reload.', '렌더링 컨텍스트가 손실되었습니다. 새로고침하세요.');
 }, false);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d0b09);
-scene.fog = new THREE.Fog(0x0d0b09, 24, 90);
+scene.background = new THREE.Color(0x0b1220);
+scene.fog = new THREE.Fog(0x0b1220, 18, 85);
 
-/* ---- IBL + ambient fill ---- */
+/* ---- IBL + ambient fill (amber & teal: cool ambient, warm followers) ---- */
 const _pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 _pmrem.dispose();
-scene.environmentIntensity = 0.85;
-scene.add(new THREE.HemisphereLight(0xffe6c8, 0x16130f, 0.55));
+scene.environmentIntensity = 0.7;
+scene.add(new THREE.AmbientLight(0x33425f, 0.5));
+scene.add(new THREE.HemisphereLight(0x3a4f78, 0x140e06, 0.4));
+// two warm lights that follow the player → a moving pool of gallery light
+const warmA = new THREE.PointLight(0xffcf85, 28, 22, 2);
+const warmB = new THREE.PointLight(0xffcf85, 28, 22, 2);
+scene.add(warmA, warmB);
 
-const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, EYE_Y, 0);
 
 const clock = new THREE.Clock();
@@ -111,18 +121,15 @@ function startLoop() {
 }
 
 /* ============================================================
-   POST PIPELINE: subtle bloom + tone-mapped output
-   (no SSAO — it produced swimming dither artifacts on flat art
-    at grazing angles, and cost frames)
+   POST: subtle bloom + tone-mapped output
    ============================================================ */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.3,   // strength — picks up the cove light strips, restrained
+  0.3,   // strength — picks up the cove strips, restrained
   0.7,   // radius
-  0.85   // threshold — only the brightest fixtures/highlights bloom
+  0.82   // threshold
 );
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -139,14 +146,15 @@ window.addEventListener('resize', () => {
    MATERIALS
    ============================================================ */
 const mats = {
-  wall: new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.82, metalness: 0.0 }),
-  ceiling: new THREE.MeshStandardMaterial({ color: 0x1a1714, roughness: 0.95, metalness: 0.0 }),
-  endWall: new THREE.MeshStandardMaterial({ color: 0x26221e, roughness: 0.85, metalness: 0.0 }),
-  frame: new THREE.MeshPhysicalMaterial({
-    color: 0x121010, roughness: 0.38, metalness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.35
-  }),
-  // glowing ceiling-cove strip (emissive → reads as a light line, catches bloom)
-  cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.6 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0x1b2740, roughness: 0.9, metalness: 0.0 }),
+  ceiling: new THREE.MeshStandardMaterial({ color: 0x0e1626, roughness: 1.0, metalness: 0.0 }),
+  endWall: new THREE.MeshStandardMaterial({ color: 0x1f2c47, roughness: 0.9, metalness: 0.0 }),
+  // gilt bronze frame — ties to the amber accent
+  frame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.5, metalness: 0.45 }),
+  // polished dark floor — env reflection gives sheen without a second render pass
+  floor: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.3, metalness: 0.55 }),
+  // glowing ceiling-cove strip (emissive → light line + bloom)
+  cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.5 }),
 };
 
 /* ============================================================
@@ -154,18 +162,17 @@ const mats = {
    no infinite generation: one enclosed corridor with end walls.
    ============================================================ */
 const ART_SPACING = 5;        // metres between consecutive pieces on a wall
-const ART_W = 1.7, ART_H = 1.15;
-const ART_Y = 1.7;            // centre height of artwork
-const START_MARGIN = 6;      // first piece this far in front of spawn
-const END_MARGIN = 5;        // gap between last piece and the back wall
+const ART_H = 1.9;            // artwork height (width derives from aspect)
+const ART_MAX_W = 2.7;        // clamp very wide images
+const ART_Y = 1.75;           // centre height of artwork
+const START_MARGIN = 6;       // first piece this far in front of spawn
+const END_MARGIN = 5;         // gap between last piece and the back wall
 
-// layout limits (filled in by buildHall, used by movement clamp)
-let HALL_BACK_Z = -50;       // most-negative reachable z (in front of back wall)
-const HALL_FRONT_Z = 2;      // wall just behind spawn (z=0)
+let HALL_BACK_Z = -50;        // most-negative reachable z (set by buildHall)
+const HALL_FRONT_Z = 2;       // wall just behind spawn (z=0)
 
 const texLoader = new THREE.TextureLoader();
 const texCache = [];          // one THREE.Texture (or null) per IMAGES entry
-const arts = [];              // { picMesh, frame, spot, z } — for focus + shadow culling
 const artMeshes = [];         // pickable picture meshes for raycasting
 
 function preloadTextures(onProgress) {
@@ -180,57 +187,32 @@ function preloadTextures(onProgress) {
   })));
 }
 
-// size both the picture plane AND its frame to the image's real aspect ratio
-function fitArtwork(art, tex) {
-  if (!tex) return;
-  const aspect = tex.image.width / tex.image.height;   // w / h
-  const w = ART_H * aspect;                            // keep height, derive width
-  art.picMesh.scale.set(w / ART_W, 1, 1);
-  art.frame.scale.set((w + 0.16) / (ART_W + 0.16), 1, 1);
-  const mtl = art.picMesh.material;
-  mtl.map = tex;
-  mtl.emissiveMap = tex;       // self-lit so the art always reads clearly
-  mtl.needsUpdate = true;
-}
-
 function makeArtwork(side, z, tex) {
-  const pivot = new THREE.Group();
-  pivot.position.set(side * (HALL_HALF_WIDTH - 0.05), ART_Y, z);
-  pivot.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+  if (!tex) return;
+  // size to the image's real aspect ratio (portrait or landscape)
+  const ar = tex.image.width / tex.image.height;
+  let h = ART_H, w = h * ar;
+  if (w > ART_MAX_W) { w = ART_MAX_W; h = w / ar; }
 
-  const frame = new THREE.Mesh(
-    new THREE.BoxGeometry(ART_W + 0.16, ART_H + 0.16, 0.08), mats.frame);
-  frame.position.z = -0.04;
-  frame.castShadow = true; frame.receiveShadow = true;
+  const x = side * (HALL_HALF_WIDTH - 0.05);
+  const ry = side > 0 ? -Math.PI / 2 : Math.PI / 2;
 
-  const picMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(ART_W, ART_H),
-    new THREE.MeshStandardMaterial({
-      color: 0xffffff, roughness: 0.62, metalness: 0,
-      emissive: 0xffffff, emissiveIntensity: 0.55 }));
-  picMesh.userData.pickable = true;
+  // frame: a flat plane slightly larger than the picture (no box → no z-fight)
+  const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.2, h + 0.2), mats.frame);
+  frame.position.set(x, ART_Y, z);
+  frame.rotation.y = ry;
+  scene.add(frame);
 
-  pivot.add(frame, picMesh);
-
-  // dedicated track spotlight
-  const spot = new THREE.SpotLight(0xffe9c8, 22, 11, Math.PI / 6, 0.45, 1.3);
-  spot.position.set(side * (HALL_HALF_WIDTH - 1.0), CEIL_Y - 0.15, z);
-  const spotTarget = new THREE.Object3D();
-  spotTarget.position.set(side * HALL_HALF_WIDTH, ART_Y, z);
-  spot.target = spotTarget;
-  spot.castShadow = true;
-  spot.shadow.mapSize.set(512, 512);
-  spot.shadow.camera.near = 0.5;
-  spot.shadow.camera.far = 9;
-  spot.shadow.bias = -0.0006;
-  spot.shadow.normalBias = 0.02;
-
-  scene.add(pivot, spot, spotTarget);
-
-  const art = { picMesh, frame, spot, z };
-  fitArtwork(art, tex);
-  arts.push(art);
-  artMeshes.push(picMesh);
+  // picture: UNLIT (MeshBasic) so it always reads true-colour, no glow, no
+  // shadow weirdness — and pushed 2cm proud of the frame so they never z-fight
+  const pic = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: tex }));
+  pic.position.set(x + side * -0.02, ART_Y, z);
+  pic.rotation.y = ry;
+  pic.userData.pickable = true;
+  scene.add(pic);
+  artMeshes.push(pic);
 }
 
 function buildHall() {
@@ -247,50 +229,34 @@ function buildHall() {
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mats.ceiling);
   ceil.rotation.x = Math.PI / 2;
   ceil.position.set(0, CEIL_Y, midZ);
-  ceil.receiveShadow = true;
   scene.add(ceil);
+
+  // glossy floor (env-reflective, single pass)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mats.floor);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0, midZ);
+  scene.add(floor);
 
   // side walls + ceiling coves
   for (const side of [-1, 1]) {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(len, CEIL_Y), mats.wall);
     wall.position.set(side * HALL_HALF_WIDTH, CEIL_Y / 2, midZ);
     wall.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-    wall.receiveShadow = true;
     scene.add(wall);
 
-    const cove = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.07), mats.cove);
+    const cove = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, len), mats.cove);
     cove.position.set(side * (HALL_HALF_WIDTH - 0.13), CEIL_Y - 0.22, midZ);
-    cove.rotation.y = Math.PI / 2;
     scene.add(cove);
   }
 
-  // end walls (back + front) — fully enclose the room
+  // end walls — fully enclose the room
   const backWall = new THREE.Mesh(new THREE.PlaneGeometry(width, CEIL_Y), mats.endWall);
   backWall.position.set(0, CEIL_Y / 2, HALL_BACK_Z);
-  backWall.receiveShadow = true;
   scene.add(backWall);
   const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(width, CEIL_Y), mats.endWall);
   frontWall.position.set(0, CEIL_Y / 2, HALL_FRONT_Z);
   frontWall.rotation.y = Math.PI;
-  frontWall.receiveShadow = true;
   scene.add(frontWall);
-
-  // reflective floor covering the whole hall
-  const fgeo = new THREE.PlaneGeometry(width, len);
-  const reflector = new Reflector(fgeo, {
-    color: 0x0c0a08,
-    textureWidth: Math.min(window.innerWidth, 512) * renderer.getPixelRatio(),
-    textureHeight: Math.min(window.innerHeight, 512) * renderer.getPixelRatio(),
-  });
-  reflector.rotation.x = -Math.PI / 2;
-  reflector.position.set(0, 0.001, midZ);
-  scene.add(reflector);
-  const overlay = new THREE.Mesh(fgeo, new THREE.MeshStandardMaterial({
-    color: 0x110e0b, roughness: 0.35, metalness: 0.5, transparent: true, opacity: 0.68 }));
-  overlay.rotation.x = -Math.PI / 2;
-  overlay.position.set(0, 0.002, midZ);
-  overlay.receiveShadow = true;
-  scene.add(overlay);
 
   // place every artwork once, alternating walls
   for (let i = 0; i < n; i++) {
@@ -301,27 +267,21 @@ function buildHall() {
   }
 }
 
-/* only the spotlights near the camera cast shadows (perf) */
-const SHADOW_RANGE = ART_SPACING * 2.2;
-updaters.push(() => {
-  const cz = camera.position.z;
-  for (const a of arts) a.spot.castShadow = Math.abs(a.z - cz) <= SHADOW_RANGE;
-});
-
 /* ============================================================
-   FIRST-PERSON CONTROLS + MOVEMENT
+   FIRST-PERSON CONTROLS + MOVEMENT (with Shift run)
    ============================================================ */
-const WALK_SPEED = 3.2;          // m/s
+const WALK_SPEED = 3.2, RUN_SPEED = 6.5;   // m/s
 const controls = new PointerLockControls(camera, document.body);
 let roamEnabled = true;
 
-const keys = { f: false, b: false, l: false, r: false };
+const keys = { f: false, b: false, l: false, r: false, run: false };
 function onKey(e, down) {
   switch (e.code) {
     case 'KeyW': case 'ArrowUp':    keys.f = down; break;
     case 'KeyS': case 'ArrowDown':  keys.b = down; break;
     case 'KeyA': case 'ArrowLeft':  keys.l = down; break;
     case 'KeyD': case 'ArrowRight': keys.r = down; break;
+    case 'ShiftLeft': case 'ShiftRight': keys.run = down; break;
   }
 }
 document.addEventListener('keydown', e => onKey(e, true));
@@ -339,10 +299,16 @@ function clampToHall(pos) {
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 updaters.push((dt) => {
+  // warm followers track the player every frame (even when paused, so the
+  // scene behind the menu stays lit)
+  const cp = camera.position;
+  warmA.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z - 3.5);
+  warmB.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z + 3.5);
+
   if (!roamEnabled || !controls.isLocked) return;
   camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
   _right.crossVectors(_fwd, camera.up).normalize();
-  const step = WALK_SPEED * dt;
+  const step = (keys.run ? RUN_SPEED : WALK_SPEED) * dt;
   const p = camera.position;
   if (keys.f) p.addScaledVector(_fwd,  step);
   if (keys.b) p.addScaledVector(_fwd, -step);
@@ -363,7 +329,7 @@ function focusOn(mesh) {
   const worldPos = new THREE.Vector3();
   mesh.getWorldPosition(worldPos);
   const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-  const toPos = worldPos.clone().addScaledVector(normal, 1.6);
+  const toPos = worldPos.clone().addScaledVector(normal, 1.7);
   toPos.y = worldPos.y;
 
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
@@ -389,6 +355,11 @@ function unfocus() {
     toQuat: roamReturn.quat.clone(),
   };
 }
+function cancelFocus() {  // hard reset (used when pausing)
+  focusState = null;
+  roamReturn = null;
+  roamEnabled = true;
+}
 
 const _q = new THREE.Quaternion();
 updaters.push((dt) => {
@@ -405,30 +376,29 @@ updaters.push((dt) => {
   }
 });
 
-/* ---- chrome + lock lifecycle ---- */
-const hud = document.getElementById('hud');
-const crosshair = document.getElementById('crosshair');
-const exitBtn = document.getElementById('exit-btn');
-document.getElementById('hud-tip').textContent =
-  T('Esc 退出 · 点击画作聚焦', 'Esc to exit · click a piece to focus', 'Esc 종료 · 작품 클릭');
-exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
-
-controls.addEventListener('lock', () => {
-  crosshair.hidden = false; hud.hidden = false; exitBtn.hidden = false;
-});
+/* ---- lock lifecycle: the #enter overlay IS the pause menu ---- */
+controls.addEventListener('lock', () => { document.body.classList.add('locked'); });
 controls.addEventListener('unlock', () => {
-  crosshair.hidden = true;
+  document.body.classList.remove('locked');
+  cancelFocus();                         // resume cleanly next time
+  if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
 });
+
 canvas.addEventListener('click', () => {
-  if (!controls.isLocked) { controls.lock(); return; }
-  if (focusState) { unfocus(); return; }
+  if (!controls.isLocked) return;        // (clicks on the overlay handle locking)
+  if (focusState) { unfocus(); return; } // click again to leave focus
   raycaster.setFromCamera(_center, camera);
   const hit = raycaster.intersectObjects(artMeshes, false)[0];
   if (hit && hit.distance < 7) focusOn(hit.object);
 });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && focusState) { unfocus(); }
-});
+
+// click the start/pause overlay (or its button) to lock the pointer and play
+function enterPlay() {
+  if (!preloaded) return;
+  entered = true;
+  controls.lock();
+}
+enterEl.addEventListener('click', enterPlay);
 
 /* ---- boot ---- */
 async function boot() {
@@ -441,13 +411,8 @@ async function boot() {
   setProgress(0, IMAGES.length);
   let done = 0;
   await preloadTextures(() => setProgress(++done, IMAGES.length));
-  buildHall();   // finite enclosed corridor with every image placed once
-
-  showGateEnter();
-  gateEnter.addEventListener('click', () => {
-    hideGate();
-    startLoop();
-    controls.lock();
-  }, { once: true });
+  buildHall();
+  startLoop();        // render the hall behind the translucent start overlay
+  readyToEnter();
 }
 boot();
