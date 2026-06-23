@@ -332,14 +332,6 @@ function buildDetail(midZ, len, perSide) {
     panel.position.set(0, CEIL_Y - 0.03, z);
     scene.add(panel);
   }
-
-  // a few benches down the centre line
-  for (let z = -11; z > HALL_BACK_Z + 3; z -= 15) {
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 1.4), mats.bench);
-    seat.position.set(0, 0.46, z); scene.add(seat);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.46, 1.18), mats.bench);
-    base.position.set(0, 0.23, z); scene.add(base);
-  }
 }
 
 /* ============================================================
