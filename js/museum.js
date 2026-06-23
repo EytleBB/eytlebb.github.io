@@ -4,7 +4,6 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
@@ -64,6 +63,7 @@ async function loadImageList() {
    ============================================================ */
 const EYE_Y = 1.6;
 const HALL_HALF_WIDTH = 3;
+const CEIL_Y = 4;
 
 const canvas = document.getElementById('scene-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -71,7 +71,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;          // a touch brighter — not a gloomy cave
+renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -83,15 +83,14 @@ canvas.addEventListener('webglcontextlost', (e) => {
 }, false);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d0b09);   // warm near-black, not cold blue
-scene.fog = new THREE.Fog(0x0d0b09, 22, 75);    // gentle far fade, not claustrophobic
+scene.background = new THREE.Color(0x0d0b09);
+scene.fog = new THREE.Fog(0x0d0b09, 24, 90);
 
-/* ---- IBL + ambient fill: lift the hall out of horror-black ---- */
+/* ---- IBL + ambient fill ---- */
 const _pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-_pmrem.dispose();                  // env texture stays valid; free the generator's render target
-scene.environmentIntensity = 0.85; // real fill so surfaces have form
-// warm sky / dim ground gradient — the key "de-eerie" fill light
+_pmrem.dispose();
+scene.environmentIntensity = 0.85;
 scene.add(new THREE.HemisphereLight(0xffe6c8, 0x16130f, 0.55));
 
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 200);
@@ -112,25 +111,20 @@ function startLoop() {
 }
 
 /* ============================================================
-   POST PIPELINE: AO + subtle bloom + tone-mapped output
+   POST PIPELINE: subtle bloom + tone-mapped output
+   (no SSAO — it produced swimming dither artifacts on flat art
+    at grazing angles, and cost frames)
    ============================================================ */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 
-const ssao = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-ssao.kernelRadius = 6;
-ssao.minDistance = 0.004;
-ssao.maxDistance = 0.10;
-composer.addPass(ssao);
-
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.32,  // strength — picks up the cove light strips, still restrained
+  0.3,   // strength — picks up the cove light strips, restrained
   0.7,   // radius
   0.85   // threshold — only the brightest fixtures/highlights bloom
 );
 composer.addPass(bloom);
-
 composer.addPass(new OutputPass());
 
 window.addEventListener('resize', () => {
@@ -138,69 +132,41 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
-  ssao.setSize(window.innerWidth, window.innerHeight);
   bloom.setSize(window.innerWidth, window.innerHeight);
 });
 
 /* ============================================================
-   ARCHITECTURE: materials + corridor shell
+   MATERIALS
    ============================================================ */
-const CEIL_Y = 4;
-const CHUNK_LEN = 8;
-const ART_PER_SIDE = 1;
-
 const mats = {
-  // warm graphite walls — lighter than before so they read as designed plaster
   wall: new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.82, metalness: 0.0 }),
   ceiling: new THREE.MeshStandardMaterial({ color: 0x1a1714, roughness: 0.95, metalness: 0.0 }),
+  endWall: new THREE.MeshStandardMaterial({ color: 0x26221e, roughness: 0.85, metalness: 0.0 }),
   frame: new THREE.MeshPhysicalMaterial({
     color: 0x121010, roughness: 0.38, metalness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.35
   }),
-  // dark metal baseboard / picture-rail trim
-  trim: new THREE.MeshStandardMaterial({ color: 0x171513, roughness: 0.5, metalness: 0.45 }),
   // glowing ceiling-cove strip (emissive → reads as a light line, catches bloom)
   cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.6 }),
 };
 
-// A very long ceiling slab; the floor is added below (reflective).
-function buildStructure() {
-  const LEN = 400; // long enough to feel endless before chunk recycling matters
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(HALL_HALF_WIDTH * 2, LEN), mats.ceiling);
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, CEIL_Y, -LEN / 2 + 4);
-  ceil.receiveShadow = true;
-  scene.add(ceil);
-}
-
-/* ---- polished reflective floor ---- */
-function buildFloor() {
-  const LEN = 400;
-  const geo = new THREE.PlaneGeometry(HALL_HALF_WIDTH * 2, LEN);
-  const reflector = new Reflector(geo, {
-    color: 0x0c0a08,
-    textureWidth: Math.min(window.innerWidth, 512) * renderer.getPixelRatio(),
-    textureHeight: Math.min(window.innerHeight, 512) * renderer.getPixelRatio(),
-  });
-  reflector.rotation.x = -Math.PI / 2;
-  reflector.position.set(0, 0.001, -LEN / 2 + 4);
-  scene.add(reflector);
-
-  // a rough warm overlay so it reads polished stone, not a mirror
-  const overlay = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-    color: 0x110e0b, roughness: 0.35, metalness: 0.5, transparent: true, opacity: 0.68 }));
-  overlay.rotation.x = -Math.PI / 2;
-  overlay.position.set(0, 0.002, -LEN / 2 + 4);
-  overlay.receiveShadow = true;
-  scene.add(overlay);
-}
-
 /* ============================================================
-   TEXTURE CACHE — load every gallery image ONCE, reuse forever.
-   This is what keeps the endless walk smooth: recycling a chunk
-   only reassigns a cached texture (no decode / GPU upload hitch).
+   FINITE HALL — sized to hold every image once. No recycling,
+   no infinite generation: one enclosed corridor with end walls.
    ============================================================ */
+const ART_SPACING = 5;        // metres between consecutive pieces on a wall
+const ART_W = 1.7, ART_H = 1.15;
+const ART_Y = 1.7;            // centre height of artwork
+const START_MARGIN = 6;      // first piece this far in front of spawn
+const END_MARGIN = 5;        // gap between last piece and the back wall
+
+// layout limits (filled in by buildHall, used by movement clamp)
+let HALL_BACK_Z = -50;       // most-negative reachable z (in front of back wall)
+const HALL_FRONT_Z = 2;      // wall just behind spawn (z=0)
+
 const texLoader = new THREE.TextureLoader();
-const texCache = [];   // one THREE.Texture (or null) per IMAGES entry
+const texCache = [];          // one THREE.Texture (or null) per IMAGES entry
+const arts = [];              // { picMesh, frame, spot, z } — for focus + shadow culling
+const artMeshes = [];         // pickable picture meshes for raycasting
 
 function preloadTextures(onProgress) {
   return Promise.all(IMAGES.map((url, i) => new Promise((resolve) => {
@@ -214,139 +180,137 @@ function preloadTextures(onProgress) {
   })));
 }
 
-/* ============================================================
-   CHUNK SYSTEM: walls, framed art, recycling
-   ============================================================ */
-const POOL = 7;
-const SHADOW_CHUNKS = 1;            // only the nearest chunk casts shadows (perf)
-const ART_W = 1.6, ART_H = 1.1;
-const ART_Y = 1.7;                 // center height of artwork
-const chunks = [];
-const artMeshes = [];
-let nextImage = 0;
-
-function setArtTexture(slot, imageIndex) {
-  const tex = texCache[imageIndex % IMAGES.length];
-  if (!tex) return;                       // failed image → keep placeholder
-  const mtl = slot.picMesh.material;
+// size both the picture plane AND its frame to the image's real aspect ratio
+function fitArtwork(art, tex) {
+  if (!tex) return;
+  const aspect = tex.image.width / tex.image.height;   // w / h
+  const w = ART_H * aspect;                            // keep height, derive width
+  art.picMesh.scale.set(w / ART_W, 1, 1);
+  art.frame.scale.set((w + 0.16) / (ART_W + 0.16), 1, 1);
+  const mtl = art.picMesh.material;
   mtl.map = tex;
-  mtl.emissiveMap = tex;                  // self-lit so the art always reads
+  mtl.emissiveMap = tex;       // self-lit so the art always reads clearly
   mtl.needsUpdate = true;
-  // fit plane to image aspect (keep height, adjust width)
-  const aspect = (tex.image.width / tex.image.height) / (ART_W / ART_H);
-  slot.picMesh.scale.set(aspect, 1, 1);
 }
 
-function makeChunk(index) {
-  const group = new THREE.Group();
-  const slots = [];
+function makeArtwork(side, z, tex) {
+  const pivot = new THREE.Group();
+  pivot.position.set(side * (HALL_HALF_WIDTH - 0.05), ART_Y, z);
+  pivot.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
 
-  // two side walls (one per side), full chunk length
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(ART_W + 0.16, ART_H + 0.16, 0.08), mats.frame);
+  frame.position.z = -0.04;
+  frame.castShadow = true; frame.receiveShadow = true;
+
+  const picMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(ART_W, ART_H),
+    new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.62, metalness: 0,
+      emissive: 0xffffff, emissiveIntensity: 0.55 }));
+  picMesh.userData.pickable = true;
+
+  pivot.add(frame, picMesh);
+
+  // dedicated track spotlight
+  const spot = new THREE.SpotLight(0xffe9c8, 22, 11, Math.PI / 6, 0.45, 1.3);
+  spot.position.set(side * (HALL_HALF_WIDTH - 1.0), CEIL_Y - 0.15, z);
+  const spotTarget = new THREE.Object3D();
+  spotTarget.position.set(side * HALL_HALF_WIDTH, ART_Y, z);
+  spot.target = spotTarget;
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(512, 512);
+  spot.shadow.camera.near = 0.5;
+  spot.shadow.camera.far = 9;
+  spot.shadow.bias = -0.0006;
+  spot.shadow.normalBias = 0.02;
+
+  scene.add(pivot, spot, spotTarget);
+
+  const art = { picMesh, frame, spot, z };
+  fitArtwork(art, tex);
+  arts.push(art);
+  artMeshes.push(picMesh);
+}
+
+function buildHall() {
+  const n = IMAGES.length;
+  const perSide = Math.ceil(n / 2);
+  const lastArtZ = -(START_MARGIN + (perSide - 1) * ART_SPACING);
+  HALL_BACK_Z = lastArtZ - END_MARGIN;
+
+  const len = HALL_FRONT_Z - HALL_BACK_Z;        // total corridor length (positive)
+  const midZ = (HALL_FRONT_Z + HALL_BACK_Z) / 2; // centre for floor/ceiling/walls
+  const width = HALL_HALF_WIDTH * 2;
+
+  // ceiling
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mats.ceiling);
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.set(0, CEIL_Y, midZ);
+  ceil.receiveShadow = true;
+  scene.add(ceil);
+
+  // side walls + ceiling coves
   for (const side of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_LEN, CEIL_Y), mats.wall);
-    wall.position.set(side * HALL_HALF_WIDTH, CEIL_Y / 2, 0);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(len, CEIL_Y), mats.wall);
+    wall.position.set(side * HALL_HALF_WIDTH, CEIL_Y / 2, midZ);
     wall.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
     wall.receiveShadow = true;
-    group.add(wall);
+    scene.add(wall);
 
-    // ceiling cove — a glowing strip along the top of the wall (design + light line)
-    const cove = new THREE.Mesh(new THREE.BoxGeometry(CHUNK_LEN, 0.05, 0.07), mats.cove);
-    cove.position.set(side * (HALL_HALF_WIDTH - 0.13), CEIL_Y - 0.22, 0);
-    group.add(cove);
-
-    // baseboard trim along the floor
-    const base = new THREE.Mesh(new THREE.BoxGeometry(CHUNK_LEN, 0.13, 0.06), mats.trim);
-    base.position.set(side * (HALL_HALF_WIDTH - 0.03), 0.065, 0);
-    group.add(base);
-
-    // artwork slots along this wall
-    for (let a = 0; a < ART_PER_SIDE; a++) {
-      const pivot = new THREE.Group();
-      const zOff = -CHUNK_LEN / 2 + CHUNK_LEN * (a + 0.5) / ART_PER_SIDE;
-      pivot.position.set(side * (HALL_HALF_WIDTH - 0.05), ART_Y, zOff);
-      pivot.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-
-      // frame (slightly larger box behind the picture)
-      const frame = new THREE.Mesh(
-        new THREE.BoxGeometry(ART_W + 0.16, ART_H + 0.16, 0.08), mats.frame);
-      frame.position.z = -0.04;
-      frame.castShadow = true; frame.receiveShadow = true;
-
-      // picture plane — self-lit (emissive map) so the art always reads,
-      // with the spotlight adding a diffuse sheen for depth
-      const picMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(ART_W, ART_H),
-        new THREE.MeshStandardMaterial({
-          color: 0xffffff, roughness: 0.62, metalness: 0,
-          emissive: 0xffffff, emissiveIntensity: 0.6 }));
-      picMesh.userData.pickable = true;
-
-      pivot.add(frame, picMesh);
-
-      // dedicated track spotlight aimed at this piece
-      const spot = new THREE.SpotLight(0xffe9c8, 22, 10, Math.PI / 6, 0.45, 1.3);
-      spot.position.set(side * (HALL_HALF_WIDTH - 1.0), CEIL_Y - 0.15, zOff);
-      const spotTarget = new THREE.Object3D();
-      spotTarget.position.set(side * HALL_HALF_WIDTH, ART_Y, zOff);
-      spot.target = spotTarget;
-      spot.castShadow = true;
-      spot.shadow.mapSize.set(512, 512);
-      spot.shadow.camera.near = 0.5;
-      spot.shadow.camera.far = 9;
-      spot.shadow.bias = -0.0006;
-      spot.shadow.normalBias = 0.02;
-      group.add(spot, spotTarget);
-
-      group.add(pivot);
-      artMeshes.push(picMesh);
-      slots.push({ pivot, picMesh, frame, side, spot, spotTarget });
-    }
+    const cove = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.07), mats.cove);
+    cove.position.set(side * (HALL_HALF_WIDTH - 0.13), CEIL_Y - 0.22, midZ);
+    cove.rotation.y = Math.PI / 2;
+    scene.add(cove);
   }
-  scene.add(group);
-  return { group, slots };
-}
 
-function buildChunks() {
-  for (let i = 0; i < POOL; i++) {
-    const c = makeChunk(i);
-    c.z = -i * CHUNK_LEN;          // chunk 0 starts at origin, extends forward
-    c.group.position.z = c.z;
-    for (const slot of c.slots) slot.img = nextImage++;   // defer texturing to after preload
-    chunks.push(c);
+  // end walls (back + front) — fully enclose the room
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(width, CEIL_Y), mats.endWall);
+  backWall.position.set(0, CEIL_Y / 2, HALL_BACK_Z);
+  backWall.receiveShadow = true;
+  scene.add(backWall);
+  const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(width, CEIL_Y), mats.endWall);
+  frontWall.position.set(0, CEIL_Y / 2, HALL_FRONT_Z);
+  frontWall.rotation.y = Math.PI;
+  frontWall.receiveShadow = true;
+  scene.add(frontWall);
+
+  // reflective floor covering the whole hall
+  const fgeo = new THREE.PlaneGeometry(width, len);
+  const reflector = new Reflector(fgeo, {
+    color: 0x0c0a08,
+    textureWidth: Math.min(window.innerWidth, 512) * renderer.getPixelRatio(),
+    textureHeight: Math.min(window.innerHeight, 512) * renderer.getPixelRatio(),
+  });
+  reflector.rotation.x = -Math.PI / 2;
+  reflector.position.set(0, 0.001, midZ);
+  scene.add(reflector);
+  const overlay = new THREE.Mesh(fgeo, new THREE.MeshStandardMaterial({
+    color: 0x110e0b, roughness: 0.35, metalness: 0.5, transparent: true, opacity: 0.68 }));
+  overlay.rotation.x = -Math.PI / 2;
+  overlay.position.set(0, 0.002, midZ);
+  overlay.receiveShadow = true;
+  scene.add(overlay);
+
+  // place every artwork once, alternating walls
+  for (let i = 0; i < n; i++) {
+    const side = (i % 2 === 0) ? -1 : 1;
+    const k = Math.floor(i / 2);
+    const z = -(START_MARGIN + k * ART_SPACING);
+    makeArtwork(side, z, texCache[i]);
   }
 }
 
-// assign cached textures to the initial pool once preload is done
-function applyInitialTextures() {
-  for (const c of chunks) for (const slot of c.slots) setArtTexture(slot, slot.img);
-}
-
-function recycleChunks() {
-  // furthest-back chunk (largest z) jumps ahead of the furthest-forward (smallest z)
-  // when the player has walked past it. Re-texturing is instant (cache).
-  const playerZ = camera.position.z;
-  for (const c of chunks) {
-    if (c.z - playerZ > CHUNK_LEN * 1.5) {     // chunk is well behind the player
-      const minZ = Math.min(...chunks.map(k => k.z));
-      c.z = minZ - CHUNK_LEN;
-      c.group.position.z = c.z;
-      for (const slot of c.slots) setArtTexture(slot, nextImage++);
-    }
-  }
-}
-updaters.push(recycleChunks);
+/* only the spotlights near the camera cast shadows (perf) */
+const SHADOW_RANGE = ART_SPACING * 2.2;
 updaters.push(() => {
-  const pz = camera.position.z;
-  for (const c of chunks) {
-    const near = Math.abs(c.z - pz) <= CHUNK_LEN * SHADOW_CHUNKS;
-    for (const slot of c.slots) if (slot.spot) slot.spot.castShadow = near;
-  }
+  const cz = camera.position.z;
+  for (const a of arts) a.spot.castShadow = Math.abs(a.z - cz) <= SHADOW_RANGE;
 });
 
 /* ============================================================
    FIRST-PERSON CONTROLS + MOVEMENT
    ============================================================ */
-const FORWARD_MIN_Z = 1.5;
 const WALK_SPEED = 3.2;          // m/s
 const controls = new PointerLockControls(camera, document.body);
 let roamEnabled = true;
@@ -367,7 +331,8 @@ function clampToHall(pos) {
   const m = 0.4; // keep off the walls
   if (pos.x >  HALL_HALF_WIDTH - m) pos.x =  HALL_HALF_WIDTH - m;
   if (pos.x < -HALL_HALF_WIDTH + m) pos.x = -HALL_HALF_WIDTH + m;
-  if (pos.z >  FORWARD_MIN_Z) pos.z = FORWARD_MIN_Z; // can't walk behind start
+  if (pos.z > HALL_FRONT_Z - 0.6) pos.z = HALL_FRONT_Z - 0.6;  // front wall
+  if (pos.z < HALL_BACK_Z + 0.6)  pos.z = HALL_BACK_Z + 0.6;   // back wall
   pos.y = EYE_Y;
 }
 
@@ -395,7 +360,6 @@ let focusState = null;   // null | { phase:'toArt'|'returning', t, fromPos, from
 let roamReturn = null;   // { pos, quat } — the roam pose to glide back to
 
 function focusOn(mesh) {
-  // target: stand back from the piece, looking straight at it
   const worldPos = new THREE.Vector3();
   mesh.getWorldPosition(worldPos);
   const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
@@ -428,20 +392,17 @@ function unfocus() {
 
 const _q = new THREE.Quaternion();
 updaters.push((dt) => {
-  if (!focusState || focusState.t >= 1) return;   // null, or already settled
+  if (!focusState || focusState.t >= 1) return;
   focusState.t = Math.min(1, focusState.t + dt / 0.6); // ~0.6s
   const e = focusState.t * focusState.t * (3 - 2 * focusState.t); // smoothstep
   camera.position.lerpVectors(focusState.fromPos, focusState.toPos, e);
   _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
   camera.quaternion.copy(_q);
   if (focusState.t >= 1 && focusState.phase === 'returning') {
-    // arrived back at the roam pose → resume roaming
     roamEnabled = true;
     focusState = null;
     roamReturn = null;
   }
-  // phase 'toArt' settles with focusState kept (t===1); the guard above
-  // then early-returns each later frame until the user unfocuses.
 });
 
 /* ---- chrome + lock lifecycle ---- */
@@ -457,11 +418,10 @@ controls.addEventListener('lock', () => {
 });
 controls.addEventListener('unlock', () => {
   crosshair.hidden = true;
-  // re-show a minimal hint to click back in (re-lock on canvas click)
 });
 canvas.addEventListener('click', () => {
   if (!controls.isLocked) { controls.lock(); return; }
-  if (focusState) { unfocus(); return; }      // click again to leave focus (or interrupt inbound tween)
+  if (focusState) { unfocus(); return; }
   raycaster.setFromCamera(_center, camera);
   const hit = raycaster.intersectObjects(artMeshes, false)[0];
   if (hit && hit.distance < 7) focusOn(hit.object);
@@ -478,15 +438,10 @@ async function boot() {
     fail('画廊暂无图片或加载失败。', 'Gallery is empty or failed to load.', '갤러리가 비어 있거나 로드에 실패했습니다.');
     return;
   }
-  buildStructure();   // ceiling
-  buildFloor();       // reflective floor
-  buildChunks();      // walls + art + spotlights (textures deferred)
-
-  // preload every image once, then assign to the pool — smooth recycling
   setProgress(0, IMAGES.length);
   let done = 0;
   await preloadTextures(() => setProgress(++done, IMAGES.length));
-  applyInitialTextures();
+  buildHall();   // finite enclosed corridor with every image placed once
 
   showGateEnter();
   gateEnter.addEventListener('click', () => {
