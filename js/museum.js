@@ -271,10 +271,8 @@ function buildHall() {
    ============================================================ */
 const WALK_SPEED = 3.2, RUN_SPEED = 6.5;   // m/s
 const LOOK_SENS = 0.0022;
-const LOOK_RESP = 24;                        // look smoothing rate (higher = snappier)
-const MAX_DELTA = 160;                       // discard only catastrophic single-event spikes
-let yaw = Math.PI, pitch = 0;                // applied (smoothed) look angles
-let yawTarget = Math.PI, pitchTarget = 0;    // raw target the mouse drives
+const MAX_DELTA = 200;                       // safety cap for glitch spikes (raw input rarely hits it)
+let yaw = Math.PI, pitch = 0;                // start facing -Z (into the hall)
 let roamEnabled = true;
 const isLocked = () => document.pointerLockElement === canvas;
 
@@ -297,9 +295,9 @@ document.addEventListener('mousemove', (e) => {
   if (!isLocked() || focusState) return;     // focus tween owns the camera
   const dx = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementX || 0));
   const dy = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementY || 0));
-  yawTarget   -= dx * LOOK_SENS;
-  pitchTarget -= dy * LOOK_SENS;
-  pitchTarget = Math.max(-1.2, Math.min(1.2, pitchTarget));
+  yaw   -= dx * LOOK_SENS;
+  pitch -= dy * LOOK_SENS;
+  pitch = Math.max(-1.2, Math.min(1.2, pitch));
 });
 
 function clampToHall(pos) {
@@ -320,13 +318,8 @@ updaters.push((dt) => {
   warmA.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z - 3.5);
   warmB.position.set(cp.x * 0.3, CEIL_Y - 1.0, cp.z + 3.5);
 
-  // smoothly ease toward the mouse target, then rebuild orientation — unless a
-  // focus tween drives the camera. Smoothing smears any input spike over a few
-  // frames so it never reads as a snap.
+  // rebuild orientation from yaw/pitch unless a focus tween drives the camera
   if (!focusState) {
-    const k = 1 - Math.exp(-dt * LOOK_RESP);
-    yaw   += (yawTarget   - yaw)   * k;
-    pitch += (pitchTarget - pitch) * k;
     camera.rotation.set(0, 0, 0, 'YXZ');
     camera.rotateY(yaw);
     camera.rotateX(pitch);
@@ -363,7 +356,7 @@ function focusOn(mesh) {
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
   const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
 
-  savedYaw = yawTarget; savedPitch = pitchTarget;
+  savedYaw = yaw; savedPitch = pitch;
   roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
   focusState = {
     phase: 'toArt', t: 0,
@@ -387,7 +380,7 @@ function unfocus() {
 function cancelFocus() {  // hard reset (used when pausing)
   if (focusState || roamReturn) {        // only when actually focused
     if (roamReturn) camera.position.copy(roamReturn.pos);
-    yaw = yawTarget = savedYaw; pitch = pitchTarget = savedPitch;
+    yaw = savedYaw; pitch = savedPitch;
   }
   focusState = null;
   roamReturn = null;
@@ -403,7 +396,7 @@ updaters.push((dt) => {
   _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
   camera.quaternion.copy(_q);
   if (focusState.t >= 1 && focusState.phase === 'returning') {
-    yaw = yawTarget = savedYaw; pitch = pitchTarget = savedPitch;   // hand control back to mouse-look
+    yaw = savedYaw; pitch = savedPitch;   // hand control back to mouse-look
     roamEnabled = true;
     focusState = null;
     roamReturn = null;
@@ -428,11 +421,23 @@ canvas.addEventListener('click', () => {
   if (hit && hit.distance < 7) focusOn(hit.object);
 });
 
+// Lock the pointer requesting RAW mouse input (unadjustedMovement) — this is
+// the real fix for the "fling": it bypasses the Windows mouse-acceleration that
+// balloons movementX on a fast flick. Falls back to a plain lock if unsupported.
+function lockPointer() {
+  try {
+    const p = canvas.requestPointerLock({ unadjustedMovement: true });
+    if (p && typeof p.catch === 'function') p.catch(() => canvas.requestPointerLock());
+  } catch {
+    canvas.requestPointerLock();
+  }
+}
+
 // click the start/pause overlay (or its button) to lock the pointer and play
 function enterPlay() {
   if (!preloaded) return;
   entered = true;
-  canvas.requestPointerLock();
+  lockPointer();
 }
 enterEl.addEventListener('click', enterPlay);
 
