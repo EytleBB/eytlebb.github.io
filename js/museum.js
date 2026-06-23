@@ -306,7 +306,7 @@ function buildHall() {
   buildDetail(midZ, len, perSide);
 }
 
-/* architectural detailing: moldings, pilasters, ceiling light panels, benches */
+/* architectural detailing: crown molding, pilasters, ceiling light panels */
 function buildDetail(midZ, len, perSide) {
   for (const side of [-1, 1]) {
     const x = side * (HALL_HALF_WIDTH - 0.04);
