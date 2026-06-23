@@ -270,7 +270,7 @@ function buildHall() {
    FIRST-PERSON CONTROLS + MOVEMENT (with Shift run)
    ============================================================ */
 const WALK_SPEED = 3.2, RUN_SPEED = 6.5;   // m/s
-const LOOK_SENS = 0.0022;
+const LOOK_SENS = 0.0015;
 const MAX_DELTA = 200;                       // safety cap for glitch spikes (raw input rarely hits it)
 let yaw = Math.PI, pitch = 0;                // start facing -Z (into the hall)
 let roamEnabled = true;
