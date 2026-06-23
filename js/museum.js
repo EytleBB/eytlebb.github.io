@@ -173,8 +173,6 @@ const mats = {
   // rough overlay laid over the planar mirror → reads as polished stone, not glass
   floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.34, metalness: 0.5,
     transparent: true, opacity: 0.6, roughnessMap: floorRough }),
-  // glowing ceiling-cove strip (emissive → light line + bloom)
-  cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.5 }),
   // architectural rhythm: pilasters + moldings
   trim: new THREE.MeshStandardMaterial({ color: 0x202a3e, roughness: 0.6, metalness: 0.35,
     bumpMap: wallBump, bumpScale: 0.01 }),
@@ -182,14 +180,13 @@ const mats = {
   // emissive fixtures: picture lights over each piece + recessed ceiling panels
   pictureLight: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2ad, emissiveIntensity: 2.2 }),
   ceilPanel: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xbfd0ff, emissiveIntensity: 0.8 }),
-  bench: new THREE.MeshStandardMaterial({ color: 0x161b28, roughness: 0.5, metalness: 0.3 }),
 };
 
 /* ============================================================
    FINITE HALL — sized to hold every image once. No recycling,
    no infinite generation: one enclosed corridor with end walls.
    ============================================================ */
-const ART_SPACING = 5;        // metres between consecutive pieces on a wall
+const ART_SPACING = 6;        // metres between consecutive pieces on a wall (widened 1.2x)
 const ART_H = 1.9;            // artwork height (width derives from aspect)
 const ART_MAX_W = 2.7;        // clamp very wide images
 const ART_Y = 1.75;           // centre height of artwork
@@ -287,10 +284,6 @@ function buildHall() {
     wall.position.set(side * HALL_HALF_WIDTH, CEIL_Y / 2, midZ);
     wall.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
     scene.add(wall);
-
-    const cove = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, len), mats.cove);
-    cove.position.set(side * (HALL_HALF_WIDTH - 0.13), CEIL_Y - 0.22, midZ);
-    scene.add(cove);
   }
 
   // end walls — fully enclose the room
@@ -317,11 +310,9 @@ function buildHall() {
 function buildDetail(midZ, len, perSide) {
   for (const side of [-1, 1]) {
     const x = side * (HALL_HALF_WIDTH - 0.04);
-    // crown molding (near ceiling) + chair rail (lower) run the full length
+    // crown molding (near ceiling) runs the full length
     const crown = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), mats.molding);
     crown.position.set(x, CEIL_Y - 0.5, midZ); scene.add(crown);
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, len), mats.molding);
-    rail.position.set(x, 1.0, midZ); scene.add(rail);
 
     // pilasters spaced between the artwork positions → vertical rhythm
     for (let k = 0; k < perSide; k++) {
