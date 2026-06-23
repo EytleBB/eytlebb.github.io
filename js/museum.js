@@ -143,18 +143,46 @@ window.addEventListener('resize', () => {
 });
 
 /* ============================================================
-   MATERIALS
+   MATERIALS  (+ procedural surface texture, generated on a canvas —
+   no external files, keeping the no-build constraint)
    ============================================================ */
+function makeNoiseTexture(size = 256, spread = 26) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d');
+  const img = x.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 205 + (Math.random() * spread - spread / 2);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+const wallBump = makeNoiseTexture(256, 30);  wallBump.repeat.set(8, 3);   // plaster grain
+const floorRough = makeNoiseTexture(256, 16); floorRough.repeat.set(6, 24); // micro-smudge
+
 const mats = {
-  wall: new THREE.MeshStandardMaterial({ color: 0x1b2740, roughness: 0.9, metalness: 0.0 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0x1b2740, roughness: 0.92, metalness: 0.0,
+    bumpMap: wallBump, bumpScale: 0.012 }),
   ceiling: new THREE.MeshStandardMaterial({ color: 0x0e1626, roughness: 1.0, metalness: 0.0 }),
-  endWall: new THREE.MeshStandardMaterial({ color: 0x1f2c47, roughness: 0.9, metalness: 0.0 }),
+  endWall: new THREE.MeshStandardMaterial({ color: 0x1f2c47, roughness: 0.9, metalness: 0.0,
+    bumpMap: wallBump, bumpScale: 0.012 }),
   // gilt bronze frame — ties to the amber accent
   frame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.5, metalness: 0.45 }),
   // rough overlay laid over the planar mirror → reads as polished stone, not glass
-  floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.34, metalness: 0.5, transparent: true, opacity: 0.6 }),
+  floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.34, metalness: 0.5,
+    transparent: true, opacity: 0.6, roughnessMap: floorRough }),
   // glowing ceiling-cove strip (emissive → light line + bloom)
   cove: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd9a0, emissiveIntensity: 1.5 }),
+  // architectural rhythm: pilasters + moldings
+  trim: new THREE.MeshStandardMaterial({ color: 0x202a3e, roughness: 0.6, metalness: 0.35,
+    bumpMap: wallBump, bumpScale: 0.01 }),
+  molding: new THREE.MeshStandardMaterial({ color: 0x344563, roughness: 0.55, metalness: 0.3 }),
+  // emissive fixtures: picture lights over each piece + recessed ceiling panels
+  pictureLight: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2ad, emissiveIntensity: 2.2 }),
+  ceilPanel: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xbfd0ff, emissiveIntensity: 0.8 }),
+  bench: new THREE.MeshStandardMaterial({ color: 0x161b28, roughness: 0.5, metalness: 0.3 }),
 };
 
 /* ============================================================
@@ -213,6 +241,12 @@ function makeArtwork(side, z, tex) {
   pic.userData.pickable = true;
   scene.add(pic);
   artMeshes.push(pic);
+
+  // picture light: a small emissive fixture above the frame (design + bloom)
+  const pl = new THREE.Mesh(new THREE.BoxGeometry(Math.min(w, 1.4), 0.05, 0.1), mats.pictureLight);
+  pl.position.set(x + side * -0.07, ART_Y + h / 2 + 0.22, z);
+  pl.rotation.y = ry;
+  scene.add(pl);
 }
 
 function buildHall() {
@@ -274,6 +308,46 @@ function buildHall() {
     const k = Math.floor(i / 2);
     const z = -(START_MARGIN + k * ART_SPACING);
     makeArtwork(side, z, texCache[i]);
+  }
+
+  buildDetail(midZ, len, perSide);
+}
+
+/* architectural detailing: moldings, pilasters, ceiling light panels, benches */
+function buildDetail(midZ, len, perSide) {
+  for (const side of [-1, 1]) {
+    const x = side * (HALL_HALF_WIDTH - 0.04);
+    // crown molding (near ceiling) + chair rail (lower) run the full length
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), mats.molding);
+    crown.position.set(x, CEIL_Y - 0.5, midZ); scene.add(crown);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, len), mats.molding);
+    rail.position.set(x, 1.0, midZ); scene.add(rail);
+
+    // pilasters spaced between the artwork positions → vertical rhythm
+    for (let k = 0; k < perSide; k++) {
+      const pz = -(START_MARGIN + (k + 0.5) * ART_SPACING);
+      if (pz < HALL_BACK_Z + 0.6) continue;
+      const pil = new THREE.Mesh(new THREE.BoxGeometry(0.16, CEIL_Y - 0.1, 0.32), mats.trim);
+      pil.position.set(side * (HALL_HALF_WIDTH - 0.08), (CEIL_Y - 0.1) / 2, pz);
+      scene.add(pil);
+    }
+  }
+
+  // recessed glowing ceiling panels down the centre (overhead rhythm + bloom)
+  const panelGeo = new THREE.PlaneGeometry(1.1, 1.7);
+  for (let z = HALL_FRONT_Z - 3; z > HALL_BACK_Z + 2; z -= 4.5) {
+    const panel = new THREE.Mesh(panelGeo, mats.ceilPanel);
+    panel.rotation.x = Math.PI / 2;
+    panel.position.set(0, CEIL_Y - 0.03, z);
+    scene.add(panel);
+  }
+
+  // a few benches down the centre line
+  for (let z = -11; z > HALL_BACK_Z + 3; z -= 15) {
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 1.4), mats.bench);
+    seat.position.set(0, 0.46, z); scene.add(seat);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.46, 1.18), mats.bench);
+    base.position.set(0, 0.23, z); scene.add(base);
   }
 }
 
