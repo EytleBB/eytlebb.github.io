@@ -78,7 +78,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
-// no shadow maps — dropped for smoothness (was the source of the view-snap hitch)
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
@@ -171,8 +172,10 @@ const mats = {
   // gilt bronze frame — ties to the amber accent
   frame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.5, metalness: 0.45 }),
   // rough overlay laid over the planar mirror → reads as polished stone, not glass
-  floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.34, metalness: 0.5,
-    transparent: true, opacity: 0.6, roughnessMap: floorRough }),
+  // frosted polished-marble / micro-cement: veil the hard mirror with a rougher,
+  // bump-textured layer so the reflection is soft and the black floor has detail
+  floorOverlay: new THREE.MeshStandardMaterial({ color: 0x0c1322, roughness: 0.58, metalness: 0.45,
+    transparent: true, opacity: 0.74, roughnessMap: floorRough, bumpMap: floorRough, bumpScale: 0.06 }),
   // architectural rhythm: pilasters + moldings
   trim: new THREE.MeshStandardMaterial({ color: 0x202a3e, roughness: 0.6, metalness: 0.35,
     bumpMap: wallBump, bumpScale: 0.01 }),
@@ -199,6 +202,7 @@ const HALL_FRONT_Z = 2;       // wall just behind spawn (z=0)
 const texLoader = new THREE.TextureLoader();
 const texCache = [];          // one THREE.Texture (or null) per IMAGES entry
 const artMeshes = [];         // pickable picture meshes for raycasting
+const artSpots = [];          // { light, z } — per-painting spotlights, distance-culled
 
 function preloadTextures(onProgress) {
   return Promise.all(IMAGES.map((url, i) => new Promise((resolve) => {
@@ -222,28 +226,49 @@ function makeArtwork(side, z, tex) {
   const x = side * (HALL_HALF_WIDTH - 0.05);
   const ry = side > 0 ? -Math.PI / 2 : Math.PI / 2;
 
-  // frame: a flat plane slightly larger than the picture (no box → no z-fight)
-  const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.2, h + 0.2), mats.frame);
+  // frame: a thin box that protrudes from the wall → it casts a real shadow
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, h + 0.2, 0.06), mats.frame);
   frame.position.set(x, ART_Y, z);
   frame.rotation.y = ry;
+  frame.castShadow = true;
   scene.add(frame);
 
-  // picture: UNLIT (MeshBasic) so it always reads true-colour, no glow, no
-  // shadow weirdness — and pushed 2cm proud of the frame so they never z-fight
+  // picture: UNLIT (MeshBasic) so it always reads true-colour, no glow — pushed
+  // proud of the frame's front face so they never z-fight
   const pic = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
     new THREE.MeshBasicMaterial({ map: tex }));
-  pic.position.set(x + side * -0.02, ART_Y, z);
+  pic.position.set(x + side * -0.05, ART_Y, z);
   pic.rotation.y = ry;
   pic.userData.pickable = true;
   scene.add(pic);
   artMeshes.push(pic);
 
-  // picture light: a small emissive fixture above the frame (design + bloom)
-  const pl = new THREE.Mesh(new THREE.BoxGeometry(Math.min(w, 1.4), 0.05, 0.1), mats.pictureLight);
-  pl.position.set(x + side * -0.07, ART_Y + h / 2 + 0.22, z);
-  pl.rotation.y = ry;
-  scene.add(pl);
+  // spotlight from the upper-diagonal front → the piece becomes a focal point
+  // and the protruding frame throws a soft shadow on the wall (depth). Only
+  // pieces near the camera keep their light/shadow on (distance-culled).
+  const sx = x + (-side) * 0.9;                 // out into the corridor
+  const sy = ART_Y + h / 2 + 0.7;               // above the piece
+  const spot = new THREE.SpotLight(0xffe9c8, 34, 9, Math.PI / 6.5, 0.5, 2);
+  spot.position.set(sx, sy, z);
+  const target = new THREE.Object3D();
+  target.position.set(x, ART_Y, z);
+  spot.target = target;
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(1024, 1024);
+  spot.shadow.camera.near = 0.5;
+  spot.shadow.camera.far = 9;
+  spot.shadow.bias = -0.0005;
+  spot.shadow.normalBias = 0.02;
+  spot.visible = false;
+  scene.add(spot, target);
+  artSpots.push({ light: spot, z });
+
+  // visible lamp housing at the source (emissive fixture + bloom)
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.12), mats.pictureLight);
+  lamp.position.set(sx, sy, z);
+  lamp.rotation.y = ry;
+  scene.add(lamp);
 }
 
 function buildHall() {
