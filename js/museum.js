@@ -21,6 +21,7 @@ const enterSub = document.getElementById('enter-sub');
 const enterKeys = document.getElementById('enter-keys');
 const enterProg = document.getElementById('enter-prog');
 const enterBack = document.getElementById('enter-back');
+const artHintEl = document.getElementById('art-hint');
 const titleEl = document.getElementById('title');
 const hudEl = document.getElementById('hud');
 const exitBtn = document.getElementById('exit-btn');
@@ -98,6 +99,10 @@ const VAULT_SEGMENTS = 18;
 const STAR_INSET = 0.028;
 const LAMP_BASE_DEPTH = 0.045;
 const BLOOM_LAYER = 1;
+const CAMERA_FOV = 64;
+const ZOOM_FOV = 28;
+const ZOOM_FOV_SPEED = 78;
+const ART_INTERACT_DISTANCE = 3.5;
 
 const canvas = document.getElementById('scene-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -112,7 +117,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   renderer.setAnimationLoop(null);
-  document.body.classList.remove('locked');
+  document.body.classList.remove('locked', 'focused');
   fail('渲染上下文丢失，请刷新页面。', 'Rendering context lost — please reload.', '렌더링 컨텍스트가 손실되었습니다. 새로고침하세요.');
 }, false);
 
@@ -128,7 +133,7 @@ scene.environmentIntensity = 0.7;
 scene.add(new THREE.AmbientLight(0x33425f, 0.5));
 scene.add(new THREE.HemisphereLight(0x3a4f78, 0x140e06, 0.4));
 
-const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, EYE_Y, 0);
 
 const clock = new THREE.Clock();
@@ -224,6 +229,21 @@ function makeNoiseTexture(size = 256, spread = 26) {
   x.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeSpotWashTexture(size = 256) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(size * 0.5, size * 0.22, 0, size * 0.5, size * 0.22, size * 0.56);
+  g.addColorStop(0.00, 'rgba(255,246,223,0.92)');
+  g.addColorStop(0.18, 'rgba(255,238,202,0.58)');
+  g.addColorStop(0.58, 'rgba(255,218,150,0.16)');
+  g.addColorStop(1.00, 'rgba(255,218,150,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -394,6 +414,10 @@ const mats = {
     color: 0xffedcc, emissive: 0xffd28a, emissiveIntensity: 1.35, roughness: 0.35,
     transparent: true, opacity: 0.86, toneMapped: false,
   }),
+  pictureLightWash: new THREE.MeshBasicMaterial({
+    color: 0xffe0a8, map: makeSpotWashTexture(), transparent: true, opacity: 0.42,
+    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }),
   ceilPanel: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xbfd0ff, emissiveIntensity: 0.8 }),
 };
 
@@ -414,24 +438,46 @@ const ART_MAX_W = 2.16;       // clamp very wide images
 const ART_Y = 1.75;           // centre height of artwork
 const FRAME_DEPTH = 0.16;
 const FRAME_ART_Z = 0.052;
+const LARGE_ART_FRAME_DEPTH = 0.085;
+const LARGE_ART_FRAME_ART_Z = 0.03;
 const LARGE_ART_SCALE_THRESHOLD = 0.95;
 const LARGE_ART_LAMP_SCALE = 0.6;
+const LARGE_ART_LAMP_ARM_REACH = 1.08;
+const LARGE_ART_WALL_AIM_OFFSET = 0.08;
+const LARGE_ART_LAMP_Y_OFFSET = -0.32;
+const LIGHT_WASH_WIDTH = 0.86;
+const LIGHT_WASH_HEIGHT = 1.42;
 const LIGHT_FIXTURES_PER_SLOT = 2;
-const MAX_REAL_SPOT_LIGHTS = 24;
+const MAX_REAL_SPOT_LIGHTS = THREE.MathUtils.clamp(
+  Math.floor(((renderer.capabilities.maxFragmentUniforms || 1024) - 384) / 8),
+  24,
+  64,
+);
 
 const texLoader = new THREE.TextureLoader();
 const texCache = [];          // one THREE.Texture (or null) per IMAGES entry
 const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
 const pictureSpotPool = [];
-const pictureSpotFrustum = new THREE.Frustum();
-const pictureSpotViewProjection = new THREE.Matrix4();
-const pictureSpotForward = new THREE.Vector3();
-const pictureSpotDelta = new THREE.Vector3();
 const chunks = [];
 let floorRig = null;
 let rearWall = null;
 let nextImageIndex = 0;
+
+function frameMetricsForScale(scale) {
+  if (scale >= LARGE_ART_SCALE_THRESHOLD) {
+    return { depth: LARGE_ART_FRAME_DEPTH, artZ: LARGE_ART_FRAME_ART_Z };
+  }
+  return { depth: FRAME_DEPTH, artZ: FRAME_ART_Z };
+}
+
+function frameXForSide(side, metrics) {
+  return side * HALL_HALF_WIDTH + (-side) * (metrics.depth / 2 - 0.012);
+}
+
+function pictureXForFrame(side, frameX, metrics) {
+  return frameX + (-side) * metrics.artZ;
+}
 
 function clearPictureFrame(frame) {
   for (const child of frame.children) {
@@ -440,10 +486,10 @@ function clearPictureFrame(frame) {
   frame.clear();
 }
 
-function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openingW, openingH) {
-  const outerFrontZ = FRAME_DEPTH - 0.068;
-  const insetFrontZ = FRAME_ART_Z + 0.012;
-  const backZ = -0.055;
+function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openingW, openingH, metrics) {
+  const outerFrontZ = metrics.depth * 0.575;
+  const insetFrontZ = metrics.artZ + 0.012;
+  const backZ = -Math.max(metrics.depth * 0.34, 0.026);
   const positions = [];
   const normals = [];
   const uvs = [];
@@ -511,7 +557,7 @@ function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openi
   return geo;
 }
 
-function resizePictureFrame(frame, artW, artH) {
+function resizePictureFrame(frame, artW, artH, metrics = frameMetricsForScale(0)) {
   clearPictureFrame(frame);
   const border = THREE.MathUtils.clamp(artH * 0.11, 0.105, 0.18);
   const inset = Math.max(border * 0.34, 0.046);
@@ -524,7 +570,7 @@ function resizePictureFrame(frame, artW, artH) {
   const openingW = Math.max(artW - artOverlap * 2, artW * 0.92);
   const openingH = Math.max(artH - artOverlap * 2, artH * 0.92);
   const mesh = new THREE.Mesh(
-    makeTieredFrameGeometry(outerW, outerH, innerOuterW, innerOuterH, openingW, openingH),
+    makeTieredFrameGeometry(outerW, outerH, innerOuterW, innerOuterH, openingW, openingH, metrics),
     mats.pictureFrame,
   );
   mesh.castShadow = true;
@@ -536,7 +582,7 @@ function makePictureFrame(x, y, z, ry) {
   const frame = new THREE.Group();
   frame.position.set(x, y, z);
   frame.rotation.y = ry;
-  resizePictureFrame(frame, 2, ART_H);
+  resizePictureFrame(frame, 2, ART_H, frameMetricsForScale(0));
   return frame;
 }
 
@@ -557,15 +603,20 @@ function fitArtwork(pic, frame, tex, imageIndex) {
   if (!tex || !tex.image) return;
   const ar = tex.image.width / tex.image.height;
   const scale = IMAGE_META[imageIndex % IMAGE_META.length]?.scale ?? 1;
+  const metrics = frameMetricsForScale(scale);
   let h = ART_H * scale, w = h * ar;
   const maxW = ART_MAX_W * scale;
   if (w > maxW) { w = maxW; h = w / ar; }
   pic.geometry.dispose();
   pic.geometry = new THREE.PlaneGeometry(w, h);
-  resizePictureFrame(frame, w, h);
+  resizePictureFrame(frame, w, h, metrics);
   if (pic.userData.slot) {
-    pic.userData.slot.artScale = scale;
-    resizePictureLight(pic.userData.slot, w, h);
+    const slot = pic.userData.slot;
+    slot.artScale = scale;
+    const frameX = frameXForSide(slot.side, metrics);
+    slot.frame.position.x = frameX;
+    slot.pic.position.x = pictureXForFrame(slot.side, frameX, metrics);
+    resizePictureLight(slot, w, h);
   }
 }
 
@@ -584,8 +635,9 @@ function pictureLightY(artH) {
 
 function makeArtwork(parent, side, localZ, imageIndex) {
   const ry = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-  const frameX = side * HALL_HALF_WIDTH + (-side) * (FRAME_DEPTH / 2 - 0.012);
-  const picX = frameX + (-side) * FRAME_ART_Z;
+  const metrics = frameMetricsForScale(0);
+  const frameX = frameXForSide(side, metrics);
+  const picX = pictureXForFrame(side, frameX, metrics);
 
   const frame = makePictureFrame(frameX, ART_Y, localZ, ry);
   parent.add(frame);
@@ -658,8 +710,12 @@ function makePictureLight(parent, side) {
   enableBloomLayer(glow);
   group.add(glow);
 
+  const wash = new THREE.Mesh(new THREE.PlaneGeometry(LIGHT_WASH_WIDTH, LIGHT_WASH_HEIGHT), mats.pictureLightWash);
+  wash.renderOrder = 6;
+  group.add(wash);
+
   const fixture = {
-    group, base, armA, armB, knuckle, glow, lens, head, rim, parent, side, size: 1,
+    group, base, armA, armB, knuckle, glow, lens, head, rim, wash, parent, side, size: 1,
     lightActive: false,
     lightLocalPosition: new THREE.Vector3(),
     targetLocalPosition: new THREE.Vector3(),
@@ -671,7 +727,6 @@ function makePictureLight(parent, side) {
     spotPenumbra: 0.5,
     spotDecay: 2,
     distanceSq: Infinity,
-    viewRank: 2,
   };
   pictureLightFixtures.push(fixture);
   return fixture;
@@ -693,9 +748,6 @@ function updatePictureSpotPool() {
   ensurePictureSpotPool();
   const activeFixtures = [];
   camera.updateMatrixWorld();
-  camera.getWorldDirection(pictureSpotForward);
-  pictureSpotViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  pictureSpotFrustum.setFromProjectionMatrix(pictureSpotViewProjection);
 
   for (const fixture of pictureLightFixtures) {
     if (!fixture.lightActive || !fixture.group.visible) continue;
@@ -705,15 +757,9 @@ function updatePictureSpotPool() {
     fixture.worldTargetPosition.copy(fixture.targetLocalPosition);
     fixture.parent.localToWorld(fixture.worldTargetPosition);
     fixture.distanceSq = fixture.worldLightPosition.distanceToSquared(camera.position);
-    const depth = pictureSpotDelta.subVectors(fixture.worldTargetPosition, camera.position).dot(pictureSpotForward);
-    const inView = depth > 0 && (
-      pictureSpotFrustum.containsPoint(fixture.worldLightPosition) ||
-      pictureSpotFrustum.containsPoint(fixture.worldTargetPosition)
-    );
-    fixture.viewRank = inView ? 0 : (depth > 0 ? 1 : 2);
     activeFixtures.push(fixture);
   }
-  activeFixtures.sort((a, b) => a.viewRank - b.viewRank || a.distanceSq - b.distanceSq);
+  activeFixtures.sort((a, b) => a.distanceSq - b.distanceSq);
 
   for (let i = 0; i < pictureSpotPool.length; i++) {
     const pooled = pictureSpotPool[i];
@@ -787,19 +833,22 @@ function configurePictureSpot(fixture, count, active) {
 }
 
 function positionPictureLightFixture(slot, fixture, artH, zOffset, count, active) {
-  const y = pictureLightY(artH);
+  const y = pictureLightY(artH) + (count > 1 ? LARGE_ART_LAMP_Y_OFFSET : 0);
   const x = slot.frame.position.x;
   const targetX = slot.pic.position.x;
   const z = slot.frame.position.z + zOffset;
   const side = fixture.side;
   const size = count > 1 ? LARGE_ART_LAMP_SCALE : 1;
+  const armReach = count > 1 ? LARGE_ART_LAMP_ARM_REACH : size;
+  const targetWallBias = count > 1 ? side * LARGE_ART_WALL_AIM_OFFSET : 0;
   const inward = new THREE.Vector3(-side, 0, 0);
   const wallSurfaceX = side * HALL_HALF_WIDTH;
   const baseDepth = LAMP_BASE_DEPTH * size;
   const wallPoint = new THREE.Vector3(wallSurfaceX + inward.x * (baseDepth / 2), y, z);
-  const jointPoint = new THREE.Vector3(x + (-side) * 0.14 * size, y - 0.02 * size, z);
-  const headPoint = new THREE.Vector3(x + (-side) * 0.32 * size, y - 0.055 * size, z);
-  const targetPoint = new THREE.Vector3(targetX, ART_Y + 0.1, slot.frame.position.z + zOffset * 0.9);
+  const armRootOffset = count > 1 ? baseDepth / 2 : 0.03 * size;
+  const jointPoint = new THREE.Vector3(x + (-side) * 0.14 * armReach, y - 0.02 * size, z);
+  const headPoint = new THREE.Vector3(x + (-side) * 0.32 * armReach, y - 0.055 * size, z);
+  const targetPoint = new THREE.Vector3(targetX + targetWallBias, ART_Y + 0.1, slot.frame.position.z + zOffset * 0.9);
   const aimDir = targetPoint.clone().sub(headPoint).normalize();
 
   fixture.group.visible = active;
@@ -809,7 +858,7 @@ function positionPictureLightFixture(slot, fixture, artH, zOffset, count, active
   fixture.targetLocalPosition.copy(targetPoint);
   fixture.base.position.copy(wallPoint);
   alignObjectToVector(fixture.base, new THREE.Vector3(0, 1, 0), inward);
-  updateRod(fixture.armA, wallPoint.clone().addScaledVector(inward, 0.03 * size), jointPoint);
+  updateRod(fixture.armA, wallPoint.clone().addScaledVector(inward, armRootOffset), jointPoint);
   updateRod(fixture.armB, jointPoint, headPoint);
   fixture.knuckle.position.copy(jointPoint);
   fixture.head.position.copy(headPoint);
@@ -820,6 +869,14 @@ function positionPictureLightFixture(slot, fixture, artH, zOffset, count, active
   alignObjectToVector(fixture.lens, new THREE.Vector3(0, 0, 1), aimDir);
   fixture.glow.position.copy(headPoint).addScaledVector(aimDir, 0.138 * size);
   alignObjectToVector(fixture.glow, new THREE.Vector3(0, 0, 1), aimDir);
+  fixture.wash.visible = active;
+  fixture.wash.position.set(wallSurfaceX + inward.x * 0.014, targetPoint.y, targetPoint.z);
+  fixture.wash.rotation.set(0, side > 0 ? -Math.PI / 2 : Math.PI / 2, 0);
+  fixture.wash.scale.set(
+    count > 1 ? 0.68 : 1,
+    THREE.MathUtils.clamp((artH / ART_H) * (count > 1 ? 0.92 : 1), 0.5, 1.1),
+    1,
+  );
 }
 
 function resizePictureLight(slot, artW, artH) {
@@ -1071,6 +1128,7 @@ const LOOK_SENS = 0.0015;
 const MAX_DELTA = 200;                       // safety cap for glitch spikes (raw input rarely hits it)
 let yaw = 0, pitch = 0;                      // start facing -Z (into the hall)
 let roamEnabled = true;
+let zoomHeld = false;
 const isLocked = () => document.pointerLockElement === canvas;
 
 const keys = { f: false, b: false, l: false, r: false, run: false };
@@ -1117,6 +1175,18 @@ function approachScalar(current, target, maxDelta) {
   if (current > target) return Math.max(target, current - maxDelta);
   return current;
 }
+
+function setZoomHeld(active) {
+  zoomHeld = Boolean(active && isLocked() && !focusState);
+}
+
+updaters.push((dt) => {
+  const targetFov = zoomHeld && !focusState ? ZOOM_FOV : CAMERA_FOV;
+  const nextFov = approachScalar(camera.fov, targetFov, ZOOM_FOV_SPEED * dt);
+  if (Math.abs(nextFov - camera.fov) < 0.001) return;
+  camera.fov = nextFov;
+  camera.updateProjectionMatrix();
+});
 
 updaters.push((dt) => {
   recycleChunks();
@@ -1181,6 +1251,17 @@ let focusState = null;   // null | { phase:'toArt'|'returning', t, fromPos, from
 let roamReturn = null;   // { pos, quat } — the roam pose to glide back to
 let savedYaw = 0, savedPitch = 0;   // look angles to restore after focus
 
+raycaster.far = ART_INTERACT_DISTANCE;
+
+function getAimedArtworkHit() {
+  raycaster.setFromCamera(_center, camera);
+  return raycaster.intersectObjects(artMeshes, false)[0] || null;
+}
+
+function setArtHintVisible(visible) {
+  artHintEl.classList.toggle('show', Boolean(visible));
+}
+
 function focusOn(mesh) {
   const worldPos = new THREE.Vector3();
   mesh.getWorldPosition(worldPos);
@@ -1193,6 +1274,9 @@ function focusOn(mesh) {
 
   savedYaw = yaw; savedPitch = pitch;
   roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
+  setZoomHeld(false);
+  setArtHintVisible(false);
+  document.body.classList.add('focused');
   focusState = {
     phase: 'toArt', t: 0,
     fromPos: camera.position.clone(),
@@ -1204,6 +1288,7 @@ function focusOn(mesh) {
 
 function unfocus() {
   if (!focusState || focusState.phase === 'returning' || !roamReturn) return;
+  document.body.classList.remove('focused');
   focusState = {
     phase: 'returning', t: 0,
     fromPos: camera.position.clone(),
@@ -1220,6 +1305,9 @@ function cancelFocus() {  // hard reset (used when pausing)
   focusState = null;
   roamReturn = null;
   roamEnabled = true;
+  setZoomHeld(false);
+  setArtHintVisible(false);
+  document.body.classList.remove('focused');
 }
 
 const _q = new THREE.Quaternion();
@@ -1238,6 +1326,14 @@ updaters.push((dt) => {
   }
 });
 
+updaters.push(() => {
+  if (!isLocked() || focusState) {
+    setArtHintVisible(false);
+    return;
+  }
+  setArtHintVisible(Boolean(getAimedArtworkHit()));
+});
+
 /* ---- pointer-lock lifecycle: the #enter overlay IS the pause menu ---- */
 document.addEventListener('pointerlockchange', () => {
   const locked = isLocked();
@@ -1248,12 +1344,28 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
-canvas.addEventListener('click', () => {
+document.addEventListener('contextmenu', (e) => {
+  if (isLocked()) e.preventDefault();
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (e.button !== 2 || !isLocked()) return;
+  e.preventDefault();
+  setZoomHeld(true);
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (e.button === 2) setZoomHeld(false);
+});
+
+window.addEventListener('blur', () => setZoomHeld(false));
+
+canvas.addEventListener('click', (e) => {
+  if (e.button !== 0) return;
   if (!isLocked()) return;               // (clicks on the overlay handle locking)
   if (focusState) { unfocus(); return; } // click again to leave focus
-  raycaster.setFromCamera(_center, camera);
-  const hit = raycaster.intersectObjects(artMeshes, false)[0];
-  if (hit && hit.distance < 7) focusOn(hit.object);
+  const hit = getAimedArtworkHit();
+  if (hit) focusOn(hit.object);
 });
 
 // Lock the pointer requesting RAW mouse input (unadjustedMovement) — this is
