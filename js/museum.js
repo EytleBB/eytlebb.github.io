@@ -103,8 +103,11 @@ const CAMERA_FOV = 64;
 const ZOOM_FOV = 28;
 const ZOOM_FOV_SPEED = 78;
 const ART_INTERACT_DISTANCE = 3.5;
+const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
+const audioListener = new THREE.AudioListener();
+audioListener.setMasterVolume(0);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -117,6 +120,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   renderer.setAnimationLoop(null);
+  audioListener.setMasterVolume(0);
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
   document.body.classList.remove('locked', 'focused');
   fail('渲染上下文丢失，请刷新页面。', 'Rendering context lost — please reload.', '렌더링 컨텍스트가 손실되었습니다. 새로고침하세요.');
 }, false);
@@ -134,7 +139,10 @@ scene.add(new THREE.AmbientLight(0x33425f, 0.5));
 scene.add(new THREE.HemisphereLight(0x3a4f78, 0x140e06, 0.4));
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 200);
-camera.position.set(0, EYE_Y, 0);
+camera.position.set(0, EYE_Y, SPAWN_Z);
+
+// One listener follows every camera pose, including artwork focus tweens.
+camera.add(audioListener);
 
 const clock = new THREE.Clock();
 const updaters = [];
@@ -433,6 +441,22 @@ const REAR_WALL_OFFSET = 72;
 const FORWARD_VIEW_BUFFER = 170;
 const ART_PER_SIDE = 2;
 const ART_SPACING = CHUNK_LEN / ART_PER_SIDE;
+const PILLAR_SPACING = CHUNK_LEN; // one left/right pilaster pair per chunk
+const SPEAKER_PILLAR_INTERVAL = 13;
+const SPEAKER_SPACING = PILLAR_SPACING * SPEAKER_PILLAR_INTERVAL;
+const SPEAKER_COVERAGE_DISTANCE = SPEAKER_SPACING / 2;
+const REAR_PILLAR_Z = REAR_WALL_OFFSET - CHUNK_LEN - ART_SPACING;
+const FIRST_SPEAKER_Z = REAR_PILLAR_Z
+  - Math.round((REAR_PILLAR_Z - SPAWN_Z) / PILLAR_SPACING) * PILLAR_SPACING;
+const SPEAKER_POOL_SIZE = 4;
+const SPEAKER_WALL_X = HALL_HALF_WIDTH - 0.07;
+const SPEAKER_Y = 3.12;
+const SPEAKER_REF_DISTANCE = 4;
+const SPEAKER_EDGE_GAIN = 0.18;
+const SPEAKER_ROLLOFF = 1 - SPEAKER_EDGE_GAIN;
+const SPEAKER_CROSSFADE_SECONDS = 0.12;
+const MUSEUM_MUSIC_VOLUME = 0.42;
+const MUSEUM_MUSIC_URL = 'audio/museum.mp3';
 const ART_H = 1.52;           // artwork height (width derives from aspect)
 const ART_MAX_W = 2.16;       // clamp very wide images
 const ART_Y = 1.75;           // centre height of artwork
@@ -460,9 +484,167 @@ const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
 const pictureSpotPool = [];
 const chunks = [];
+const speakerRigs = [];
 let floorRig = null;
 let rearWall = null;
 let nextImageIndex = 0;
+
+/* ---- synchronized spatial music ---- */
+const speakerCabinetGeo = new THREE.BoxGeometry(0.32, 0.46, 0.16);
+const speakerGrilleGeo = new THREE.PlaneGeometry(0.255, 0.385);
+const speakerWooferGeo = new THREE.CircleGeometry(0.088, 24);
+const speakerTweeterGeo = new THREE.CircleGeometry(0.036, 20);
+const speakerCabinetMat = new THREE.MeshStandardMaterial({
+  color: 0x171b22, roughness: 0.72, metalness: 0.18,
+});
+const speakerGrilleMat = new THREE.MeshStandardMaterial({
+  color: 0x080a0d, roughness: 0.92, metalness: 0.08,
+});
+const speakerDriverMat = new THREE.MeshStandardMaterial({
+  color: 0x242a33, roughness: 0.66, metalness: 0.22,
+});
+
+const museumTrack = document.createElement('audio');
+museumTrack.crossOrigin = 'anonymous';
+museumTrack.preload = 'none';
+museumTrack.loop = true;
+museumTrack.playsInline = true;
+museumTrack.src = MUSEUM_MUSIC_URL;
+museumTrack.addEventListener('error', () => reportMuseumTrackFailure(museumTrack.error));
+let museumTrackNode = null;
+let museumTrackStarting = false;
+let museumTrackWarningShown = false;
+
+function speakerZForIndex(index) {
+  return FIRST_SPEAKER_Z - index * SPEAKER_SPACING;
+}
+
+function nearestSpeakerIndexForZ(z) {
+  return Math.max(0, Math.round((FIRST_SPEAKER_Z - z) / SPEAKER_SPACING));
+}
+
+function setSpeakerRigIndex(rig, index) {
+  const side = index % 2 === 0 ? 1 : -1;
+  rig.index = index;
+  rig.group.position.set(side * SPEAKER_WALL_X, SPEAKER_Y, speakerZForIndex(index));
+  rig.group.rotation.y = -side * Math.PI / 2;
+}
+
+function rampSpeakerVolume(sound, volume) {
+  const gain = sound.gain.gain;
+  const now = audioListener.context.currentTime;
+  if (typeof gain.cancelAndHoldAtTime === 'function') {
+    gain.cancelAndHoldAtTime(now);
+  } else {
+    const current = gain.value;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(current, now);
+  }
+  gain.linearRampToValueAtTime(volume, now + SPEAKER_CROSSFADE_SECONDS);
+}
+
+function makeSpeakerRig() {
+  const group = new THREE.Group();
+
+  const cabinet = new THREE.Mesh(speakerCabinetGeo, speakerCabinetMat);
+  cabinet.castShadow = true;
+  group.add(cabinet);
+
+  const grille = new THREE.Mesh(speakerGrilleGeo, speakerGrilleMat);
+  grille.position.z = 0.081;
+  group.add(grille);
+
+  const woofer = new THREE.Mesh(speakerWooferGeo, speakerDriverMat);
+  woofer.position.set(0, -0.075, 0.083);
+  group.add(woofer);
+
+  const tweeter = new THREE.Mesh(speakerTweeterGeo, speakerDriverMat);
+  tweeter.position.set(0, 0.112, 0.083);
+  group.add(tweeter);
+
+  const sound = new THREE.PositionalAudio(audioListener);
+  sound.panner.panningModel = 'HRTF';
+  sound.setDistanceModel('linear');
+  sound.setRefDistance(SPEAKER_REF_DISTANCE);
+  sound.setMaxDistance(SPEAKER_COVERAGE_DISTANCE);
+  sound.setRolloffFactor(SPEAKER_ROLLOFF);
+  sound.setVolume(0);
+  sound.position.z = 0.1;
+  group.add(sound);
+
+  scene.add(group);
+  return { group, sound, index: null, active: false };
+}
+
+function updateSpeakerPool() {
+  if (speakerRigs.length === 0) return;
+
+  const nearestIndex = nearestSpeakerIndexForZ(camera.position.z);
+  const firstIndex = Math.max(0, nearestIndex - 1);
+  const desiredIndices = Array.from({ length: SPEAKER_POOL_SIZE }, (_, i) => firstIndex + i);
+  const desiredSet = new Set(desiredIndices);
+  const reusableRigs = speakerRigs.filter(rig => !desiredSet.has(rig.index));
+
+  for (const index of desiredIndices) {
+    if (speakerRigs.some(rig => rig.index === index)) continue;
+    const rig = reusableRigs.shift();
+    if (rig) setSpeakerRigIndex(rig, index);
+  }
+
+  // Coverage is measured along the pillar grid. The panner adds natural 3D
+  // attenuation inside that cell; its non-zero edge gain avoids a silent seam.
+  const nearestDistance = Math.abs(camera.position.z - speakerZForIndex(nearestIndex));
+  const activeIndex = nearestDistance <= SPEAKER_COVERAGE_DISTANCE ? nearestIndex : null;
+  for (const rig of speakerRigs) {
+    const active = rig.index === activeIndex;
+    if (rig.active === active) continue;
+    rig.active = active;
+    rampSpeakerVolume(rig.sound, active ? MUSEUM_MUSIC_VOLUME : 0);
+  }
+}
+
+function buildSpeakerPool() {
+  if (speakerRigs.length > 0) return;
+  for (let i = 0; i < SPEAKER_POOL_SIZE; i++) speakerRigs.push(makeSpeakerRig());
+  updateSpeakerPool();
+}
+
+function reportMuseumTrackFailure(error) {
+  if (museumTrackWarningShown) return;
+  museumTrackWarningShown = true;
+  console.info(`Museum music is unavailable. Add the MP3 at ${MUSEUM_MUSIC_URL}.`, error);
+}
+
+function connectMuseumTrack() {
+  if (museumTrackNode) return;
+  museumTrackNode = audioListener.context.createMediaElementSource(museumTrack);
+  for (const rig of speakerRigs) rig.sound.setNodeSource(museumTrackNode);
+}
+
+function startMuseumTrack() {
+  let resumePromise;
+  try {
+    resumePromise = audioListener.context.resume();
+  } catch (error) {
+    reportMuseumTrackFailure(error);
+    return;
+  }
+  if (museumTrackStarting || !museumTrack.paused) {
+    if (resumePromise) resumePromise.catch(reportMuseumTrackFailure);
+    return;
+  }
+  museumTrackStarting = true;
+  try {
+    connectMuseumTrack();
+    const playPromise = museumTrack.play();
+    Promise.all([resumePromise, playPromise].filter(Boolean))
+      .catch(reportMuseumTrackFailure)
+      .finally(() => { museumTrackStarting = false; });
+  } catch (error) {
+    museumTrackStarting = false;
+    reportMuseumTrackFailure(error);
+  }
+}
 
 function frameMetricsForScale(scale) {
   if (scale >= LARGE_ART_SCALE_THRESHOLD) {
@@ -1054,6 +1236,7 @@ function buildHall() {
     nextImageIndex += chunk.slots.length;
     chunks.push(chunk);
   }
+  buildSpeakerPool();
   buildRearWall();
   positionRearWall();
 }
@@ -1130,6 +1313,11 @@ let yaw = 0, pitch = 0;                      // start facing -Z (into the hall)
 let roamEnabled = true;
 let zoomHeld = false;
 const isLocked = () => document.pointerLockElement === canvas;
+
+function syncMuseumAudioState() {
+  const audible = entered && isLocked() && !document.hidden;
+  audioListener.setMasterVolume(audible ? 1 : 0);
+}
 
 const keys = { f: false, b: false, l: false, r: false, run: false };
 function onKey(e, down) {
@@ -1326,6 +1514,8 @@ updaters.push((dt) => {
   }
 });
 
+updaters.push(updateSpeakerPool);
+
 updaters.push(() => {
   if (!isLocked() || focusState) {
     setArtHintVisible(false);
@@ -1338,6 +1528,7 @@ updaters.push(() => {
 document.addEventListener('pointerlockchange', () => {
   const locked = isLocked();
   document.body.classList.toggle('locked', locked);
+  syncMuseumAudioState();
   if (!locked) {
     cancelFocus();                       // resume cleanly next time
     if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
@@ -1359,6 +1550,7 @@ document.addEventListener('mouseup', (e) => {
 });
 
 window.addEventListener('blur', () => setZoomHeld(false));
+document.addEventListener('visibilitychange', syncMuseumAudioState);
 
 canvas.addEventListener('click', (e) => {
   if (e.button !== 0) return;
@@ -1384,6 +1576,7 @@ function lockPointer() {
 function enterPlay() {
   if (!preloaded) return;
   entered = true;
+  startMuseumTrack();
   lockPointer();
 }
 enterEl.addEventListener('click', enterPlay);

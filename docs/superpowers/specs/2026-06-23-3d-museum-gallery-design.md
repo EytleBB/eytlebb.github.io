@@ -23,7 +23,7 @@ no behavior change there.
 - No mobile 3D experience (mobile keeps the current grid).
 - No backend, no per-image captions/metadata (images are numbered files only).
 - No day/night theme switching inside the museum — it is a fixed dramatic dark hall.
-- No multiplayer, no audio (out of scope for v1).
+- No multiplayer. Synchronized spatial gallery music was added after v1.
 
 ## Architecture
 
