@@ -78,7 +78,7 @@ let logsLoaded = false;
 const GALLERY_BATCH_SIZE = 18;
 const GALLERY_HOME_COUNT = 12;
 const GALLERY_CACHE = 'eytle-gallery-v1';
-const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v1';
+const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
@@ -137,9 +137,14 @@ function randomGalleryPreview() {
 
   // Avoid showing the identical layout again after returning home or refreshing.
   const preview = order.slice(0, GALLERY_HOME_COUNT);
-  const previous = sessionStorage.getItem(GALLERY_PREVIEW_KEY);
-  if (preview.length > 1 && previous === preview.join(',')) [preview[0], preview[1]] = [preview[1], preview[0]];
-  sessionStorage.setItem(GALLERY_PREVIEW_KEY, preview.join(','));
+  let previous = '';
+  try { previous = sessionStorage.getItem(GALLERY_PREVIEW_KEY) || ''; } catch {}
+  let signature = JSON.stringify(preview.map(i => DATA.gallery[i].src));
+  if (preview.length > 1 && previous === signature) {
+    [preview[0], preview[1]] = [preview[1], preview[0]];
+    signature = JSON.stringify(preview.map(i => DATA.gallery[i].src));
+  }
+  try { sessionStorage.setItem(GALLERY_PREVIEW_KEY, signature); } catch {}
   return preview;
 }
 
