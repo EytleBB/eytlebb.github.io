@@ -27,15 +27,47 @@ const hudEl = document.getElementById('hud');
 const exitBtn = document.getElementById('exit-btn');
 
 enterSub.textContent = T('一座灯光下的私人博物馆', 'A private museum under gallery light', '갤러리 조명 아래의 개인 미술관');
-enterKeys.textContent = T('WASD 移动 · 鼠标转视角 · Shift 快走 · ESC 暂停',
-  'WASD move · mouse look · Shift run · ESC pause', 'WASD 이동 · 마우스 시점 · Shift 달리기 · ESC 일시정지');
+function controlGuideMarkup() {
+  const movement = T('移动', 'Move', '이동');
+  const inspect = T('端详', 'Inspect', '감상');
+  const zoom = T('变焦', 'Zoom', '확대');
+  const run = T('快走', 'Run', '달리기');
+  const pause = T('暂停', 'Pause', '일시정지');
+  return `
+    <div class="guide-group movement-guide">
+      <div class="guide-caption">${movement}</div>
+      <div class="dpad" aria-hidden="true">
+        <span class="key key-w">W</span>
+        <span class="key key-a">A</span>
+        <span class="key key-s">S</span>
+        <span class="key key-d">D</span>
+      </div>
+    </div>
+    <span class="guide-rule" aria-hidden="true"></span>
+    <div class="guide-group mouse-guide">
+      <div class="mouse-label mouse-label-left">${inspect}</div>
+      <div class="mouse-shell" aria-hidden="true">
+        <span class="mouse-button mouse-left"></span>
+        <span class="mouse-button mouse-right"></span>
+        <span class="mouse-seam"></span>
+      </div>
+      <div class="mouse-label mouse-label-right">${zoom}</div>
+    </div>
+    <span class="guide-rule" aria-hidden="true"></span>
+    <div class="guide-shortcuts">
+      <div class="shortcut"><span class="wide-key esc-key">Esc</span><span>${pause}</span></div>
+      <div class="shortcut"><span class="wide-key shift-key">Shift</span><span>${run}</span></div>
+    </div>`;
+}
+const controlGuide = controlGuideMarkup();
+enterKeys.innerHTML = controlGuide;
+enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左键端详，鼠标右键变焦，Shift 快走，Esc 暂停',
+  'Controls: WASD move, left click inspect, right click zoom, Shift run, Esc pause',
+  '조작 안내: WASD 이동, 왼쪽 클릭 감상, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
 enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
 titleEl.textContent = T('画廊 — This is Eytle', 'Gallery — This is Eytle', '갤러리 — This is Eytle');
-hudEl.innerHTML = T(
-  '<b>WASD</b> 移动 · 鼠标 转视角 · <b>Shift</b> 快走 · <b>ESC</b> 暂停',
-  '<b>WASD</b> move · mouse look · <b>Shift</b> run · <b>ESC</b> pause',
-  '<b>WASD</b> 이동 · 마우스 시점 · <b>Shift</b> 달리기 · <b>ESC</b> 일시정지'
-);
+hudEl.className = 'control-guide';
+hudEl.innerHTML = controlGuide;
 exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
 enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = 'index.html'; });
 

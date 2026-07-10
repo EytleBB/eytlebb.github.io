@@ -23,7 +23,6 @@ body { font-family:'Hanken Grotesk','PingFang SC',system-ui,sans-serif; color:#e
 }
 #enter .go:hover { transform:translateY(-1px); }
 #enter .go[disabled] { opacity:.45; cursor:default; transform:none; }
-#enter .keys { margin-top:2px; font-size:12px; color:#5d6c8c; letter-spacing:.04em; }
 #enter .prog { font-size:12px; color:#7e8cab; letter-spacing:.05em; min-height:16px; }
 #enter .back {
   margin-top:14px; background:none; border:0; color:#7e8cab; font:inherit; font-size:12px;
@@ -32,11 +31,7 @@ body { font-family:'Hanken Grotesk','PingFang SC',system-ui,sans-serif; color:#e
 #enter .back:hover { color:#e6a92b; }
 
 /* ---- in-game chrome (shown only while pointer is locked) ---- */
-#hud {
-  position:fixed; left:18px; bottom:16px; z-index:9; font-size:12px; color:#7e8cab;
-  letter-spacing:.05em; opacity:0; transition:opacity .4s; pointer-events:none;
-}
-#hud b { color:#e6a92b; font-weight:500; }
+#hud { opacity:0; transition:opacity .4s; }
 #title {
   position:fixed; left:20px; top:16px; z-index:9; font-family:'Fraunces',Georgia,serif;
   font-size:15px; color:#cdd6e6; opacity:0; transition:opacity .4s; letter-spacing:.02em; pointer-events:none;
@@ -80,4 +75,66 @@ body.locked #exit-btn { opacity:1; pointer-events:auto; }
 body.locked #enter { opacity:0; pointer-events:none; }
 body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exit-btn, body.focused #art-hint {
   opacity:0; pointer-events:none;
+}
+
+/* ---- shared control guide: start screen and in-game HUD ---- */
+.control-guide {
+  position:fixed; left:clamp(18px, 3vw, 42px); bottom:clamp(18px, 3.2vw, 38px); z-index:12;
+  display:flex; align-items:center; gap:20px; color:rgba(205,214,230,.72);
+  font-size:11px; letter-spacing:.08em; pointer-events:none; user-select:none;
+}
+.guide-group { position:relative; }
+.guide-caption {
+  position:absolute; left:50%; top:-16px; transform:translateX(-50%); color:rgba(205,214,230,.54);
+  font-size:9px; letter-spacing:.18em; white-space:nowrap;
+}
+.dpad {
+  width:92px; height:62px; display:grid; grid-template:repeat(2, 28px) / repeat(3, 28px); gap:4px;
+}
+.key, .wide-key {
+  display:grid; place-items:center; border:1px solid rgba(205,214,230,.34);
+  background:rgba(11,18,32,.22); color:rgba(236,228,210,.86);
+  box-shadow:0 0 0 1px rgba(11,18,32,.16); backdrop-filter:blur(3px);
+}
+.key { width:28px; height:28px; border-radius:2px; font-size:10px; }
+.key-w { grid-area:1 / 2; }
+.key-a { grid-area:2 / 1; }
+.key-s { grid-area:2 / 2; }
+.key-d { grid-area:2 / 3; }
+.guide-rule { width:1px; height:42px; background:rgba(205,214,230,.16); }
+.mouse-guide { width:126px; height:62px; display:flex; justify-content:center; align-items:flex-end; }
+.mouse-shell {
+  position:relative; width:38px; height:58px; overflow:hidden; border:1px solid rgba(205,214,230,.5);
+  border-radius:19px 19px 15px 15px; background:rgba(11,18,32,.12);
+}
+.mouse-button {
+  position:absolute; top:0; width:50%; height:25px;
+  background:rgba(230,169,43,.14); border-bottom:1px solid rgba(230,169,43,.4);
+}
+.mouse-left { left:0; }
+.mouse-right { right:0; }
+.mouse-seam { position:absolute; left:50%; top:0; width:1px; height:24px; background:rgba(205,214,230,.3); }
+.mouse-seam::after {
+  content:''; position:absolute; width:3px; height:9px; left:-1.5px; top:7px; border-radius:2px;
+  background:rgba(236,228,210,.68);
+}
+.mouse-label {
+  position:absolute; top:8px; color:rgba(205,214,230,.67); font-size:9px; letter-spacing:.12em; white-space:nowrap;
+}
+.mouse-label::after { content:''; position:absolute; top:7px; width:7px; height:1px; background:rgba(236,228,210,.3); }
+.mouse-label-left { right:94px; text-align:right; }
+.mouse-label-left::after { left:calc(100% + 5px); }
+.mouse-label-right { left:94px; }
+.mouse-label-right::after { right:calc(100% + 5px); }
+.guide-shortcuts { display:flex; flex-direction:column; gap:8px; }
+.shortcut { display:flex; align-items:center; gap:8px; white-space:nowrap; color:rgba(205,214,230,.56); }
+.wide-key { height:28px; border-radius:2px; font-size:9px; letter-spacing:.04em; }
+.esc-key { width:28px; min-width:28px; padding:0; font-size:8px; }
+.shift-key { width:46px; padding:0 7px; }
+
+#enter .enter-guide { margin:0; }
+
+@media (max-width:700px), (max-height:560px) {
+  .control-guide { gap:10px; transform:scale(.86); transform-origin:left bottom; }
+  .guide-rule { display:none; }
 }
