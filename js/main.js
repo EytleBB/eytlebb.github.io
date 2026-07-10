@@ -57,7 +57,7 @@ const DATA = {
    at https://web3forms.com and paste it below. Leave '' and the
    form simply acknowledges locally without sending.
    ============================================================ */
-const MSG_CONFIG = { web3formsKey: '' };
+const MSG_CONFIG = { web3formsKey: '918bb7ac-52b3-4b34-8e20-7bbf4e897e20' };
 
 /* ============================================================
    STATE
