@@ -23,6 +23,12 @@ const DATA = {
         { name: 'CS Prophet',          nameKo: 'CS 프로핏',    github: 'https://github.com/EytleBB/CS-Prophet' },
         { name: 'CS HLTV Downloader',  nameKo: 'CS HLTV 다운로더', github: 'https://github.com/EytleBB/CS-HLTV_Downloader' }
       ]
+    },
+    {
+      id: 'this-is-eytle',
+      name: 'This is Eytle', nameEn: 'This is Eytle', nameKo: 'This is Eytle',
+      github: 'https://github.com/EytleBB/eytlebb.github.io',
+      sub: []
     }
   ],
 
@@ -69,6 +75,10 @@ if (!['night', 'day'].includes(theme)) theme = 'night';   // migrate old dark/li
 let activeSection = 'about';
 let galleryLoaded = false;
 let logsLoaded = false;
+const GALLERY_BATCH_SIZE = 18;
+const GALLERY_HOME_COUNT = 12;
+const GALLERY_CACHE = 'eytle-gallery-v1';
+const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v1';
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
@@ -110,13 +120,44 @@ function fmtDot(dateStr) { return dateStr.replace(/-/g, '.'); }  // 2026-06-03 �
 async function loadGallery() {
   if (galleryLoaded) return;
   try {
-    const res = await fetch('./images/gallery/index.json');
-    if (res.ok) {
-      const files = await res.json();
+    const files = await (await fetch('./images/gallery/index.json', { cache: 'no-cache' })).json();
+    if (Array.isArray(files)) {
       DATA.gallery = files.map(f => ({ src: `images/gallery/${encodeURIComponent(f)}` }));
     }
   } catch {}
   galleryLoaded = true;
+}
+
+function randomGalleryPreview() {
+  const order = DATA.gallery.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+
+  // Avoid showing the identical layout again after returning home or refreshing.
+  const preview = order.slice(0, GALLERY_HOME_COUNT);
+  const previous = sessionStorage.getItem(GALLERY_PREVIEW_KEY);
+  if (preview.length > 1 && previous === preview.join(',')) [preview[0], preview[1]] = [preview[1], preview[0]];
+  sessionStorage.setItem(GALLERY_PREVIEW_KEY, preview.join(','));
+  return preview;
+}
+
+async function cacheGalleryImages(images) {
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open(GALLERY_CACHE);
+    await Promise.all(images.map(async ({ src }) => {
+      if (await cache.match(src)) return;
+      const response = await fetch(src);
+      if (response.ok) await cache.put(src, response);
+    }));
+  } catch {}
+}
+
+function wireGalleryImages(root) {
+  root.querySelectorAll('img[data-idx]').forEach(im =>
+    im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
 }
 async function loadLogs() {
   if (logsLoaded) return;
@@ -184,16 +225,15 @@ async function renderAbout() {
     card.querySelector('.r-loading').textContent = t('暂无随笔','Nothing yet','아직 없음');
   }
 
-  // gallery preview — newest few, shuffled (concept uses 6)
+  // Gallery preview — 3 columns × 4 rows, matching the left-hand stack.
   await loadGallery();
   const gal = document.getElementById('home-gal');
   if (DATA.gallery.length) {
-    const idx = DATA.gallery.map((_, i) => i);
-    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-    gal.innerHTML = idx.slice(0, 6)
+    const idx = randomGalleryPreview();
+    gal.innerHTML = idx
       .map(i => `<img src="${DATA.gallery[i].src}" alt="" loading="lazy" data-idx="${i}" />`).join('');
-    gal.querySelectorAll('img').forEach(im =>
-      im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+    wireGalleryImages(gal);
+    cacheGalleryImages(idx.map(i => DATA.gallery[i]));
   } else {
     gal.innerHTML = `<p class="placeholder-text">${t('暂无图片','No images yet','이미지 없음')}</p>`;
   }
@@ -358,10 +398,27 @@ async function renderGallery() {
   }
   stage.innerHTML = `
     <div><div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
-    <div class="gallery-grid">${DATA.gallery.map((img, i) =>
-      `<img src="${img.src}" alt="" loading="lazy" data-idx="${i}" />`).join('')}</div></div>`;
-  stage.querySelectorAll('.gallery-grid img').forEach(im =>
-    im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+    <div class="gallery-grid gallery-masonry" id="gallery-grid"></div>
+    <div class="gallery-sentinel" id="gallery-sentinel" aria-hidden="true"></div></div>`;
+  const grid = document.getElementById('gallery-grid');
+  const sentinel = document.getElementById('gallery-sentinel');
+  let shown = 0;
+  let observer;
+  const appendBatch = () => {
+    const batch = DATA.gallery.slice(shown, shown + GALLERY_BATCH_SIZE);
+    if (!batch.length) { observer?.disconnect(); sentinel.remove(); return; }
+    grid.insertAdjacentHTML('beforeend', batch.map((img, offset) =>
+      `<img src="${img.src}" alt="" loading="lazy" data-idx="${shown + offset}" />`).join(''));
+    const newImages = [...grid.querySelectorAll('img[data-idx]')].slice(-batch.length);
+    newImages.forEach(im => im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+    cacheGalleryImages(batch);
+    shown += batch.length;
+  };
+  appendBatch();
+  observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) appendBatch();
+  }, { rootMargin: '700px 0px' });
+  observer.observe(sentinel);
 }
 
 /* ============================================================

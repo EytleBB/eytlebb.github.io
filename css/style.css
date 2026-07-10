@@ -125,17 +125,22 @@ nav { display:flex; flex-direction:column; gap:2px; }
    STAGE
    ============================================================ */
 .stage {
-  padding:52px 56px 48px; display:flex; flex-direction:column; gap:30px;
-  min-width:0;
+  width:min(100%, 1280px); justify-self:center;
+  padding:clamp(38px,5vw,68px) clamp(28px,5vw,72px) 56px;
+  display:flex; flex-direction:column; gap:clamp(26px,3vw,38px); min-width:0;
 }
 
+.hero {
+  padding:0 0 clamp(22px,3vw,32px);
+  border-bottom:1px solid var(--line);
+}
 .hero h1 {
   font-family:var(--disp); font-weight:400;
-  font-size:clamp(40px,5.2vw,68px); line-height:.98; letter-spacing:-.01em;
+  font-size:clamp(44px,5.4vw,72px); line-height:.94; letter-spacing:-.025em;
 }
 .hero h1 em { font-style:italic; color:var(--amber); }
 .hero .url {
-  margin-top:14px; font-size:12px; letter-spacing:.22em; color:var(--dim);
+  margin-top:18px; font-size:11px; letter-spacing:.25em; color:var(--dim);
   text-transform:uppercase;
 }
 
@@ -147,14 +152,19 @@ nav { display:flex; flex-direction:column; gap:2px; }
 /* ---- panel (shared) ---- */
 .panel {
   background:var(--panel); border:1px solid var(--line); border-radius:8px;
-  padding:22px 24px; backdrop-filter:blur(3px);
+  padding:clamp(20px,2.3vw,28px); backdrop-filter:blur(3px);
 }
 
 /* ============================================================
    HOME (about / overview)
    ============================================================ */
-.grid2 { display:grid; grid-template-columns:1.45fr 1fr; gap:22px; align-items:start; }
-.col-left { display:flex; flex-direction:column; gap:22px; min-width:0; }
+.grid2 { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,.9fr); gap:clamp(18px,2.4vw,30px); align-items:stretch; }
+.col-left { display:flex; flex-direction:column; gap:clamp(18px,2.4vw,30px); min-width:0; }
+.col-right {
+  min-width:0; min-height:0; height:100%; padding:clamp(20px,2.3vw,28px); display:flex; flex-direction:column;
+  background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  backdrop-filter:blur(3px);
+}
 
 /* latest patch log preview */
 .plog-card { border-left:2px solid var(--amber); border-radius:0 8px 8px 0; }
@@ -175,7 +185,7 @@ nav { display:flex; flex-direction:column; gap:2px; }
 
 /* message form */
 .msg-text {
-  width:100%; height:92px; resize:none; overflow:hidden;
+  width:100%; height:168px; resize:none; overflow:hidden;
   background:var(--field); border:1px solid var(--line); border-radius:6px;
   color:var(--parchment); font:inherit; font-size:14px; line-height:1.6;
   padding:11px 13px; transition:border-color .18s;
@@ -188,19 +198,20 @@ nav { display:flex; flex-direction:column; gap:2px; }
 .msg-send {
   background:var(--amber); color:var(--amber-ink); border:0; border-radius:6px; cursor:pointer;
   font:inherit; font-size:14px; font-weight:500; padding:10px 22px; white-space:nowrap;
-  transition:background .18s;
+  transform:translateY(20px); transition:background .18s;
 }
 .msg-send:hover { background:var(--amber-deep); }
 .msg-send:disabled { opacity:.6; cursor:default; }
 .msg-hint { min-height:18px; margin-top:10px; font-size:12.5px; color:var(--dim); letter-spacing:.02em; }
 
 /* gallery preview (home right column) */
-.gal { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.gal { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(4,minmax(0,1fr)); flex:1; min-height:0; gap:8px; }
 .gal img {
-  width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px;
-  border:1px solid var(--line); display:block; cursor:pointer; transition:border-color .18s;
+  width:auto; height:100%; min-height:0; max-width:100%; aspect-ratio:1; object-fit:cover; justify-self:center; border-radius:5px;
+  border:1px solid var(--line); display:block; cursor:pointer;
+  transition:border-color .18s, transform .18s; will-change:transform;
 }
-.gal img:hover { border-color:var(--amber-deep); }
+.gal img:hover { border-color:var(--amber-deep); transform:translateY(-2px); }
 
 /* ============================================================
    GENERIC LIST (projects / tools / sub-projects)
@@ -285,6 +296,14 @@ nav { display:flex; flex-direction:column; gap:2px; }
   border:1px solid var(--line); cursor:pointer; display:block; transition:border-color .18s;
 }
 .gallery-grid img:hover { border-color:var(--amber-deep); }
+.gallery-masonry {
+  display:block; columns:4 190px; column-gap:12px;
+}
+.gallery-masonry img {
+  width:100%; height:auto; aspect-ratio:auto; margin:0 0 12px;
+  break-inside:avoid; display:block;
+}
+.gallery-sentinel { height:2px; }
 
 /* ============================================================
    OVERLAYS (patch reader + gallery lightbox)
@@ -334,7 +353,11 @@ nav { display:flex; flex-direction:column; gap:2px; }
    RESPONSIVE
    ============================================================ */
 @media (max-width:860px) {
-  .grid2 { grid-template-columns:1fr; }
+  .grid2 { grid-template-columns:1fr; align-items:start; }
+  .col-right { max-width:680px; }
+  .gal { flex:none; grid-template-rows:none; }
+  .gal img { width:100%; height:auto; aspect-ratio:1; }
+  .gallery-masonry { columns:3 170px; }
 }
 @media (max-width:760px) {
   .app { grid-template-columns:1fr; }
@@ -344,11 +367,23 @@ nav { display:flex; flex-direction:column; gap:2px; }
   }
   .brand { order:0; }
   .lang { order:1; margin-left:auto; }
-  nav { order:2; flex-direction:row; flex-wrap:wrap; gap:4px; width:100%; }
-  .nav-i { width:auto; }
+  nav { order:2; flex-direction:row; flex-wrap:nowrap; gap:4px; width:100%; overflow-x:auto; padding-bottom:2px; }
+  .nav-i { width:auto; flex:0 0 auto; padding:8px 10px; font-size:13.5px; }
   .nav-i.on::before { display:none; }
   .rail-foot { order:3; margin:0; flex-direction:row; align-items:center; gap:18px; width:100%; }
-  .stage { padding:32px 22px 40px; gap:24px; }
+  .stage { width:100%; padding:30px 20px 42px; gap:24px; }
+  .hero { padding-bottom:22px; }
+  .hero h1 { font-size:clamp(42px,13vw,58px); }
+  .gal { grid-template-columns:repeat(3,1fr); }
+  .gallery-masonry { columns:2 140px; column-gap:9px; }
+  .gallery-masonry img { margin-bottom:9px; }
+  .msg-text { height:120px; }
   .reader { padding:30px 26px; }
+}
+@media (max-width:400px) {
+  .rail { padding-inline:16px; }
+  .stage { padding-inline:16px; }
+  .msg-row { align-items:flex-end; }
+  .msg-send { padding-inline:17px; }
 }
 @media (prefers-reduced-motion:reduce) { *{ transition:none !important; animation:none !important; } }

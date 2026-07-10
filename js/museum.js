@@ -59,6 +59,7 @@ function fail(zh, en, ko) {
 let IMAGES = [];
 let IMAGE_META = [];
 const SMALL_IMAGE_BYTES = 1024 * 1024;
+const GALLERY_CACHE = 'eytle-gallery-v1';
 
 async function readImageByteSize(url) {
   try {
@@ -72,7 +73,7 @@ async function readImageByteSize(url) {
 }
 
 async function loadImageList() {
-  const res = await fetch('./images/gallery/index.json');
+  const res = await fetch('./images/gallery/index.json', { cache: 'no-cache' });
   if (!res.ok) throw new Error('index ' + res.status);
   const files = await res.json();
   if (!Array.isArray(files) || files.length === 0) throw new Error('empty');
@@ -480,6 +481,7 @@ const MAX_REAL_SPOT_LIGHTS = THREE.MathUtils.clamp(
 
 const texLoader = new THREE.TextureLoader();
 const texCache = [];          // one THREE.Texture (or null) per IMAGES entry
+const textureLoads = [];
 const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
 const pictureSpotPool = [];
@@ -768,17 +770,40 @@ function makePictureFrame(x, y, z, ry) {
   return frame;
 }
 
-function preloadTextures(onProgress) {
-  return Promise.all(IMAGES.map((url, i) => new Promise((resolve) => {
+async function galleryImageSource(url) {
+  if (!('caches' in window)) return url;
+  try {
+    const cache = await caches.open(GALLERY_CACHE);
+    let response = await cache.match(url);
+    if (!response) {
+      response = await fetch(url);
+      if (!response.ok) return url;
+      await cache.put(url, response.clone());
+    }
+    return URL.createObjectURL(await response.blob());
+  } catch {
+    return url;
+  }
+}
+
+function loadTexture(i) {
+  if (texCache[i]) return Promise.resolve(texCache[i]);
+  if (textureLoads[i]) return textureLoads[i];
+  textureLoads[i] = galleryImageSource(IMAGES[i]).then(url => new Promise((resolve) => {
     texLoader.load(url, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       texCache[i] = tex;
       if (typeof renderer.initTexture === 'function') renderer.initTexture(tex);
-      onProgress();
-      resolve();
-    }, undefined, () => { texCache[i] = null; onProgress(); resolve(); });
-  })));
+      resolve(tex);
+    }, undefined, () => { texCache[i] = null; resolve(null); });
+  }));
+  return textureLoads[i];
+}
+
+function preloadTextures(onProgress) {
+  return Promise.all(IMAGES.map((_, i) =>
+    loadTexture(i).finally(onProgress)));
 }
 
 function fitArtwork(pic, frame, tex, imageIndex) {
@@ -803,12 +828,26 @@ function fitArtwork(pic, frame, tex, imageIndex) {
 }
 
 function setArtTexture(slot, imageIndex) {
-  const cacheIndex = imageIndex % texCache.length;
-  const tex = texCache[cacheIndex];
+  const cacheIndex = imageIndex % IMAGES.length;
+  slot.imageIndex = cacheIndex;
+  const tex = texCache[cacheIndex] || texCache.find(Boolean);
   if (!tex) return;
   slot.pic.material.map = tex;
   slot.pic.material.needsUpdate = true;
-  fitArtwork(slot.pic, slot.frame, tex, cacheIndex);
+  fitArtwork(slot.pic, slot.frame, tex, tex === texCache[cacheIndex] ? cacheIndex : 0);
+}
+
+function loadSlotTexture(slot) {
+  const cacheIndex = slot.imageIndex;
+  if (cacheIndex == null || texCache[cacheIndex] || slot.loadingIndex === cacheIndex) return;
+  slot.loadingIndex = cacheIndex;
+  loadTexture(cacheIndex).then(loaded => {
+    if (slot.loadingIndex === cacheIndex) slot.loadingIndex = null;
+    if (!loaded || slot.imageIndex !== cacheIndex) return;
+    slot.pic.material.map = loaded;
+    slot.pic.material.needsUpdate = true;
+    fitArtwork(slot.pic, slot.frame, loaded, cacheIndex);
+  });
 }
 
 function pictureLightY(artH) {
@@ -1270,6 +1309,18 @@ function recycleChunks() {
   positionRearWall();
 }
 
+const artWorldPos = new THREE.Vector3();
+function prefetchNearbyArtwork() {
+  if (!entered) return;
+  for (const chunk of chunks) {
+    for (const slot of chunk.slots) {
+      slot.pic.getWorldPosition(artWorldPos);
+      const ahead = camera.position.z - artWorldPos.z;
+      if (ahead >= -2 && ahead < 24) loadSlotTexture(slot);
+    }
+  }
+}
+
 function getRearWallZ() {
   return rearWall ? rearWall.position.z : REAR_WALL_OFFSET;
 }
@@ -1378,6 +1429,7 @@ updaters.push((dt) => {
 
 updaters.push((dt) => {
   recycleChunks();
+  prefetchNearbyArtwork();
 
   // rebuild orientation from yaw/pitch unless a focus tween drives the camera
   if (!focusState) {
@@ -1589,9 +1641,10 @@ async function boot() {
     fail('画廊暂无图片或加载失败。', 'Gallery is empty or failed to load.', '갤러리가 비어 있거나 로드에 실패했습니다.');
     return;
   }
-  setProgress(0, IMAGES.length);
+  const textureCount = IMAGES.length;
+  setProgress(0, textureCount);
   let done = 0;
-  await preloadTextures(() => setProgress(++done, IMAGES.length));
+  await preloadTextures(() => setProgress(++done, textureCount));
   enterProg.textContent = T('优化场景中', 'Optimizing scene', '장면 최적화 중');
   buildHall();
   await prewarmScene();
