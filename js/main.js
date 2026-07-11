@@ -28,7 +28,10 @@ const DATA = {
       id: 'this-is-eytle',
       name: 'This is Eytle', nameEn: 'This is Eytle', nameKo: 'This is Eytle',
       github: 'https://github.com/EytleBB/eytlebb.github.io',
-      sub: []
+      sub: [
+        { name: 'Museum',   nameKo: '뮤지엄',   github: 'https://github.com/EytleBB/Eytle-Museum' },
+        { name: 'Patch Log', nameKo: '패치 로그', github: 'https://github.com/EytleBB/Eytle-Patch-Log' }
+      ]
     }
   ],
 
