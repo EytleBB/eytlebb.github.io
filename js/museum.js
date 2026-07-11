@@ -16,6 +16,7 @@ const T = (zh, en, ko) => (lang === 'en' ? en : lang === 'ko' ? ko : zh);
 
 /* ---- overlay / chrome DOM ---- */
 const enterEl = document.getElementById('enter');
+const exhibitionTitle = document.getElementById('exhibition-title');
 const enterGo = document.getElementById('enter-go');
 const enterSub = document.getElementById('enter-sub');
 const enterKeys = document.getElementById('enter-keys');
@@ -26,7 +27,10 @@ const titleEl = document.getElementById('title');
 const hudEl = document.getElementById('hud');
 const exitBtn = document.getElementById('exit-btn');
 
-enterSub.textContent = T('一座灯光下的私人博物馆', 'A private museum under gallery light', '갤러리 조명 아래의 개인 미술관');
+const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
+document.title = `${exhibitionName} · This is Eytle`;
+exhibitionTitle.textContent = exhibitionName;
+enterSub.textContent = T('灯光下的私人展览', 'A private exhibition under focused light', '조명 아래의 개인 전시');
 function controlGuideMarkup() {
   const movement = T('移动', 'Move', '이동');
   const inspect = T('端详', 'Inspect', '감상');
@@ -65,7 +69,7 @@ enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左�
   'Controls: WASD move, left click inspect, right click zoom, Shift run, Esc pause',
   '조작 안내: WASD 이동, 왼쪽 클릭 감상, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
 enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
-titleEl.textContent = T('画廊 — This is Eytle', 'Gallery — This is Eytle', '갤러리 — This is Eytle');
+titleEl.textContent = `${exhibitionName} — This is Eytle`;
 hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
 exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
@@ -1814,7 +1818,11 @@ async function boot() {
   try {
     await loadImageList();
   } catch (e) {
-    fail('画廊暂无图片或加载失败。', 'Gallery is empty or failed to load.', '갤러리가 비어 있거나 로드에 실패했습니다.');
+    fail(
+      '图画展览会暂无图片或加载失败。',
+      'Pictures At An Exhibition is empty or failed to load.',
+      '전람회의 그림을 불러오지 못했습니다.'
+    );
     return;
   }
   const textureCount = Math.min(INITIAL_TEXTURE_COUNT, IMAGES.length);
