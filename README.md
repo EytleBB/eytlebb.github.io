@@ -3,7 +3,7 @@
 
 Deploy test
 
-## Gallery image names
+## Pictures At An Exhibition image names
 
 Run the zero-dependency watcher before adding images:
 
@@ -22,6 +22,6 @@ For a one-time scan without watching:
 node scripts/gallery-renamer.js --once
 ```
 
-The current gallery index accepts JPG, JPEG, PNG, GIF, and WebP. TIFF, AVIF, and
+The current exhibition index accepts JPG, JPEG, PNG, GIF, and WebP. TIFF, AVIF, and
 BMP files are renamed but omitted from the index; convert them or extend the
 site's format allowlist before use.

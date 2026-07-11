@@ -659,7 +659,7 @@ function buildSpeakerPool() {
 function reportMuseumTrackFailure(error) {
   if (museumTrackWarningShown) return;
   museumTrackWarningShown = true;
-  console.info(`Museum music is unavailable. Add the MP3 at ${MUSEUM_MUSIC_URL}.`, error);
+  console.info(`Exhibition music is unavailable. Add the MP3 at ${MUSEUM_MUSIC_URL}.`, error);
 }
 
 function connectMuseumTrack() {

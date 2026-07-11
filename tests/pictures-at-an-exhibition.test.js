@@ -31,3 +31,17 @@ test('long-title layout hooks remain present', () => {
   assert.match(museumStyle, /#enter h1\s*\{[^}]*max-width:/s);
   assert.match(museumStyle, /#title\s*\{[^}]*max-width:/s);
 });
+
+test('retired visitor-facing labels are absent', () => {
+  const publicSources = [
+    read('index.html'),
+    read('js/main.js'),
+    read('museum.html'),
+    read('js/museum.js')
+  ].join('\n');
+
+  assert.doesNotMatch(publicSources, /data-zh="画廊"|data-en="Gallery"|data-ko="갤러리"/);
+  assert.doesNotMatch(publicSources, /t\('画廊','Gallery','갤러리'\)/);
+  assert.doesNotMatch(publicSources, /<h1>画廊|Gallery — This is Eytle|갤러리 — This is Eytle/);
+  assert.doesNotMatch(publicSources, /Museum music is unavailable/);
+});
