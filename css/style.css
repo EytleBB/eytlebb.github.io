@@ -99,7 +99,7 @@ nav { display:flex; flex-direction:column; gap:2px; }
   position:relative; display:flex; align-items:center;
   padding:9px 10px 9px 14px; border-radius:6px;
   background:none; border:0; width:100%; text-align:left; cursor:pointer;
-  font:inherit; font-size:14.5px; color:var(--dim); letter-spacing:.01em;
+  font:inherit; font-size:14.5px; line-height:1.35; color:var(--dim); letter-spacing:.01em;
   transition:color .18s, background .18s;
 }
 .nav-i:hover { color:var(--parchment); background:var(--line); }
@@ -226,7 +226,7 @@ nav { display:flex; flex-direction:column; gap:2px; }
 }
 .list-item:hover { border-color:var(--line-2); }
 .list-item.on { border-color:var(--amber-deep); color:var(--amber); }
-.list-item .right { display:flex; align-items:center; gap:11px; color:var(--dim); }
+.list-item .right { display:flex; flex:0 0 auto; align-items:center; gap:11px; color:var(--dim); }
 .list-item .chev { transition:transform .18s; }
 .list-item:hover .chev { transform:translateX(2px); }
 .badge {
@@ -234,7 +234,10 @@ nav { display:flex; flex-direction:column; gap:2px; }
   border:1px solid var(--line-2); border-radius:4px; padding:2px 7px;
 }
 .list-item .tool-ico { width:22px; height:22px; object-fit:contain; flex:0 0 auto; image-rendering:pixelated; }
-.list-item .label { display:flex; align-items:center; gap:12px; min-width:0; }
+.list-item .label {
+  display:flex; flex:1 1 auto; align-items:center; gap:12px; min-width:0;
+  line-height:1.4; overflow-wrap:anywhere;
+}
 .list-sub { margin-top:14px; padding-left:14px; border-left:1px solid var(--line); }
 .list-sub .eyebrow { color:var(--dim); }
 
@@ -368,7 +371,7 @@ nav { display:flex; flex-direction:column; gap:2px; }
   .brand { order:0; }
   .lang { order:1; margin-left:auto; }
   nav { order:2; flex-direction:row; flex-wrap:nowrap; gap:4px; width:100%; overflow-x:auto; padding-bottom:2px; }
-  .nav-i { width:auto; flex:0 0 auto; padding:8px 10px; font-size:13.5px; }
+  .nav-i { width:auto; flex:0 0 auto; padding:8px 10px; font-size:13.5px; white-space:nowrap; }
   .nav-i.on::before { display:none; }
   .rail-foot { order:3; margin:0; flex-direction:row; align-items:center; gap:18px; width:100%; }
   .stage { width:100%; padding:30px 20px 42px; gap:24px; }

@@ -29,7 +29,7 @@ const DATA = {
       name: 'This is Eytle', nameEn: 'This is Eytle', nameKo: 'This is Eytle',
       github: 'https://github.com/EytleBB/eytlebb.github.io',
       sub: [
-        { name: 'Museum',   nameKo: '뮤지엄',   github: 'https://github.com/EytleBB/Eytle-Museum' },
+        { name: '图画展览会', nameEn: 'Pictures At An Exhibition', nameKo: '전람회의 그림', github: 'https://github.com/EytleBB/Eytle-Museum' },
         { name: 'Patch Log', nameKo: '패치 로그', github: 'https://github.com/EytleBB/Eytle-Patch-Log' }
       ]
     }
@@ -204,7 +204,7 @@ async function renderAbout() {
         </div>
       </div>
       <div class="col-right">
-        <div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+        <div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
         <div class="gal" id="home-gal"></div>
       </div>
     </section>
@@ -400,12 +400,12 @@ function buildMonth(year, month, todayStr) {
 async function renderGallery() {
   await loadGallery();
   if (!DATA.gallery.length) {
-    stage.innerHTML = `<div><div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+    stage.innerHTML = `<div><div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
     return;
   }
   stage.innerHTML = `
-    <div><div class="eyebrow">${t('画廊','Gallery','갤러리')}</div>
+    <div><div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
     <div class="gallery-grid gallery-masonry" id="gallery-grid"></div>
     <div class="gallery-sentinel" id="gallery-sentinel" aria-hidden="true"></div></div>`;
   const grid = document.getElementById('gallery-grid');
