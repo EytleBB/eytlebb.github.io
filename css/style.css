@@ -266,19 +266,18 @@ a { color:inherit; }
    PATCH LOG — archive hierarchy
    ============================================================ */
 .patchlog-shell { width:min(100%, 920px); }
-.patchlog-header { max-width:660px; margin-bottom:24px; }
-.patchlog-header .eyebrow { margin-bottom:11px; }
+.patchlog-header { max-width:660px; margin-bottom:16px; }
+.patchlog-header .eyebrow { margin-bottom:0; }
 .patchlog-title {
+  margin-top:10px;
   font-family:var(--disp); font-size:clamp(30px,3.4vw,44px); font-weight:400;
   line-height:1.08; letter-spacing:-.02em; color:var(--parchment);
-}
-.patchlog-description {
-  max-width:580px; margin-top:11px; color:var(--dim); font-size:13px; line-height:1.7;
 }
 .patchlog-surface {
   overflow:hidden; border:1px solid var(--line); border-radius:10px;
   background:var(--panel); backdrop-filter:blur(5px);
 }
+.patchlog-surface-calendar { max-width:680px; }
 .patch-breadcrumb {
   display:flex; flex-direction:row; align-items:center; flex-wrap:wrap; gap:9px;
   width:100%; min-height:48px; padding:13px 20px; border-bottom:1px solid var(--line);
@@ -301,17 +300,13 @@ a { color:inherit; }
   display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
 }
 .patch-index-card {
-  display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:14px;
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px;
   min-height:76px; padding:14px 16px; border:1px solid var(--line); border-radius:8px;
   background:rgba(8,16,33,.18); color:var(--parchment); font:inherit; text-align:left;
   cursor:pointer; transition:border-color .18s, background .18s, color .18s;
 }
 .patch-index-card:hover { border-color:var(--amber-deep); background:rgba(8,16,33,.34); }
 [data-theme="day"] .patch-index-card:hover { background:rgba(255,255,255,.34); }
-.patch-index-number {
-  min-width:46px; color:var(--amber); font-family:'PatchFont',monospace;
-  font-size:16px; font-variant-numeric:tabular-nums;
-}
 .patch-index-copy { display:flex; flex-direction:column; min-width:0; gap:4px; }
 .patch-index-main { font-family:var(--disp); font-size:18px; line-height:1.2; }
 .patch-index-meta {
@@ -319,11 +314,7 @@ a { color:inherit; }
 }
 .patch-index-arrow { display:flex; align-items:center; color:var(--faint); }
 .patch-index-card:hover .patch-index-arrow { color:var(--amber); }
-.patch-calendar-layout {
-  display:grid; grid-template-columns:minmax(0,1.45fr) minmax(220px,.75fr); gap:16px;
-  align-items:start;
-}
-.patch-calendar-card, .patch-entry-list {
+.patch-calendar-card {
   min-width:0; border:1px solid var(--line); border-radius:8px;
   background:rgba(8,16,33,.16);
 }
@@ -337,10 +328,6 @@ a { color:inherit; }
   width:9px; height:9px; border:1px solid var(--amber-deep); border-radius:2px;
 }
 .cal-wrap { width:100%; padding:18px; }
-.cal-month-label {
-  font-family:var(--disp); font-weight:500; font-size:18px; color:var(--parchment);
-  margin-bottom:16px;
-}
 .cal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; width:100%; }
 .cal-head {
   font-size:11px; color:var(--faint); text-align:center; padding-bottom:4px;
@@ -360,23 +347,6 @@ a { color:inherit; }
 }
 .cal-day-entry:hover { background:rgba(230,169,43,.12); }
 .cal-day-active { background:var(--amber); color:var(--amber-ink); border-color:var(--amber); }
-.patch-entry-list { overflow:hidden; }
-.patch-entry-heading {
-  min-height:42px; padding:12px 14px; border-bottom:1px solid var(--line);
-  color:var(--faint); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-}
-.patch-entry-item {
-  display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:10px;
-  width:100%; padding:12px 14px; border:0; border-bottom:1px solid var(--line);
-  background:none; color:var(--parchment); font:inherit; font-size:13px; text-align:left;
-  cursor:pointer; transition:background .18s, color .18s;
-}
-.patch-entry-item:last-child { border-bottom:0; }
-.patch-entry-item:hover { background:rgba(230,169,43,.08); color:var(--amber); }
-.patch-entry-date {
-  color:var(--faint); font-family:'PatchFont',monospace; font-size:10px;
-  font-variant-numeric:tabular-nums;
-}
 
 /* ============================================================
    GALLERY — full grid
@@ -471,9 +441,8 @@ a { color:inherit; }
   .gallery-masonry { columns:2 140px; column-gap:9px; }
   .gallery-masonry img { margin-bottom:9px; }
   .msg-text { height:120px; }
-  .patchlog-header { margin-bottom:20px; }
-  .patch-index-grid, .patch-calendar-layout { grid-template-columns:1fr; }
-  .patch-entry-list { max-height:none; }
+  .patchlog-header { margin-bottom:16px; }
+  .patch-index-grid { grid-template-columns:1fr; }
   .reader { padding:30px 26px; }
 }
 @media (max-width:400px) {
@@ -482,10 +451,8 @@ a { color:inherit; }
   .patch-breadcrumb { padding-inline:16px; }
   .patch-level { padding:16px; }
   .patch-index-card { min-height:70px; padding-inline:13px; gap:11px; }
-  .patch-index-number { min-width:40px; }
   .cal-wrap { padding:14px 10px 16px; }
   .cal-grid { gap:3px; }
-  .patch-entry-date { display:none; }
   .msg-row { align-items:flex-end; }
   .msg-send { padding-inline:17px; }
 }

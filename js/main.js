@@ -440,19 +440,6 @@ function patchlogMonthLabel(year, month, includeYear = false) {
   return includeYear ? `${MONTH_EN[month]} ${year}` : MONTH_EN[month];
 }
 
-function patchlogMonthCount(count) {
-  if (lang === 'zh') return `${count} 个月`;
-  if (lang === 'ko') return `${count}개월`;
-  return `${count} ${count === 1 ? 'month' : 'months'}`;
-}
-
-function patchlogDayLabel(date) {
-  const [, month, day] = date.split('-').map(Number);
-  if (lang === 'zh') return `${month}月${day}日`;
-  if (lang === 'ko') return `${month}월 ${day}일`;
-  return `${MONTH_EN[month - 1]} ${day}`;
-}
-
 function patchlogBreadcrumb() {
   const { year, month } = patchlogSelection;
   const allYears = t('全部年份','All years','전체 연도');
@@ -482,12 +469,7 @@ function renderPatchlogLevel() {
   }
 
   const totalCount = index.reduce((total, item) => total + item.count, 0);
-  let title = t('日志目录','Log archive','로그 보관함');
-  let description = t(
-    '按年份、月份和日期逐级浏览。',
-    'Browse entries by year, month, and date.',
-    '연도, 월, 날짜 순서로 기록을 찾아보세요.'
-  );
+  let title = '';
   let content = '';
   if (!index.length) {
     content = placeholder(t('暂无日志','No entries yet','아직 로그가 없습니다'));
@@ -499,20 +481,14 @@ function renderPatchlogLevel() {
       </div>
       <div class="patch-index-grid">${index.map(item => `
         <button class="patch-index-card" data-log-year="${item.year}">
-          <span class="patch-index-number">${item.year}</span>
           <span class="patch-index-copy">
-            <span class="patch-index-main">${patchlogCount(item.count)}</span>
-            <span class="patch-index-meta">${patchlogMonthCount(item.months.length)}</span>
+            <span class="patch-index-main">${item.year}</span>
+            <span class="patch-index-meta">${patchlogCount(item.count)}</span>
           </span>
           <span class="patch-index-arrow">${chev()}</span>
         </button>`).join('')}</div>`;
   } else if (patchlogSelection.month === null) {
     title = `${selectedYear.year}`;
-    description = t(
-      `${patchlogMonthCount(selectedYear.months.length)}，共 ${patchlogCount(selectedYear.count)}。选择月份继续。`,
-      `${patchlogMonthCount(selectedYear.months.length)} and ${patchlogCount(selectedYear.count)}. Choose a month to continue.`,
-      `${patchlogMonthCount(selectedYear.months.length)}, 총 ${patchlogCount(selectedYear.count)}. 월을 선택하세요.`
-    );
     content = `
       <div class="patch-level-title">
         <span>${t('月份','Months','월')}</span>
@@ -520,7 +496,6 @@ function renderPatchlogLevel() {
       </div>
       <div class="patch-index-grid">${selectedYear.months.map(item => `
         <button class="patch-index-card" data-log-month="${item.month}">
-          <span class="patch-index-number">${String(item.month + 1).padStart(2, '0')}</span>
           <span class="patch-index-copy">
             <span class="patch-index-main">${patchlogMonthLabel(selectedYear.year, item.month)}</span>
             <span class="patch-index-meta">${patchlogCount(item.dates.length)}</span>
@@ -530,45 +505,28 @@ function renderPatchlogLevel() {
   } else {
     const selectedMonth = selectedYear.months.find(item => item.month === patchlogSelection.month);
     title = patchlogMonthLabel(selectedYear.year, selectedMonth.month, true);
-    description = t(
-      `本月有 ${patchlogCount(selectedMonth.dates.length)}，点击琥珀色日期阅读。`,
-      `${patchlogCount(selectedMonth.dates.length)} this month. Select an amber date to read.`,
-      `이번 달 ${patchlogCount(selectedMonth.dates.length)}. 호박색 날짜를 선택해 읽어보세요.`
-    );
     content = `
-      <div class="patch-calendar-layout">
-        <section class="patch-calendar-card" aria-label="${t('月历','Monthly calendar','월간 달력')}">
-          <div class="patch-calendar-bar">
-            <span>${t('月历','Calendar','달력')}</span>
-            <span class="patch-calendar-legend"><i aria-hidden="true"></i>${t('有日志','Entry','기록 있음')}</span>
-          </div>
-          <div class="cal-wrap">${buildMonth(
-            selectedYear.year,
-            selectedMonth.month,
-            fmtDate(new Date()),
-            new Set(selectedMonth.dates)
-          )}</div>
-        </section>
-        <aside class="patch-entry-list" aria-label="${t('本月日志','Entries this month','이번 달 기록')}">
-          <div class="patch-entry-heading">${t('本月日志','Entries this month','이번 달 기록')}</div>
-          ${selectedMonth.dates.map(date => `
-            <button class="patch-entry-item" data-log-entry data-date="${date}">
-              <span>${patchlogDayLabel(date)}</span>
-              <span class="patch-entry-date">${date}</span>
-              <span class="patch-index-arrow">${chev()}</span>
-            </button>`).join('')}
-        </aside>
-      </div>`;
+      <section class="patch-calendar-card" aria-label="${t('月历','Monthly calendar','월간 달력')}">
+        <div class="patch-calendar-bar">
+          <span>${t('月历','Calendar','달력')}</span>
+          <span class="patch-calendar-legend"><i aria-hidden="true"></i>${t('有日志','Entry','기록 있음')}</span>
+        </div>
+        <div class="cal-wrap">${buildMonth(
+          selectedYear.year,
+          selectedMonth.month,
+          fmtDate(new Date()),
+          new Set(selectedMonth.dates)
+        )}</div>
+      </section>`;
   }
 
   stage.innerHTML = `
     <div class="patchlog-shell">
       <header class="patchlog-header">
-        <div class="eyebrow">${t('斑驳日志','Patch Log','Patch Log')}</div>
-        <h1 class="patchlog-title">${title}</h1>
-        <p class="patchlog-description">${description}</p>
+        <div class="eyebrow">${t('斑驳日志','Patch Log','패치 로그')}</div>
+        ${title ? `<h1 class="patchlog-title">${title}</h1>` : ''}
       </header>
-      <div class="patchlog-surface">
+      <div class="patchlog-surface${patchlogSelection.month !== null ? ' patchlog-surface-calendar' : ''}">
         ${patchlogBreadcrumb()}
         <div class="patch-level">${content}</div>
       </div>
@@ -592,14 +550,11 @@ function renderPatchlogLevel() {
       patchlogSelection.month = Number(button.dataset.logMonth);
       renderPatchlogLevel();
     }));
-  stage.querySelectorAll('.cal-day-entry, [data-log-entry]').forEach(button =>
+  stage.querySelectorAll('.cal-day-entry').forEach(button =>
     button.addEventListener('click', () => openReader(button.dataset.date)));
 }
 
 function buildMonth(year, month, todayStr, logDates) {
-  const label = lang === 'zh' ? `${year}年 ${MONTH_ZH[month]}`
-              : lang === 'ko' ? `${year}년 ${MONTH_KO[month]}`
-              : `${MONTH_EN[month]} ${year}`;
   const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;   // Monday-first
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const nowTime = new Date(); nowTime.setHours(0, 0, 0, 0);
@@ -622,7 +577,7 @@ function buildMonth(year, month, todayStr, logDates) {
       ? `<button class="${cls}" data-date="${ds}" aria-label="${ds}">${d}</button>`
       : `<div class="${cls}">${d}</div>`;
   }
-  return `<div class="cal-month"><p class="cal-month-label">${label}</p><div class="cal-grid">${heads}${cells}</div></div>`;
+  return `<div class="cal-month"><div class="cal-grid">${heads}${cells}</div></div>`;
 }
 
 /* ============================================================
