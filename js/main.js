@@ -32,6 +32,29 @@ const DATA = {
         { name: '图画展览会', nameEn: 'Pictures At An Exhibition', nameKo: '전람회의 그림', github: 'https://github.com/EytleBB/Eytle-Museum' },
         { name: 'Patch Log', nameKo: '패치 로그', github: 'https://github.com/EytleBB/Eytle-Patch-Log' }
       ]
+    },
+    {
+      id: 'casual-projects',
+      name: 'Casual Projects', nameEn: 'Casual Projects', nameKo: 'Casual Projects',
+      github: 'https://github.com/EytleBB',
+      sub: [
+        {
+          name: '抖音直播语音助手', nameEn: 'Douyin Live Voice', nameKo: '더우인 라이브 음성 도우미',
+          github: 'https://github.com/EytleBB/douyin-live-voice'
+        },
+        {
+          name: '抖音门卫', nameEn: 'Douyin Chat Guard', nameKo: '더우인 채팅 가드',
+          github: 'https://github.com/EytleBB/douyinchat'
+        },
+        {
+          name: 'Android 连点器', nameEn: 'Android Auto Clicker', nameKo: 'Android 자동 클릭기',
+          github: 'https://github.com/EytleBB/AndroidAC'
+        },
+        {
+          name: '校园一卡通', nameEn: 'Campus One Card', nameKo: '캠퍼스 원카드',
+          github: 'https://github.com/EytleBB/one-card'
+        }
+      ]
     }
   ],
 
@@ -47,6 +70,21 @@ const DATA = {
   patchlog: [],  // built from logs/index.json (auto-maintained)
 
   downloads: [
+    {
+      name: '抖音直播语音助手', nameEn: 'Douyin Live Voice', nameKo: '더우인 라이브 음성 도우미',
+      meta: 'Windows x64 · v0.1.1 · 2026-07-16',
+      icon: '🎙️', url: 'https://github.com/EytleBB/douyin-live-voice/releases/latest'
+    },
+    {
+      name: '抖音门卫', nameEn: 'Douyin Chat Guard', nameKo: '더우인 채팅 가드',
+      meta: 'Android APK · v0.1.0 · 2026-07-11',
+      icon: '🛡️', url: 'https://github.com/EytleBB/douyinchat/releases/latest'
+    },
+    {
+      name: 'Android 连点器', nameEn: 'Android Auto Clicker', nameKo: 'Android 자동 클릭기',
+      meta: 'Android APK · v1.0.0 · 2026-07-11',
+      icon: '⚙️', url: 'https://github.com/EytleBB/AndroidAC/releases/latest'
+    },
     { name: '730', meta: 'Updated: 2025-12-20', icon: '📦', url: './files/730.zip' },
     {
       name: 'Minecraft 1.21.8 生存存档',
@@ -78,6 +116,7 @@ if (!['night', 'day'].includes(theme)) theme = 'night';   // migrate old dark/li
 let activeSection = 'about';
 let galleryLoaded = false;
 let logsLoaded = false;
+let patchlogSelection = { year: null, month: null };
 const GALLERY_BATCH_SIZE = 18;
 const GALLERY_HOME_COUNT = 12;
 const GALLERY_CACHE = 'eytle-gallery-v1';
@@ -254,19 +293,21 @@ function renderProjects() {
   const items = DATA.projects.map(p => {
     const hasSub = p.sub && p.sub.length;
     return `
-      <button class="list-item" data-proj="${p.id}">
-        <span class="label">${escapeHtml(pick(p, 'name'))}</span>
-        <span class="right">
-          ${hasSub ? `<span class="badge">${p.sub.length} ${t('子项目','sub','하위')}</span>` : ''}
-          ${chev()}
-        </span>
-      </button>`;
+      <div class="project-group" data-proj-group="${p.id}">
+        <button class="list-item" data-proj="${p.id}" aria-expanded="false">
+          <span class="label">${escapeHtml(pick(p, 'name'))}</span>
+          <span class="right">
+            ${hasSub ? `<span class="badge">${p.sub.length} ${t('子项目','sub','하위')}</span>` : ''}
+            ${chev()}
+          </span>
+        </button>
+        <div class="project-sub-slot" data-proj-sub="${p.id}"></div>
+      </div>`;
   }).join('');
 
   stage.innerHTML = `
     <div><div class="eyebrow">${t('项目','Projects','프로젝트')}</div>
-    <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div>
-    <div id="proj-sub"></div></div>`;
+    <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div></div>`;
 
   stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
     btn.addEventListener('click', () => handleProjectClick(btn.dataset.proj)));
@@ -275,10 +316,22 @@ function renderProjects() {
 function handleProjectClick(id) {
   const proj = DATA.projects.find(p => p.id === id);
   if (!proj) return;
-  const sub = document.getElementById('proj-sub');
-  stage.querySelectorAll('.list-item[data-proj]').forEach(b => b.classList.toggle('on', b.dataset.proj === id));
+  const button = [...stage.querySelectorAll('.list-item[data-proj]')]
+    .find(b => b.dataset.proj === id);
+  if (!button) return;
 
   if (proj.sub && proj.sub.length) {
+    const shouldOpen = !button.classList.contains('on');
+    stage.querySelectorAll('.list-item[data-proj]').forEach(b => {
+      b.classList.remove('on');
+      b.setAttribute('aria-expanded', 'false');
+    });
+    stage.querySelectorAll('.project-sub-slot').forEach(slot => { slot.innerHTML = ''; });
+    if (!shouldOpen) return;
+
+    button.classList.add('on');
+    button.setAttribute('aria-expanded', 'true');
+    const sub = button.closest('.project-group').querySelector('.project-sub-slot');
     sub.innerHTML = `
       <div class="list-sub">
         <div class="eyebrow">${escapeHtml(pick(proj, 'name'))} · ${t('子项目','Sub-projects','하위 프로젝트')}</div>
@@ -289,7 +342,6 @@ function handleProjectClick(id) {
           </a>`).join('')}</div>
       </div>`;
   } else {
-    sub.innerHTML = '';
     window.open(proj.github, '_blank', 'noopener');
   }
 }
@@ -344,30 +396,133 @@ const DAY_KO = ['월','화','수','목','금','토','일'];
 
 async function renderPatchlog() {
   await loadLogs();
-  const now = new Date();
-  const todayStr = fmtDate(now);
-
-  let months = '';
-  let y = 2026, m = 2;                       // calendar starts 2026-03 (earliest log)
-  const endY = now.getFullYear(), endM = now.getMonth();
-  while (y < endY || (y === endY && m <= endM)) {
-    months += buildMonth(y, m, todayStr);
-    m++; if (m > 11) { m = 0; y++; }
-  }
-
-  stage.innerHTML = `
-    <div><div class="eyebrow">${t('斑驳日志','Patch Log','Patch Log')}</div>
-    <div class="cal-wrap">${months}</div></div>`;
-
-  stage.querySelectorAll('.cal-day-entry').forEach(el =>
-    el.addEventListener('click', () => openReader(el.dataset.date)));
+  renderPatchlogLevel();
 }
 
 function fmtDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildMonth(year, month, todayStr) {
+function buildPatchlogIndex() {
+  const years = new Map();
+  DATA.patchlog.forEach(date => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    if (!match) return;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    if (month < 0 || month > 11) return;
+    if (!years.has(year)) years.set(year, new Map());
+    const months = years.get(year);
+    if (!months.has(month)) months.set(month, []);
+    months.get(month).push(date);
+  });
+
+  return [...years.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([year, months]) => ({
+      year,
+      count: [...months.values()].reduce((total, dates) => total + dates.length, 0),
+      months: [...months.entries()]
+        .sort(([left], [right]) => right - left)
+        .map(([month, dates]) => ({ month, dates }))
+    }));
+}
+
+function patchlogCount(count) {
+  if (lang === 'zh') return `${count} 篇`;
+  if (lang === 'ko') return `${count}개`;
+  return `${count} ${count === 1 ? 'entry' : 'entries'}`;
+}
+
+function patchlogMonthLabel(year, month, includeYear = false) {
+  if (lang === 'zh') return includeYear ? `${year}年 ${MONTH_ZH[month]}` : MONTH_ZH[month];
+  if (lang === 'ko') return includeYear ? `${year}년 ${MONTH_KO[month]}` : MONTH_KO[month];
+  return includeYear ? `${MONTH_EN[month]} ${year}` : MONTH_EN[month];
+}
+
+function patchlogBreadcrumb() {
+  const { year, month } = patchlogSelection;
+  let html = `<button class="patch-crumb" data-log-years>${t('全部年份','All years','전체 연도')}</button>`;
+  if (year !== null) {
+    html += `<span class="patch-crumb-sep">/</span>
+      <button class="patch-crumb" data-log-year-crumb>${year}</button>`;
+  }
+  if (month !== null) {
+    html += `<span class="patch-crumb-sep">/</span>
+      <span class="patch-crumb-current">${patchlogMonthLabel(year, month)}</span>`;
+  }
+  return `<nav class="patch-breadcrumb" aria-label="${t('日志层级','Log hierarchy','로그 계층')}">${html}</nav>`;
+}
+
+function renderPatchlogLevel() {
+  const index = buildPatchlogIndex();
+  const selectedYear = index.find(item => item.year === patchlogSelection.year);
+  if (patchlogSelection.year !== null && !selectedYear) {
+    patchlogSelection = { year: null, month: null };
+  } else if (patchlogSelection.month !== null
+      && !selectedYear.months.some(item => item.month === patchlogSelection.month)) {
+    patchlogSelection.month = null;
+  }
+
+  let content = '';
+  if (!index.length) {
+    content = placeholder(t('暂无日志','No entries yet','아직 로그가 없습니다'));
+  } else if (patchlogSelection.year === null) {
+    content = `
+      <div class="patch-level-title">${t('选择年份','Choose a year','연도 선택')}</div>
+      <div class="patch-index-grid">${index.map(item => `
+        <button class="patch-index-card" data-log-year="${item.year}">
+          <span class="patch-index-main">${item.year}</span>
+          <span class="patch-index-meta">${patchlogCount(item.count)} ${chev()}</span>
+        </button>`).join('')}</div>`;
+  } else if (patchlogSelection.month === null) {
+    content = `
+      <div class="patch-level-title">${t('选择月份','Choose a month','월 선택')}</div>
+      <div class="patch-index-grid">${selectedYear.months.map(item => `
+        <button class="patch-index-card" data-log-month="${item.month}">
+          <span class="patch-index-main">${patchlogMonthLabel(selectedYear.year, item.month)}</span>
+          <span class="patch-index-meta">${patchlogCount(item.dates.length)} ${chev()}</span>
+        </button>`).join('')}</div>`;
+  } else {
+    const selectedMonth = selectedYear.months.find(item => item.month === patchlogSelection.month);
+    content = `<div class="cal-wrap">${buildMonth(
+      selectedYear.year,
+      selectedMonth.month,
+      fmtDate(new Date()),
+      new Set(selectedMonth.dates)
+    )}</div>`;
+  }
+
+  stage.innerHTML = `
+    <div class="patchlog-shell">
+      <div class="eyebrow">${t('斑驳日志','Patch Log','Patch Log')}</div>
+      ${patchlogBreadcrumb()}
+      <div class="patch-level">${content}</div>
+    </div>`;
+
+  stage.querySelector('[data-log-years]')?.addEventListener('click', () => {
+    patchlogSelection = { year: null, month: null };
+    renderPatchlogLevel();
+  });
+  stage.querySelector('[data-log-year-crumb]')?.addEventListener('click', () => {
+    patchlogSelection.month = null;
+    renderPatchlogLevel();
+  });
+  stage.querySelectorAll('[data-log-year]').forEach(button =>
+    button.addEventListener('click', () => {
+      patchlogSelection = { year: Number(button.dataset.logYear), month: null };
+      renderPatchlogLevel();
+    }));
+  stage.querySelectorAll('[data-log-month]').forEach(button =>
+    button.addEventListener('click', () => {
+      patchlogSelection.month = Number(button.dataset.logMonth);
+      renderPatchlogLevel();
+    }));
+  stage.querySelectorAll('.cal-day-entry').forEach(button =>
+    button.addEventListener('click', () => openReader(button.dataset.date)));
+}
+
+function buildMonth(year, month, todayStr, logDates) {
   const label = lang === 'zh' ? `${year}年 ${MONTH_ZH[month]}`
               : lang === 'ko' ? `${year}년 ${MONTH_KO[month]}`
               : `${MONTH_EN[month]} ${year}`;
@@ -382,14 +537,16 @@ function buildMonth(year, month, todayStr) {
   for (let i = 0; i < firstOffset; i++) cells += '<div class="cal-day cal-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const hasLog = DATA.patchlog.includes(ds);
+    const hasLog = logDates.has(ds);
     const isToday = ds === todayStr;
     const future = new Date(year, month, d) > nowTime;
     let cls = 'cal-day';
     if (hasLog) cls += ' cal-day-entry';
     if (isToday) cls += ' cal-day-today';
     if (future) cls += ' cal-day-future';
-    cells += hasLog ? `<div class="${cls}" data-date="${ds}">${d}</div>` : `<div class="${cls}">${d}</div>`;
+    cells += hasLog
+      ? `<button class="${cls}" data-date="${ds}" aria-label="${ds}">${d}</button>`
+      : `<div class="${cls}">${d}</div>`;
   }
   return `<div class="cal-month"><p class="cal-month-label">${label}</p><div class="cal-grid">${heads}${cells}</div></div>`;
 }
