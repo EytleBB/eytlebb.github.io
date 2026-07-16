@@ -22,3 +22,9 @@ test('patch log no longer renders every month from a fixed start date', () => {
 test('log entry days are keyboard-accessible buttons', () => {
   assert.match(main, /<button class="\$\{cls\}" data-date="\$\{ds\}" aria-label="\$\{ds\}">/);
 });
+
+test('patch log layout keeps hierarchy and monthly entry list together', () => {
+  assert.match(main, /class="patchlog-surface"/);
+  assert.match(main, /class="patch-calendar-layout"/);
+  assert.match(main, /data-log-entry data-date=/);
+});
