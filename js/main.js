@@ -60,6 +60,11 @@ const DATA = {
 
   tools: [
     {
+      name: 'CS-Scout', nameEn: 'CS-Scout', nameKo: 'CS-Scout',
+      url: 'https://scout.eytle.cn/', external: true,
+      icon: 'images/cs-scout-icon.webp'
+    },
+    {
       name: 'MC 要塞定位器', nameEn: 'MC Stronghold Finder', nameKo: 'MC 요새 찾기',
       url: './mc-calc.html', external: false,
       icon: 'images/Eye_of_Ender.png'   // Eye of Ender — ONLY here
