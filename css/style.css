@@ -268,10 +268,26 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
 .msg-send {
   background:var(--amber); color:var(--amber-ink); border:0; border-radius:6px; cursor:pointer;
   font:inherit; font-size:14px; font-weight:500; padding:10px 22px; white-space:nowrap;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; overflow:hidden;
   transform:translateY(20px); transition:background .18s;
 }
 .msg-send:hover { background:var(--amber-deep); }
 .msg-send:disabled { opacity:.6; cursor:default; }
+.msg-plane {
+  width:17px; height:17px; flex:0 0 auto;
+  transform:rotate(-4deg);
+  transition:transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.msg-send:hover .msg-plane { transform:translate(2px,-2px) rotate(-8deg); }
+.msg-send.is-launching .msg-plane {
+  animation:message-plane-takeoff .8s cubic-bezier(.4,0,.2,1);
+}
+@keyframes message-plane-takeoff {
+  0% { transform:translate(0,0) rotate(-4deg); opacity:1; }
+  42% { transform:translate(19px,-15px) rotate(-12deg); opacity:0; }
+  43% { transform:translate(-15px,12px) rotate(-12deg); opacity:0; }
+  100% { transform:translate(0,0) rotate(-4deg); opacity:1; }
+}
 .msg-hint { min-height:18px; margin-top:10px; font-size:12.5px; color:var(--dim); letter-spacing:.02em; }
 
 /* gallery preview (home right column) */

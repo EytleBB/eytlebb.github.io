@@ -264,7 +264,13 @@ async function renderAbout() {
           <input type="text" id="msg-hp" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
           <div class="msg-row">
             <span class="msg-count" id="msg-count">0 / 140</span>
-            <button class="msg-send" id="msg-send">${t('发送','Send','보내기')}</button>
+            <button class="msg-send" id="msg-send">
+              <span class="msg-send-label">${t('发送','Send','보내기')}</span>
+              <svg class="msg-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m22 2-7 20-4-8-8-4Z"></path>
+                <path d="M22 2 11 14"></path>
+              </svg>
+            </button>
           </div>
           <div class="msg-hint" id="msg-hint" aria-live="polite"></div>
         </div>
@@ -711,10 +717,18 @@ function wireMessageForm() {
   const upd = () => { cnt.textContent = `${box.value.length} / 140`; };
   box.addEventListener('input', upd); upd();
 
+  const launchPlane = () => {
+    btn.classList.remove('is-launching');
+    void btn.offsetWidth;
+    btn.classList.add('is-launching');
+    window.setTimeout(() => btn.classList.remove('is-launching'), 850);
+  };
+
   btn.addEventListener('click', async () => {
     const text = box.value.trim();
     if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.focus(); return; }
     if (hp.value) return;   // honeypot tripped → silently drop
+    launchPlane();
 
     if (!MSG_CONFIG.web3formsKey) {        // no backend configured → acknowledge locally
       hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
