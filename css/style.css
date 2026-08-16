@@ -306,7 +306,8 @@ a { color:inherit; }
   cursor:pointer; transition:border-color .18s, background .18s, color .18s;
 }
 .patch-index-card:hover { border-color:var(--amber-deep); background:rgba(8,16,33,.34); }
-[data-theme="day"] .patch-index-card:hover { background:rgba(255,255,255,.34); }
+[data-theme="day"] .patch-index-card { background:rgba(248,252,255,.52); }
+[data-theme="day"] .patch-index-card:hover { background:rgba(255,246,224,.64); }
 .patch-index-copy { display:flex; flex-direction:column; min-width:0; gap:4px; }
 .patch-index-main { font-family:var(--disp); font-size:18px; line-height:1.2; }
 .patch-index-meta {
@@ -318,6 +319,7 @@ a { color:inherit; }
   min-width:0; border:1px solid var(--line); border-radius:8px;
   background:rgba(8,16,33,.16);
 }
+[data-theme="day"] .patch-calendar-card { background:rgba(248,252,255,.52); }
 .patch-calendar-bar {
   display:flex; align-items:center; justify-content:space-between; gap:14px;
   min-height:42px; padding:10px 14px; border-bottom:1px solid var(--line);

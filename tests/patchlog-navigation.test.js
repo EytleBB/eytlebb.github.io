@@ -14,6 +14,12 @@ test('patch log preserves leading paragraph indentation', () => {
   assert.match(css, /\.plog-card \.txt \{[\s\S]*?white-space:pre-wrap;[\s\S]*?\}/);
 });
 
+test('day-mode patch log cards use a light frosted surface', () => {
+  assert.match(css, /\[data-theme="day"\] \.patch-index-card \{ background:rgba\(248,252,255,\.52\); \}/);
+  assert.match(css, /\[data-theme="day"\] \.patch-index-card:hover \{ background:rgba\(255,246,224,\.64\); \}/);
+  assert.match(css, /\[data-theme="day"\] \.patch-calendar-card \{ background:rgba\(248,252,255,\.52\); \}/);
+});
+
 test('patch log uses data-driven year, month, and day levels', () => {
   assert.match(main, /function buildPatchlogIndex\(\)/);
   assert.match(main, /data-log-year=/);
