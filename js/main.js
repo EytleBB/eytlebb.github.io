@@ -122,7 +122,7 @@ let activeSection = 'about';
 let galleryLoaded = false;
 let patchlogSelection = { year: null, month: null };
 const GALLERY_BATCH_SIZE = 18;
-const GALLERY_HOME_COUNT = 12;
+const GALLERY_HOME_COUNT = 24;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
@@ -231,8 +231,8 @@ async function cacheGalleryImages(images) {
 }
 
 function wireGalleryImages(root) {
-  root.querySelectorAll('img[data-idx]').forEach(im =>
-    im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+  root.querySelectorAll('[data-idx]').forEach(item =>
+    item.addEventListener('click', () => openLightbox(Number(item.dataset.idx))));
 }
 async function loadLogs() {
   try {
@@ -298,13 +298,22 @@ async function renderAbout() {
     card.querySelector('.r-loading').textContent = t('暂无随笔','Nothing yet','아직 없음');
   }
 
-  // Gallery preview — 3 columns × 4 rows, matching the left-hand stack.
+  // Gallery preview — a seamless vertical loop that pauses for interaction.
   await loadGallery();
   const gal = document.getElementById('home-gal');
   if (DATA.gallery.length) {
     const idx = randomGalleryPreview();
-    gal.innerHTML = idx
-      .map(i => `<img src="${DATA.gallery[i].preview || DATA.gallery[i].src}" alt="" loading="lazy" data-idx="${i}" />`).join('');
+    const label = t('查看展览图片','View exhibition picture','전시 이미지 보기');
+    const tiles = (duplicate = false) => idx.map(i => `
+      <button class="gal-item" type="button" data-idx="${i}" aria-label="${label}"${duplicate ? ' tabindex="-1"' : ''}>
+        <img src="${DATA.gallery[i].preview || DATA.gallery[i].src}" alt="" loading="lazy" />
+      </button>`).join('');
+    gal.style.setProperty('--gal-scroll-duration', `${Math.max(36, Math.ceil(idx.length / 3) * 5.5)}s`);
+    gal.innerHTML = `
+      <div class="gal-track">
+        <div class="gal-set">${tiles()}</div>
+        <div class="gal-set" aria-hidden="true">${tiles(true)}</div>
+      </div>`;
     wireGalleryImages(gal);
     cacheGalleryImages(idx.map(i => DATA.gallery[i]));
   } else {
