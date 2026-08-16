@@ -110,6 +110,9 @@ const KEEP_BEHIND_DISTANCE = 42;
 const MAX_RESIDENT_TEXTURES = 60;
 const STREAM_UPDATE_INTERVAL_MS = 400;
 const BATCH_RETRY_DELAY_MS = 8000;
+const TEXTURE_UPLOAD_MIN_INTERVAL_MS = 54;
+const TEXTURE_UPLOAD_FRAME_BUDGET_MS = 11.5;
+const TEXTURE_UPLOAD_MAX_WAIT_MS = 650;
 
 async function loadImageList() {
   const [res, previewResponse] = await Promise.all([
@@ -137,6 +140,8 @@ async function loadImageList() {
       url,
       textureUrl: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
       byteSize: Number.isFinite(previewMeta.sourceBytes) ? previewMeta.sourceBytes : null,
+      width: Number.isFinite(previewMeta.width) ? previewMeta.width : null,
+      height: Number.isFinite(previewMeta.height) ? previewMeta.height : null,
     };
   });
   const entriesByUrl = new Map(entries.map(entry => [entry.url, entry]));
@@ -147,7 +152,9 @@ async function loadImageList() {
   let homepageImages = [];
   try {
     const stored = JSON.parse(sessionStorage.getItem(GALLERY_PREVIEW_KEY) || '[]');
-    if (Array.isArray(stored)) homepageImages = stored;
+    if (Array.isArray(stored)) homepageImages = stored.map(url => (
+      typeof url === 'string' ? url.split('?')[0] : url
+    ));
   } catch {}
   const available = new Set(urls);
   const prioritized = [...new Set(homepageImages)].filter(url => available.has(url));
@@ -162,10 +169,16 @@ async function loadImageList() {
   const orderedEntries = orderedUrls.map(url => entriesByUrl.get(url));
   IMAGES = orderedEntries.map(entry => entry.url);
   TEXTURE_IMAGES = orderedEntries.map(entry => entry.textureUrl);
-  IMAGE_META = orderedEntries.map(entry => Number.isFinite(entry.byteSize) ? {
-    byteSize: entry.byteSize,
-    scale: entry.byteSize <= SMALL_IMAGE_BYTES ? 0.5 : 1,
-  } : null);
+  IMAGE_META = orderedEntries.map(entry => (
+    Number.isFinite(entry.byteSize) || (Number.isFinite(entry.width) && Number.isFinite(entry.height))
+      ? {
+          byteSize: entry.byteSize,
+          width: entry.width,
+          height: entry.height,
+          scale: Number.isFinite(entry.byteSize) && entry.byteSize <= SMALL_IMAGE_BYTES ? 0.5 : 1,
+        }
+      : null
+  ));
 }
 
 /* ============================================================
@@ -229,10 +242,12 @@ camera.add(audioListener);
 const clock = new THREE.Clock();
 const updaters = [];
 function frame() {
+  const frameStartedAt = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   for (const fn of updaters) fn(dt);
   updatePictureSpotPool();
   renderGalleryFrame();
+  processTextureUploadQueue(frameStartedAt);
 }
 let looping = false;
 function startLoop() {
@@ -567,6 +582,10 @@ const textureLastUsed = [];
 const streamBatchQueue = [];
 const queuedBatchStarts = new Set();
 const batchLastAttempt = [];
+const textureUploadQueue = [];
+const artworkGeometryCache = new Map();
+const pictureFrameGeometryCache = new Map();
+const rodGeometryCache = new Map();
 const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
 const pictureSpotPool = [];
@@ -577,6 +596,7 @@ let rearWall = null;
 let nextImageIndex = 0;
 let streamBatchWorkerActive = false;
 let lastStreamUpdate = 0;
+let lastTextureUpload = 0;
 
 /* ---- synchronized spatial music ---- */
 const speakerCabinetGeo = new THREE.BoxGeometry(0.32, 0.46, 0.16);
@@ -735,6 +755,11 @@ function startMuseumTrack() {
   }
 }
 
+function prewarmMuseumTrack() {
+  museumTrack.preload = 'auto';
+  museumTrack.load();
+}
+
 function frameMetricsForScale(scale) {
   if (scale >= LARGE_ART_SCALE_THRESHOLD) {
     return { depth: LARGE_ART_FRAME_DEPTH, artZ: LARGE_ART_FRAME_ART_Z };
@@ -748,13 +773,6 @@ function frameXForSide(side, metrics) {
 
 function pictureXForFrame(side, frameX, metrics) {
   return frameX + (-side) * metrics.artZ;
-}
-
-function clearPictureFrame(frame) {
-  for (const child of frame.children) {
-    if (child.geometry) child.geometry.dispose();
-  }
-  frame.clear();
 }
 
 function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openingW, openingH, metrics) {
@@ -828,8 +846,7 @@ function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openi
   return geo;
 }
 
-function resizePictureFrame(frame, artW, artH, metrics = frameMetricsForScale(0)) {
-  clearPictureFrame(frame);
+function resizePictureFrame(frame, artW, artH, metrics = frameMetricsForScale(0), cacheKey = 'placeholder') {
   const border = THREE.MathUtils.clamp(artH * 0.11, 0.105, 0.18);
   const inset = Math.max(border * 0.34, 0.046);
   const outerBand = Math.max(border - inset, 0.07);
@@ -840,13 +857,22 @@ function resizePictureFrame(frame, artW, artH, metrics = frameMetricsForScale(0)
   const outerH = innerOuterH + outerBand * 2;
   const openingW = Math.max(artW - artOverlap * 2, artW * 0.92);
   const openingH = Math.max(artH - artOverlap * 2, artH * 0.92);
-  const mesh = new THREE.Mesh(
-    makeTieredFrameGeometry(outerW, outerH, innerOuterW, innerOuterH, openingW, openingH, metrics),
-    mats.pictureFrame,
-  );
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  frame.add(mesh);
+  const geometryKey = `${cacheKey}:${artW.toFixed(4)}:${artH.toFixed(4)}:${metrics.depth.toFixed(4)}:${metrics.artZ.toFixed(4)}`;
+  let geometry = pictureFrameGeometryCache.get(geometryKey);
+  if (!geometry) {
+    geometry = makeTieredFrameGeometry(outerW, outerH, innerOuterW, innerOuterH, openingW, openingH, metrics);
+    pictureFrameGeometryCache.set(geometryKey, geometry);
+  }
+  let mesh = frame.userData.frameMesh;
+  if (!mesh) {
+    mesh = new THREE.Mesh(geometry, mats.pictureFrame);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    frame.userData.frameMesh = mesh;
+    frame.add(mesh);
+  } else if (mesh.geometry !== geometry) {
+    mesh.geometry = geometry;
+  }
 }
 
 function makePictureFrame(x, y, z, ry) {
@@ -855,6 +881,16 @@ function makePictureFrame(x, y, z, ry) {
   frame.rotation.y = ry;
   resizePictureFrame(frame, 2, ART_H, frameMetricsForScale(0));
   return frame;
+}
+
+function artworkGeometryFor(cacheKey, width, height) {
+  const geometryKey = `${cacheKey}:${width.toFixed(4)}:${height.toFixed(4)}`;
+  let geometry = artworkGeometryCache.get(geometryKey);
+  if (!geometry) {
+    geometry = new THREE.PlaneGeometry(width, height);
+    artworkGeometryCache.set(geometryKey, geometry);
+  }
+  return geometry;
 }
 
 async function normalizeImageBlobType(blob) {
@@ -890,6 +926,40 @@ async function galleryImageSource(url, imageIndex) {
   }
 }
 
+function scheduleTextureUpload(imageIndex, texture) {
+  if (typeof renderer.initTexture !== 'function') return Promise.resolve(true);
+  if (!looping) {
+    try {
+      renderer.initTexture(texture);
+      return Promise.resolve(true);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+  return new Promise(resolve => {
+    textureUploadQueue.push({ imageIndex, texture, queuedAt: performance.now(), resolve });
+  });
+}
+
+function processTextureUploadQueue(frameStartedAt) {
+  if (!textureUploadQueue.length) return;
+  const now = performance.now();
+  if (now - lastTextureUpload < TEXTURE_UPLOAD_MIN_INTERVAL_MS) return;
+  const next = textureUploadQueue[0];
+  const waited = now - next.queuedAt;
+  const frameWork = now - frameStartedAt;
+  if (frameWork > TEXTURE_UPLOAD_FRAME_BUDGET_MS && waited < TEXTURE_UPLOAD_MAX_WAIT_MS) return;
+
+  textureUploadQueue.shift();
+  lastTextureUpload = now;
+  try {
+    renderer.initTexture(next.texture);
+    next.resolve(true);
+  } catch {
+    next.resolve(false);
+  }
+}
+
 function loadTexture(i) {
   if (texCache[i]) return Promise.resolve(texCache[i]);
   if (textureLoads[i]) return textureLoads[i];
@@ -901,10 +971,16 @@ function loadTexture(i) {
     texLoader.load(source.url, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      texCache[i] = tex;
-      textureLastUsed[i] = performance.now();
-      if (typeof renderer.initTexture === 'function') renderer.initTexture(tex);
-      finish(tex);
+      void scheduleTextureUpload(i, tex).then(uploaded => {
+        if (!uploaded) {
+          tex.dispose();
+          finish(null);
+          return;
+        }
+        texCache[i] = tex;
+        textureLastUsed[i] = performance.now();
+        finish(tex);
+      });
     }, undefined, () => { texCache[i] = null; finish(null); });
   })).finally(() => {
     if (textureLoads[i] === promise) textureLoads[i] = null;
@@ -913,12 +989,13 @@ function loadTexture(i) {
   return promise;
 }
 
-async function loadTextureIndices(indices, onProgress) {
+async function loadTextureIndices(indices, onProgress, onTextureReady) {
   let cursor = 0;
   const worker = async () => {
     while (cursor < indices.length) {
       const imageIndex = indices[cursor++];
-      await loadTexture(imageIndex);
+      const texture = await loadTexture(imageIndex);
+      if (texture && onTextureReady) onTextureReady(imageIndex, texture);
       if (onProgress) onProgress();
     }
   };
@@ -934,18 +1011,24 @@ function preloadInitialTextures(onProgress) {
 }
 
 function fitArtwork(pic, frame, tex, imageIndex) {
-  if (!tex || !tex.image) return;
-  const ar = tex.image.width / tex.image.height;
-  const scale = IMAGE_META[imageIndex % IMAGE_META.length]?.scale ?? 1;
+  const meta = IMAGE_META[imageIndex % IMAGE_META.length];
+  const sourceWidth = meta?.width || tex?.image?.width;
+  const sourceHeight = meta?.height || tex?.image?.height;
+  if (!sourceWidth || !sourceHeight) return;
+  const ar = sourceWidth / sourceHeight;
+  const scale = meta?.scale ?? 1;
   const metrics = frameMetricsForScale(scale);
   let h = ART_H * scale, w = h * ar;
   const maxW = ART_MAX_W * scale;
   if (w > maxW) { w = maxW; h = w / ar; }
-  pic.geometry.dispose();
-  pic.geometry = new THREE.PlaneGeometry(w, h);
-  resizePictureFrame(frame, w, h, metrics);
+  const layoutKey = `${imageIndex}:${w.toFixed(4)}:${h.toFixed(4)}:${scale}`;
+  const geometry = artworkGeometryFor(layoutKey, w, h);
+  if (pic.geometry !== geometry) pic.geometry = geometry;
+  resizePictureFrame(frame, w, h, metrics, layoutKey);
   if (pic.userData.slot) {
     const slot = pic.userData.slot;
+    if (slot.layoutKey === layoutKey) return;
+    slot.layoutKey = layoutKey;
     slot.artScale = scale;
     const frameX = frameXForSide(slot.side, metrics);
     slot.frame.position.x = frameX;
@@ -955,23 +1038,26 @@ function fitArtwork(pic, frame, tex, imageIndex) {
 }
 
 function showArtworkTexture(slot, tex, imageIndex) {
+  const hadMap = Boolean(slot.pic.material.map);
   slot.pic.material.map = tex;
   slot.pic.material.color.setHex(0xffffff);
-  slot.pic.material.needsUpdate = true;
+  if (!hadMap) slot.pic.material.needsUpdate = true;
   textureLastUsed[imageIndex] = performance.now();
   fitArtwork(slot.pic, slot.frame, tex, imageIndex);
 }
 
 function showArtworkPlaceholder(slot) {
+  const hadMap = Boolean(slot.pic.material.map);
   slot.pic.material.map = null;
   slot.pic.material.color.setHex(0x263248);
-  slot.pic.material.needsUpdate = true;
+  if (hadMap) slot.pic.material.needsUpdate = true;
 }
 
 function setArtTexture(slot, imageIndex) {
   const cacheIndex = imageIndex % IMAGES.length;
   slot.imageIndex = cacheIndex;
   const tex = texCache[cacheIndex];
+  fitArtwork(slot.pic, slot.frame, tex, cacheIndex);
   if (tex) showArtworkTexture(slot, tex, cacheIndex);
   else showArtworkPlaceholder(slot);
 }
@@ -990,7 +1076,7 @@ function makeArtwork(parent, side, localZ, imageIndex) {
   parent.add(frame);
 
   const pic = new THREE.Mesh(
-    new THREE.PlaneGeometry(2, ART_H),
+    artworkGeometryFor('placeholder', 2, ART_H),
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78, metalness: 0.0 }));
   pic.position.set(picX, ART_Y, localZ);
   pic.rotation.y = ry;
@@ -1012,8 +1098,15 @@ function alignObjectToVector(obj, from, to) {
 
 function makeRod(start, end, radius, material) {
   const dir = end.clone().sub(start);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, dir.length(), 14), material);
+  const key = radius.toFixed(4);
+  let geometry = rodGeometryCache.get(key);
+  if (!geometry) {
+    geometry = new THREE.CylinderGeometry(radius, radius, 1, 14);
+    rodGeometryCache.set(key, geometry);
+  }
+  const rod = new THREE.Mesh(geometry, material);
   rod.userData.radius = radius;
+  rod.scale.y = Math.max(dir.length(), 0.001);
   rod.position.copy(start).addScaledVector(dir, 0.5);
   alignObjectToVector(rod, new THREE.Vector3(0, 1, 0), dir);
   return rod;
@@ -1021,8 +1114,7 @@ function makeRod(start, end, radius, material) {
 
 function updateRod(rod, start, end) {
   const dir = end.clone().sub(start);
-  rod.geometry.dispose();
-  rod.geometry = new THREE.CylinderGeometry(rod.userData.radius || 0.025, rod.userData.radius || 0.025, dir.length(), 14);
+  rod.scale.y = Math.max(dir.length(), 0.001);
   rod.position.copy(start).addScaledVector(dir, 0.5);
   alignObjectToVector(rod, new THREE.Vector3(0, 1, 0), dir);
 }
@@ -1466,7 +1558,7 @@ function protectedTextureIndices() {
   return protectedIndices;
 }
 
-function evictDistantTextures() {
+function evictDistantTextures(maxRemove = 1) {
   const residents = texCache
     .map((tex, i) => tex ? i : -1)
     .filter(i => i >= 0);
@@ -1476,7 +1568,7 @@ function evictDistantTextures() {
   const candidates = residents
     .filter(i => !protectedIndices.has(i) && !textureLoads[i])
     .sort((a, b) => (textureLastUsed[a] || 0) - (textureLastUsed[b] || 0));
-  const removeCount = Math.min(residents.length - MAX_RESIDENT_TEXTURES, candidates.length);
+  const removeCount = Math.min(residents.length - MAX_RESIDENT_TEXTURES, candidates.length, maxRemove);
 
   for (let n = 0; n < removeCount; n++) {
     const imageIndex = candidates[n];
@@ -1501,9 +1593,11 @@ async function drainStreamBatchQueue() {
       try {
         batchLastAttempt[start] = Date.now();
         const missing = indices.filter(i => !texCache[i] && !textureLoads[i]);
-        await loadTextureIndices(missing);
-        refreshArtworkSlots(new Set(indices));
-        evictDistantTextures();
+        await loadTextureIndices(missing, null, (imageIndex) => {
+          refreshArtworkSlots(new Set([imageIndex]));
+          evictDistantTextures(1);
+        });
+        evictDistantTextures(1);
       } finally {
         queuedBatchStarts.delete(start);
       }
@@ -1523,10 +1617,10 @@ function queueTextureBatch(imageIndex) {
   void drainStreamBatchQueue();
 }
 
-function updateTextureStreaming() {
-  if (!entered) return;
+function updateTextureStreaming(force = false) {
+  if (!entered && !force) return;
   const now = performance.now();
-  if (now - lastStreamUpdate < STREAM_UPDATE_INTERVAL_MS) return;
+  if (!force && now - lastStreamUpdate < STREAM_UPDATE_INTERVAL_MS) return;
   lastStreamUpdate = now;
 
   for (const chunk of chunks) {
@@ -1543,7 +1637,7 @@ function updateTextureStreaming() {
       }
     }
   }
-  evictDistantTextures();
+  evictDistantTextures(1);
 }
 
 function getRearWallZ() {
@@ -1874,10 +1968,13 @@ async function boot() {
   setProgress(0, textureCount);
   let done = 0;
   await preloadInitialTextures(() => setProgress(++done, textureCount));
+  prewarmMuseumTrack();
   enterProg.textContent = T('优化场景中', 'Optimizing scene', '장면 최적화 중');
   buildHall();
+  try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
   await prewarmScene();
   startLoop();        // render the hall behind the translucent start overlay
+  updateTextureStreaming(true); // use the start overlay time to prepare the next visible batches
   readyToEnter();
 }
 boot();
