@@ -30,7 +30,15 @@ test('day and night backgrounds are paired versioned 4K artwork', () => {
 
   assert.deepEqual(jpegDimensions('images/patchlog-bg-light.jpg'), { width: 3840, height: 2160 });
   assert.deepEqual(jpegDimensions('images/patchlog-bg-night.jpg'), { width: 3840, height: 2160 });
-  assert.match(css, /patchlog-bg-light\.jpg\?v=background-4k-20260816/);
-  assert.match(css, /patchlog-bg-night\.jpg\?v=background-4k-20260816/);
-  assert.match(html, /css\/style\.css\?v=background-4k-20260816/);
+  assert.match(css, /patchlog-bg-light\.jpg\?v=background-aligned-20260816/);
+  assert.match(css, /patchlog-bg-night\.jpg\?v=background-aligned-20260816/);
+  assert.match(html, /css\/style\.css\?v=background-aligned-20260816/);
+});
+
+test('night background is generated from the daytime master without geometry changes', () => {
+  const generator = fs.readFileSync(path.join(root, 'scripts/night-background.py'), 'utf8');
+
+  assert.match(generator, /DAY = ROOT \/ "images" \/ "patchlog-bg-light\.jpg"/);
+  assert.match(generator, /OUT = ROOT \/ "images" \/ "patchlog-bg-night\.jpg"/);
+  assert.doesNotMatch(generator, /\.resize\(|\.transform\(|\.rotate\(/);
 });
