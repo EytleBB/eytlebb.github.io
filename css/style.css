@@ -299,7 +299,7 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
 }
 .gal-track {
   position:absolute; top:0; left:0; width:100%; display:flex; flex-direction:column;
-  animation:home-gallery-scroll var(--gal-scroll-duration,44s) linear infinite;
+  animation:home-gallery-scroll var(--gal-scroll-duration,29.333s) linear infinite;
   will-change:transform;
 }
 .gal:hover .gal-track,
