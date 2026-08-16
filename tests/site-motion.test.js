@@ -18,6 +18,7 @@ test('forest motion suite is local, interactive, and motion-safe', () => {
   assert.match(main, /className = `theme-wipe to-\$\{nextTheme\}`/);
   assert.match(main, /requestAnimationFrame\(drawAmbient\)/);
   assert.match(main, /classList\.add\('motion-reveal'\)/);
+  assert.match(main, /Apply the hidden animation start state[\s\S]*enhanceMotion\(stage\);[\s\S]*await loadLogs\(\)/);
   assert.match(main, /--surface-x/);
   assert.match(style, /@keyframes forest-content-in/);
   assert.match(style, /html\.theme-changing::view-transition-new\(root\)/);

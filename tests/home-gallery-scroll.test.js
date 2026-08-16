@@ -18,5 +18,5 @@ test('home exhibition preview uses a seamless auto-scrolling loop', () => {
   assert.match(style, /\.gal:hover \.gal-track,[\s\S]*\.gal:focus-within \.gal-track \{ animation-play-state:paused; \}/);
   assert.match(style, /@keyframes home-gallery-scroll[\s\S]*translate3d\(0,-50%,0\)/);
   assert.match(html, /css\/style\.css\?v=forest-motion-20260816/);
-  assert.match(html, /js\/main\.js\?v=forest-motion-20260816/);
+  assert.match(html, /js\/main\.js\?v=forest-motion-flashfix-20260816/);
 });

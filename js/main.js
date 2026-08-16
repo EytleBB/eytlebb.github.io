@@ -276,6 +276,8 @@ async function renderAbout() {
     </section>
   `;
 
+  // Apply the hidden animation start state before the first async wait/paint.
+  enhanceMotion(stage);
   wireMessageForm();
 
   // latest patch log (real content, no fabrication)

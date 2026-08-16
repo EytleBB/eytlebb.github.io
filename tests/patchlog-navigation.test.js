@@ -18,7 +18,7 @@ test('patch log content bypasses stale browser caches', () => {
   assert.match(main, /fetch\('\.\/logs\/index\.json', \{ cache: 'no-store' \}\)/);
   assert.match(main, /fetch\(`\.\/logs\/\$\{latest\}\.txt`, \{ cache: 'no-store' \}\)/);
   assert.match(main, /fetch\(`\.\/logs\/\$\{dateStr\}\.txt`, \{ cache: 'no-store' \}\)/);
-  assert.match(html, /js\/main\.js\?v=forest-motion-20260816/);
+  assert.match(html, /js\/main\.js\?v=forest-motion-flashfix-20260816/);
 });
 
 test('day-mode patch log cards use a light frosted surface', () => {
