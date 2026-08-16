@@ -1,5 +1,6 @@
 .claude/
 .worktrees/
+__pycache__/
 _shots/
 
 deploy/

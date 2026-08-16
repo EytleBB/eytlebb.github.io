@@ -93,10 +93,12 @@ function fail(zh, en, ko) {
 
 /* ---- gallery list ---- */
 let IMAGES = [];
+let TEXTURE_IMAGES = [];
 let IMAGE_META = [];
 const SMALL_IMAGE_BYTES = 1024 * 1024;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
+const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
 const INITIAL_TEXTURE_COUNT = 40;
 const STREAM_BATCH_SIZE = 20;
 const TEXTURE_LOAD_CONCURRENCY = 4;
@@ -107,11 +109,35 @@ const STREAM_UPDATE_INTERVAL_MS = 400;
 const BATCH_RETRY_DELAY_MS = 8000;
 
 async function loadImageList() {
-  const res = await fetch('./images/gallery/index.json', { cache: 'no-cache' });
+  const [res, previewResponse] = await Promise.all([
+    fetch('./images/gallery/index.json', { cache: 'no-cache' }),
+    fetch(GALLERY_PREVIEW_INDEX, { cache: 'no-cache' }).catch(() => null),
+  ]);
   if (!res.ok) throw new Error('index ' + res.status);
   const files = await res.json();
   if (!Array.isArray(files) || files.length === 0) throw new Error('empty');
-  const urls = files.map(f => `images/gallery/${encodeURIComponent(f)}`);
+  let previewItems = {};
+  if (previewResponse?.ok) {
+    const manifest = await previewResponse.json();
+    if (manifest && typeof manifest.items === 'object') previewItems = manifest.items;
+  }
+  const entries = files.map((filename) => {
+    const url = `images/gallery/${encodeURIComponent(filename)}`;
+    const previewMeta = previewItems[filename];
+    if (!previewMeta || typeof previewMeta.preview !== 'string') {
+      return { url, textureUrl: url, byteSize: null };
+    }
+    const version = typeof previewMeta.sourceHash === 'string'
+      ? `?v=${encodeURIComponent(previewMeta.sourceHash.slice(0, 12))}`
+      : '';
+    return {
+      url,
+      textureUrl: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
+      byteSize: Number.isFinite(previewMeta.sourceBytes) ? previewMeta.sourceBytes : null,
+    };
+  });
+  const entriesByUrl = new Map(entries.map(entry => [entry.url, entry]));
+  const urls = entries.map(entry => entry.url);
 
   // Put the 12 homepage images first so the initial 40 reuse their disk cache.
   let homepageImages = [];
@@ -122,8 +148,14 @@ async function loadImageList() {
   const available = new Set(urls);
   const prioritized = [...new Set(homepageImages)].filter(url => available.has(url));
   const prioritizedSet = new Set(prioritized);
-  IMAGES = [...prioritized, ...urls.filter(url => !prioritizedSet.has(url))];
-  IMAGE_META = IMAGES.map(() => null);
+  const orderedUrls = [...prioritized, ...urls.filter(url => !prioritizedSet.has(url))];
+  const orderedEntries = orderedUrls.map(url => entriesByUrl.get(url));
+  IMAGES = orderedEntries.map(entry => entry.url);
+  TEXTURE_IMAGES = orderedEntries.map(entry => entry.textureUrl);
+  IMAGE_META = orderedEntries.map(entry => Number.isFinite(entry.byteSize) ? {
+    byteSize: entry.byteSize,
+    scale: entry.byteSize <= SMALL_IMAGE_BYTES ? 0.5 : 1,
+  } : null);
 }
 
 /* ============================================================
@@ -835,10 +867,12 @@ async function galleryImageSource(url, imageIndex) {
       void cache.put(url, response.clone()).catch(() => {});
     }
     const blob = await normalizeImageBlobType(await response.blob());
-    IMAGE_META[imageIndex] = {
-      byteSize: blob.size,
-      scale: blob.size <= SMALL_IMAGE_BYTES ? 0.5 : 1,
-    };
+    if (!IMAGE_META[imageIndex]) {
+      IMAGE_META[imageIndex] = {
+        byteSize: blob.size,
+        scale: blob.size <= SMALL_IMAGE_BYTES ? 0.5 : 1,
+      };
+    }
     const objectUrl = URL.createObjectURL(blob);
     return { url: objectUrl, objectUrl };
   } catch {
@@ -849,7 +883,7 @@ async function galleryImageSource(url, imageIndex) {
 function loadTexture(i) {
   if (texCache[i]) return Promise.resolve(texCache[i]);
   if (textureLoads[i]) return textureLoads[i];
-  const promise = galleryImageSource(IMAGES[i], i).then(source => new Promise((resolve) => {
+  const promise = galleryImageSource(TEXTURE_IMAGES[i] || IMAGES[i], i).then(source => new Promise((resolve) => {
     const finish = (value) => {
       if (source.objectUrl) URL.revokeObjectURL(source.objectUrl);
       resolve(value);

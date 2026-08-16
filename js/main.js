@@ -126,6 +126,7 @@ const GALLERY_BATCH_SIZE = 18;
 const GALLERY_HOME_COUNT = 12;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
+const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
@@ -167,9 +168,30 @@ function fmtDot(dateStr) { return dateStr.replace(/-/g, '.'); }  // 2026-06-03 â
 async function loadGallery() {
   if (galleryLoaded) return;
   try {
-    const files = await (await fetch('./images/gallery/index.json', { cache: 'no-cache' })).json();
+    const [galleryResponse, previewResponse] = await Promise.all([
+      fetch('./images/gallery/index.json', { cache: 'no-cache' }),
+      fetch(GALLERY_PREVIEW_INDEX, { cache: 'no-cache' }).catch(() => null),
+    ]);
+    if (!galleryResponse.ok) throw new Error(`gallery index ${galleryResponse.status}`);
+    const files = await galleryResponse.json();
+    let previewItems = {};
+    if (previewResponse?.ok) {
+      const manifest = await previewResponse.json();
+      if (manifest && typeof manifest.items === 'object') previewItems = manifest.items;
+    }
     if (Array.isArray(files)) {
-      DATA.gallery = files.map(f => ({ src: `images/gallery/${encodeURIComponent(f)}` }));
+      DATA.gallery = files.map((f) => {
+        const src = `images/gallery/${encodeURIComponent(f)}`;
+        const previewMeta = previewItems[f];
+        if (!previewMeta || typeof previewMeta.preview !== 'string') return { src, preview: src };
+        const version = typeof previewMeta.sourceHash === 'string'
+          ? `?v=${encodeURIComponent(previewMeta.sourceHash.slice(0, 12))}`
+          : '';
+        return {
+          src,
+          preview: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
+        };
+      });
     }
   } catch {}
   galleryLoaded = true;
@@ -199,10 +221,11 @@ async function cacheGalleryImages(images) {
   if (!('caches' in window)) return;
   try {
     const cache = await caches.open(GALLERY_CACHE);
-    await Promise.all(images.map(async ({ src }) => {
-      if (await cache.match(src)) return;
-      const response = await fetch(src);
-      if (response.ok) await cache.put(src, response);
+    await Promise.all(images.map(async ({ src, preview }) => {
+      const resource = preview || src;
+      if (await cache.match(resource)) return;
+      const response = await fetch(resource);
+      if (response.ok) await cache.put(resource, response);
     }));
   } catch {}
 }
@@ -283,7 +306,7 @@ async function renderAbout() {
   if (DATA.gallery.length) {
     const idx = randomGalleryPreview();
     gal.innerHTML = idx
-      .map(i => `<img src="${DATA.gallery[i].src}" alt="" loading="lazy" data-idx="${i}" />`).join('');
+      .map(i => `<img src="${DATA.gallery[i].preview || DATA.gallery[i].src}" alt="" loading="lazy" data-idx="${i}" />`).join('');
     wireGalleryImages(gal);
     cacheGalleryImages(idx.map(i => DATA.gallery[i]));
   } else {
@@ -607,7 +630,7 @@ async function renderGallery() {
     const batch = DATA.gallery.slice(shown, shown + GALLERY_BATCH_SIZE);
     if (!batch.length) { observer?.disconnect(); sentinel.remove(); return; }
     grid.insertAdjacentHTML('beforeend', batch.map((img, offset) =>
-      `<img src="${img.src}" alt="" loading="lazy" data-idx="${shown + offset}" />`).join(''));
+      `<img src="${img.preview || img.src}" alt="" loading="lazy" data-idx="${shown + offset}" />`).join(''));
     const newImages = [...grid.querySelectorAll('img[data-idx]')].slice(-batch.length);
     newImages.forEach(im => im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
     cacheGalleryImages(batch);

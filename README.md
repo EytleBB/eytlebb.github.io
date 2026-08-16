@@ -25,3 +25,14 @@ node scripts/gallery-renamer.js --once
 The current exhibition index accepts JPG, JPEG, PNG, GIF, and WebP. TIFF, AVIF, and
 BMP files are renamed but omitted from the index; convert them or extend the
 site's format allowlist before use.
+
+After the names and `index.json` have settled, generate the lightweight WebP
+assets used by the home preview, grid, and 3D museum:
+
+```powershell
+python scripts/gallery-previews.py
+```
+
+This keeps the original files for the full-size lightbox while avoiding a
+hundreds-of-megabytes first visit. The generated files live in
+`images/gallery-preview/`; do not edit its `index.json` by hand.
