@@ -26,7 +26,7 @@
   --scrim:linear-gradient(180deg, rgba(13,24,48,.72), rgba(13,24,48,.86));
   --panel:rgba(13,22,42,.55);
   --field:rgba(0,0,0,.16);
-  --bg-img:url('../images/patchlog-bg-night.jpg');
+  --bg-img:url('../images/patchlog-bg-night.jpg?v=background-4k-20260816');
   --disp:'Fraunces',Georgia,serif;
   --body:'Hanken Grotesk','PingFang SC','Microsoft YaHei','Malgun Gothic','Noto Sans KR',system-ui,sans-serif;
   --r:7px;
@@ -40,7 +40,7 @@
   --scrim:linear-gradient(180deg, rgba(169,206,230,.34), rgba(169,206,230,.58));
   --panel:rgba(255,255,255,.34);
   --field:rgba(255,255,255,.45);
-  --bg-img:url('../images/patchlog-bg-light.jpg');
+  --bg-img:url('../images/patchlog-bg-light.jpg?v=background-4k-20260816');
 }
 
 /* ============================================================
