@@ -99,7 +99,10 @@ const SMALL_IMAGE_BYTES = 1024 * 1024;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
-const INITIAL_TEXTURE_COUNT = 40;
+// The first four chunks sit behind the spawn point. Preload only the six
+// initially visible chunks ahead (4 artworks each), then stream the rest.
+const INITIAL_TEXTURE_START = 16;
+const INITIAL_TEXTURE_COUNT = 24;
 const STREAM_BATCH_SIZE = 20;
 const TEXTURE_LOAD_CONCURRENCY = 4;
 const PREFETCH_AHEAD_DISTANCE = 100;
@@ -139,7 +142,8 @@ async function loadImageList() {
   const entriesByUrl = new Map(entries.map(entry => [entry.url, entry]));
   const urls = entries.map(entry => entry.url);
 
-  // Put the 12 homepage images first so the initial 40 reuse their disk cache.
+  // Put the 12 homepage images inside the visible preload window so the museum
+  // reuses their disk cache without spending entry time on chunks behind spawn.
   let homepageImages = [];
   try {
     const stored = JSON.parse(sessionStorage.getItem(GALLERY_PREVIEW_KEY) || '[]');
@@ -148,7 +152,13 @@ async function loadImageList() {
   const available = new Set(urls);
   const prioritized = [...new Set(homepageImages)].filter(url => available.has(url));
   const prioritizedSet = new Set(prioritized);
-  const orderedUrls = [...prioritized, ...urls.filter(url => !prioritizedSet.has(url))];
+  const remainingUrls = urls.filter(url => !prioritizedSet.has(url));
+  const insertionPoint = Math.min(INITIAL_TEXTURE_START, remainingUrls.length);
+  const orderedUrls = [
+    ...remainingUrls.slice(0, insertionPoint),
+    ...prioritized,
+    ...remainingUrls.slice(insertionPoint),
+  ];
   const orderedEntries = orderedUrls.map(url => entriesByUrl.get(url));
   IMAGES = orderedEntries.map(entry => entry.url);
   TEXTURE_IMAGES = orderedEntries.map(entry => entry.textureUrl);
@@ -918,7 +928,8 @@ async function loadTextureIndices(indices, onProgress) {
 
 function preloadInitialTextures(onProgress) {
   const count = Math.min(INITIAL_TEXTURE_COUNT, IMAGES.length);
-  const indices = Array.from({ length: count }, (_, i) => i);
+  const start = Math.min(INITIAL_TEXTURE_START, Math.max(0, IMAGES.length - count));
+  const indices = Array.from({ length: count }, (_, i) => start + i);
   return loadTextureIndices(indices, onProgress);
 }
 
