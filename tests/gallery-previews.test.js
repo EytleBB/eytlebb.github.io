@@ -30,11 +30,14 @@ test('every web gallery image has a lightweight generated preview', () => {
   assert.ok(previewBytes < originalBytes / 10, 'previews should be at least 10x lighter');
 });
 
-test('main gallery uses previews while the lightbox retains originals', () => {
+test('main gallery uses previews while the lightbox streams the original', () => {
   const main = read('js/main.js');
   assert.match(main, /GALLERY_PREVIEW_INDEX = '\.\/images\/gallery-preview\/index\.json'/);
+  assert.match(main, /src: `\$\{baseSrc\}\$\{version\}`/);
   assert.match(main, /img\.preview \|\| img\.src/);
-  assert.match(main, /<div class="lightbox"><img src="\$\{img\.src\}"/);
+  assert.match(main, /const response = await fetch\(img\.src/);
+  assert.match(main, /response\.body\?\.getReader/);
+  assert.match(main, /class="lightbox-original"/);
 });
 
 test('3D museum uses preview textures with an original-image fallback', () => {

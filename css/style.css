@@ -510,11 +510,67 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
   color:var(--parchment); margin-top:22px; opacity:.94; white-space:pre-wrap;
 }
 
-/* gallery lightbox */
-.lightbox img {
-  max-width:100%; max-height:88vh; object-fit:contain; display:block;
-  border:1px solid var(--line-2); border-radius:6px;
+/* gallery lightbox — the preview develops smoothly while the original downloads */
+.lightbox {
+  --develop-progress:0%;
+  display:grid; justify-items:center; gap:11px;
 }
+.lightbox-photo {
+  position:relative; width:min(90vw,calc(82vh * var(--photo-ratio)));
+  aspect-ratio:var(--photo-ratio); overflow:hidden; isolation:isolate;
+  background:#07101d; border:1px solid var(--line-2); border-radius:6px;
+}
+.lightbox-photo img,
+.lightbox-unexposed {
+  position:absolute; inset:0; width:100%; height:100%;
+}
+.lightbox-photo img { display:block; object-fit:contain; border:0; }
+.lightbox-unexposed {
+  background:
+    linear-gradient(180deg,rgba(22,31,43,.94),rgba(5,12,24,.985)),
+    repeating-linear-gradient(90deg,transparent 0 3px,rgba(255,255,255,.015) 3px 4px);
+}
+.lightbox-preview {
+  z-index:1; clip-path:inset(0 0 calc(100% - var(--develop-progress)) 0);
+  filter:saturate(.82) contrast(.94) brightness(.92);
+  will-change:clip-path;
+}
+.lightbox-original {
+  z-index:2; opacity:0;
+  transition:opacity .5s cubic-bezier(.2,.8,.2,1);
+}
+.lightbox-developer-line {
+  position:absolute; z-index:3; left:0; right:0; top:var(--develop-progress); height:2px;
+  transform:translateY(-50%); pointer-events:none; opacity:.92;
+  background:linear-gradient(90deg,transparent 0%,rgba(224,150,32,.45) 12%,rgba(250,228,179,.96) 50%,rgba(224,150,32,.45) 88%,transparent 100%);
+  box-shadow:0 -7px 22px rgba(229,172,73,.18),0 5px 18px rgba(239,213,160,.12);
+  transition:opacity .35s ease;
+}
+.lightbox-developer-line::before {
+  content:""; position:absolute; left:0; right:0; top:-22px; height:44px;
+  background:linear-gradient(180deg,transparent,rgba(229,176,83,.045) 42%,rgba(249,228,185,.16) 50%,transparent 68%);
+}
+.lightbox-developer-line::after {
+  content:""; position:absolute; inset:-1px 0; opacity:.8;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,245,214,.9) 20%,transparent 39%,rgba(255,238,191,.8) 63%,transparent 84%);
+  background-size:180% 100%; animation:developer-shimmer 1.8s linear infinite;
+}
+@keyframes developer-shimmer {
+  from { background-position:100% 0; }
+  to { background-position:-100% 0; }
+}
+.lightbox-status {
+  min-width:176px; display:flex; justify-content:space-between; gap:28px;
+  color:rgba(234,223,199,.78); font-size:11px; letter-spacing:.14em;
+  transition:opacity .4s ease,transform .4s ease;
+}
+[data-theme="day"] .lightbox-status { color:rgba(19,48,82,.75); }
+.lightbox-progress { font-family:'PatchFont',monospace; letter-spacing:.04em; }
+.lightbox.is-developed .lightbox-original { opacity:1; }
+.lightbox.is-developed .lightbox-developer-line,
+.lightbox.is-preview-only .lightbox-developer-line { opacity:0; }
+.lightbox.is-settled .lightbox-status { opacity:0; transform:translateY(-3px); }
+.lightbox.is-preview-only .lightbox-preview { clip-path:inset(0); filter:none; }
 
 /* ============================================================
    A11Y / MOTION

@@ -182,15 +182,20 @@ async function loadGallery() {
     }
     if (Array.isArray(files)) {
       DATA.gallery = files.map((f) => {
-        const src = `images/gallery/${encodeURIComponent(f)}`;
+        const baseSrc = `images/gallery/${encodeURIComponent(f)}`;
         const previewMeta = previewItems[f];
-        if (!previewMeta || typeof previewMeta.preview !== 'string') return { src, preview: src };
+        if (!previewMeta || typeof previewMeta.preview !== 'string') {
+          return { src: baseSrc, preview: baseSrc, width: 1, height: 1, bytes: 0 };
+        }
         const version = typeof previewMeta.sourceHash === 'string'
           ? `?v=${encodeURIComponent(previewMeta.sourceHash.slice(0, 12))}`
           : '';
         return {
-          src,
+          src: `${baseSrc}${version}`,
           preview: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
+          width: Number(previewMeta.width) || 1,
+          height: Number(previewMeta.height) || 1,
+          bytes: Number(previewMeta.sourceBytes) || 0,
         };
       });
     }
@@ -665,14 +670,21 @@ async function renderGallery() {
 /* ============================================================
    OVERLAYS — patch reader + gallery lightbox
    ============================================================ */
-function mountOverlay(inner, extraClass) {
+function mountOverlay(inner, extraClass, onClose) {
   overlayRoot.innerHTML = `
     <div class="overlay ${extraClass || ''}" id="ov">
       <button class="ov-close" id="ov-close">✕ ${t('关闭','Close','닫기')}</button>
       ${inner}
     </div>`;
   const ov = document.getElementById('ov');
-  const close = () => { overlayRoot.innerHTML = ''; document.removeEventListener('keydown', onEsc); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    if (onClose) onClose();
+    overlayRoot.innerHTML = '';
+    document.removeEventListener('keydown', onEsc);
+  };
   function onEsc(e) { if (e.key === 'Escape') close(); }
   document.getElementById('ov-close').addEventListener('click', close);
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
@@ -697,10 +709,132 @@ async function openReader(dateStr) {
   }
 }
 
+async function developLightboxImage(img, loading) {
+  const lightbox = document.querySelector('.lightbox-developing');
+  const photo = lightbox?.querySelector('.lightbox-photo');
+  const original = lightbox?.querySelector('.lightbox-original');
+  const status = lightbox?.querySelector('.lightbox-status');
+  const statusText = lightbox?.querySelector('.lightbox-status-text');
+  const progressText = lightbox?.querySelector('.lightbox-progress');
+  if (!lightbox || !photo || !original || !status || !statusText || !progressText) return;
+
+  let target = .025;
+  let current = 0;
+  let frame = 0;
+  let finishing = false;
+  let resolveFinish;
+  const finished = new Promise(resolve => { resolveFinish = resolve; });
+
+  const renderProgress = () => {
+    if (!lightbox.isConnected || loading.controller.signal.aborted) {
+      resolveFinish();
+      return;
+    }
+    const ease = REDUCED_MOTION.matches ? 1 : (finishing ? .16 : .095);
+    current += (target - current) * ease;
+    if (finishing && current > .997) current = 1;
+    lightbox.style.setProperty('--develop-progress', `${(current * 100).toFixed(3)}%`);
+    if (finishing && current === 1) {
+      resolveFinish();
+      return;
+    }
+    frame = requestAnimationFrame(renderProgress);
+  };
+  frame = requestAnimationFrame(renderProgress);
+
+  const setDownloadProgress = (loaded, total) => {
+    const ratio = total
+      ? Math.min(1, loaded / total)
+      : Math.min(.96, Math.log2(1 + loaded / 262144) / 8);
+    target = .035 + ratio * .91;
+    const percent = Math.max(1, Math.round(ratio * 100));
+    progressText.textContent = `${percent}%`;
+    status.setAttribute('aria-valuenow', String(percent));
+  };
+
+  try {
+    const response = await fetch(img.src, { signal: loading.controller.signal });
+    if (!response.ok) throw new Error(`image ${response.status}`);
+    const headerBytes = Number(response.headers.get('content-length')) || 0;
+    const total = headerBytes || img.bytes || 0;
+    let blob;
+
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        setDownloadProgress(loaded, total);
+      }
+      blob = new Blob(chunks, { type: response.headers.get('content-type') || 'application/octet-stream' });
+    } else {
+      blob = await response.blob();
+      setDownloadProgress(blob.size, total || blob.size);
+    }
+
+    loading.objectUrl = URL.createObjectURL(blob);
+    original.src = loading.objectUrl;
+    if (original.decode) await original.decode();
+    else await new Promise((resolve, reject) => {
+      original.addEventListener('load', resolve, { once: true });
+      original.addEventListener('error', reject, { once: true });
+    });
+
+    target = 1;
+    finishing = true;
+    progressText.textContent = '100%';
+    status.setAttribute('aria-valuenow', '100');
+    await finished;
+    if (!lightbox.isConnected || loading.controller.signal.aborted) return;
+    lightbox.classList.add('is-developed');
+    statusText.textContent = t('显影完成', 'Developed', '현상 완료');
+    window.setTimeout(() => {
+      if (lightbox.isConnected) lightbox.classList.add('is-settled');
+    }, 900);
+  } catch (error) {
+    cancelAnimationFrame(frame);
+    if (error?.name === 'AbortError') return;
+    if (loading.objectUrl) {
+      URL.revokeObjectURL(loading.objectUrl);
+      loading.objectUrl = '';
+    }
+    lightbox.style.setProperty('--develop-progress', '100%');
+    lightbox.classList.add('is-preview-only');
+    status.removeAttribute('role');
+    status.removeAttribute('aria-valuenow');
+    statusText.textContent = t('原图加载失败，展示预览', 'Original unavailable — showing preview', '원본을 불러오지 못해 미리보기를 표시합니다');
+    progressText.textContent = '';
+  }
+}
+
 function openLightbox(idx) {
   const img = DATA.gallery[idx];
   if (!img) return;
-  mountOverlay(`<div class="lightbox"><img src="${img.src}" alt="" /></div>`, 'lightbox-ov');
+  const width = Math.max(1, Number(img.width) || 1);
+  const height = Math.max(1, Number(img.height) || 1);
+  const loading = { controller: new AbortController(), objectUrl: '' };
+  mountOverlay(`
+    <div class="lightbox lightbox-developing" role="dialog" aria-modal="true"
+      aria-label="${t('查看展览图片','View exhibition image','전시 이미지 보기')}">
+      <div class="lightbox-photo" style="--photo-ratio:${width / height}">
+        <div class="lightbox-unexposed" aria-hidden="true"></div>
+        <img class="lightbox-preview" src="${img.preview || img.src}" alt="" />
+        <img class="lightbox-original" alt="" />
+        <div class="lightbox-developer-line" aria-hidden="true"></div>
+      </div>
+      <div class="lightbox-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="lightbox-status-text">${t('显影中','Developing','현상 중')}</span>
+        <span class="lightbox-progress">0%</span>
+      </div>
+    </div>`, 'lightbox-ov', () => {
+      loading.controller.abort();
+      if (loading.objectUrl) URL.revokeObjectURL(loading.objectUrl);
+    });
+  developLightboxImage(img, loading);
 }
 
 /* ============================================================
