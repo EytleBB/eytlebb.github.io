@@ -120,7 +120,6 @@ if (!['zh', 'en', 'ko'].includes(lang)) lang = 'zh';
 if (!['night', 'day'].includes(theme)) theme = 'night';   // migrate old dark/light
 let activeSection = 'about';
 let galleryLoaded = false;
-let logsLoaded = false;
 let patchlogSelection = { year: null, month: null };
 const GALLERY_BATCH_SIZE = 18;
 const GALLERY_HOME_COUNT = 12;
@@ -236,12 +235,10 @@ function wireGalleryImages(root) {
     im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
 }
 async function loadLogs() {
-  if (logsLoaded) return;
   try {
-    const res = await fetch('./logs/index.json');
+    const res = await fetch('./logs/index.json', { cache: 'no-store' });
     if (res.ok) DATA.patchlog = await res.json();
   } catch {}
-  logsLoaded = true;
 }
 
 /* ============================================================
@@ -287,7 +284,7 @@ async function renderAbout() {
     const latest = DATA.patchlog[0];               // index.json is newest-first
     let body = '';
     try {
-      const r = await fetch(`./logs/${latest}.txt`);
+      const r = await fetch(`./logs/${latest}.txt`, { cache: 'no-store' });
       if (r.ok) body = normalizeLogBody(await r.text());
     } catch {}
     card.innerHTML = `
@@ -670,7 +667,7 @@ async function openReader(dateStr) {
     </div>`, 'reader-ov');
   const body = document.getElementById('r-body');
   try {
-    const r = await fetch(`./logs/${dateStr}.txt`);
+    const r = await fetch(`./logs/${dateStr}.txt`, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     body.textContent = normalizeLogBody(await r.text());
   } catch {

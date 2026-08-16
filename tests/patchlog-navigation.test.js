@@ -14,6 +14,13 @@ test('patch log preserves leading paragraph indentation', () => {
   assert.match(css, /\.plog-card \.txt \{[\s\S]*?white-space:pre-wrap;[\s\S]*?\}/);
 });
 
+test('patch log content bypasses stale browser caches', () => {
+  assert.match(main, /fetch\('\.\/logs\/index\.json', \{ cache: 'no-store' \}\)/);
+  assert.match(main, /fetch\(`\.\/logs\/\$\{latest\}\.txt`, \{ cache: 'no-store' \}\)/);
+  assert.match(main, /fetch\(`\.\/logs\/\$\{dateStr\}\.txt`, \{ cache: 'no-store' \}\)/);
+  assert.match(html, /js\/main\.js\?v=patchlog-fresh-content-20260816/);
+});
+
 test('day-mode patch log cards use a light frosted surface', () => {
   assert.match(css, /\[data-theme="day"\] \.patch-index-card \{ background:rgba\(248,252,255,\.52\); \}/);
   assert.match(css, /\[data-theme="day"\] \.patch-index-card:hover \{ background:rgba\(255,246,224,\.64\); \}/);
