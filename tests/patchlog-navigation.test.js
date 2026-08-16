@@ -6,6 +6,13 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
+
+test('patch log preserves leading paragraph indentation', () => {
+  assert.match(main, /function normalizeLogBody\(text\) \{ return text\.trimEnd\(\); \}/);
+  assert.equal((main.match(/normalizeLogBody\(await r\.text\(\)\)/g) || []).length, 2);
+  assert.match(css, /\.plog-card \.txt \{[\s\S]*?white-space:pre-wrap;[\s\S]*?\}/);
+});
 
 test('patch log uses data-driven year, month, and day levels', () => {
   assert.match(main, /function buildPatchlogIndex\(\)/);

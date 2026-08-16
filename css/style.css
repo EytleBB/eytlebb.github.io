@@ -173,7 +173,7 @@ a { color:inherit; }
 }
 .plog-card .txt {
   font-family:'PatchFont',monospace; font-size:15px; line-height:2.05;
-  color:var(--parchment); margin-top:16px; opacity:.92;
+  color:var(--parchment); margin-top:16px; opacity:.92; white-space:pre-wrap;
   display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
 }
 .plog-card .more {

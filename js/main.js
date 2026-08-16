@@ -161,6 +161,7 @@ function pick(o, base) {  // localized name from a DATA object
   return o[base + 'En'] || o[base];
 }
 function fmtDot(dateStr) { return dateStr.replace(/-/g, '.'); }  // 2026-06-03 → 2026.06.03
+function normalizeLogBody(text) { return text.trimEnd(); }       // preserve intentional leading indentation
 
 /* ============================================================
    DATA LOADERS (auto-maintained indexes)
@@ -287,7 +288,7 @@ async function renderAbout() {
     let body = '';
     try {
       const r = await fetch(`./logs/${latest}.txt`);
-      if (r.ok) body = (await r.text()).trim();
+      if (r.ok) body = normalizeLogBody(await r.text());
     } catch {}
     card.innerHTML = `
       <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
@@ -671,7 +672,7 @@ async function openReader(dateStr) {
   try {
     const r = await fetch(`./logs/${dateStr}.txt`);
     if (!r.ok) throw new Error(r.status);
-    body.textContent = (await r.text()).trim();
+    body.textContent = normalizeLogBody(await r.text());
   } catch {
     body.textContent = t('日志加载失败','Failed to load log','로그 로드 실패');
   }
