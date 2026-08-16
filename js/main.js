@@ -126,6 +126,7 @@ const GALLERY_HOME_COUNT = 24;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
 
@@ -376,6 +377,7 @@ function handleProjectClick(id) {
             <span class="right">${extIcon()}</span>
           </a>`).join('')}</div>
       </div>`;
+    enhanceMotion(sub);
   } else {
     window.open(proj.github, '_blank', 'noopener');
   }
@@ -587,6 +589,7 @@ function renderPatchlogLevel() {
     }));
   stage.querySelectorAll('.cal-day-entry').forEach(button =>
     button.addEventListener('click', () => openReader(button.dataset.date)));
+  enhanceMotion(stage);
 }
 
 function buildMonth(year, month, todayStr, logDates) {
@@ -642,6 +645,7 @@ async function renderGallery() {
     newImages.forEach(im => im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
     cacheGalleryImages(batch);
     shown += batch.length;
+    enhanceMotion(grid);
   };
   appendBatch();
   observer = new IntersectionObserver(entries => {
@@ -665,6 +669,7 @@ function mountOverlay(inner, extraClass) {
   document.getElementById('ov-close').addEventListener('click', close);
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
   document.addEventListener('keydown', onEsc);
+  enhanceMotion(overlayRoot);
   return close;
 }
 
@@ -756,23 +761,290 @@ function escapeHtml(s) {
 }
 
 /* ============================================================
+   MOTION — forest ambience, content reveals, interactive light
+   ============================================================ */
+function enhanceMotion(root = stage) {
+  if (!root) return;
+
+  const revealSelector = [
+    '.hero', '.col-left > .panel', '.col-right', '.list > .list-item', '.dl-item',
+    '.patchlog-header', '.patchlog-surface', '.gallery-grid > img', '.reader', '.lightbox'
+  ].join(',');
+  const surfaceSelector = [
+    '.panel', '.col-right', '.list-item', '.dl-item', '.patchlog-surface',
+    '.patch-index-card', '.cal-wrap', '.reader'
+  ].join(',');
+
+  const reveals = [...root.querySelectorAll(revealSelector)]
+    .filter(element => !element.classList.contains('motion-reveal'));
+  reveals.forEach((element, index) => {
+    element.style.setProperty('--reveal-delay', `${Math.min(index, 8) * 54}ms`);
+    element.classList.add('motion-reveal');
+  });
+  root.querySelectorAll(surfaceSelector).forEach(element => element.classList.add('motion-surface'));
+}
+
+function initSurfaceLight() {
+  let frame = 0;
+  let pending = null;
+  stage.addEventListener('pointermove', (event) => {
+    const surface = event.target.closest?.('.motion-surface');
+    if (!surface || !stage.contains(surface)) return;
+    pending = { surface, x: event.clientX, y: event.clientY };
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (!pending) return;
+      const rect = pending.surface.getBoundingClientRect();
+      pending.surface.style.setProperty('--surface-x', `${pending.x - rect.left}px`);
+      pending.surface.style.setProperty('--surface-y', `${pending.y - rect.top}px`);
+      pending = null;
+    });
+  }, { passive: true });
+}
+
+function initAmbientMotion() {
+  const canvas = document.getElementById('ambient-motes');
+  const background = document.querySelector('.bg');
+  const context = canvas?.getContext('2d');
+  if (!canvas || !background || !context) return;
+
+  const finePointer = window.matchMedia('(pointer: fine)');
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let motes = [];
+  let animationFrame = 0;
+  let lastTime = performance.now();
+  let targetX = 0;
+  let targetY = 0;
+  let forestX = 0;
+  let forestY = 0;
+  const pointer = { x: -1000, y: -1000, active: false };
+
+  const makeMote = (anywhere = true) => ({
+    x: Math.random() * width,
+    y: anywhere ? Math.random() * height : height + 12,
+    radius: .55 + Math.random() * 1.35,
+    speed: .12 + Math.random() * .34,
+    sway: .16 + Math.random() * .32,
+    phase: Math.random() * Math.PI * 2,
+    depth: .45 + Math.random() * .75,
+  });
+
+  function resizeAmbient() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = width < 760 ? 15 : Math.min(34, Math.max(20, Math.round(width / 54)));
+    motes = Array.from({ length: count }, () => makeMote(true));
+  }
+
+  function drawAmbient(now) {
+    animationFrame = 0;
+    if (REDUCED_MOTION.matches || document.hidden) return;
+    const step = Math.min(2.2, Math.max(.2, (now - lastTime) / 16.67));
+    lastTime = now;
+    context.clearRect(0, 0, width, height);
+
+    const day = document.documentElement.getAttribute('data-theme') === 'day';
+    const color = day ? '154,97,10' : '230,169,43';
+    motes.forEach((mote) => {
+      mote.y -= mote.speed * mote.depth * step;
+      mote.x += Math.sin(now * .00032 + mote.phase) * mote.sway * step;
+
+      if (pointer.active && finePointer.matches) {
+        const dx = mote.x - pointer.x;
+        const dy = mote.y - pointer.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > 0 && distance < 125) {
+          const breeze = (1 - distance / 125) * 1.1 * step;
+          mote.x += dx / distance * breeze;
+          mote.y += dy / distance * breeze;
+        }
+      }
+
+      if (mote.y < -12) Object.assign(mote, makeMote(false));
+      if (mote.x < -12) mote.x = width + 12;
+      if (mote.x > width + 12) mote.x = -12;
+
+      const pulse = .5 + .5 * Math.sin(now * .0011 + mote.phase);
+      const alpha = (day ? .055 : .08) + pulse * (day ? .085 : .14);
+      context.beginPath();
+      context.fillStyle = `rgba(${color},${alpha})`;
+      context.arc(mote.x, mote.y, mote.radius * mote.depth, 0, Math.PI * 2);
+      context.fill();
+    });
+
+    forestX += (targetX - forestX) * .045 * step;
+    forestY += (targetY - forestY) * .045 * step;
+    background.style.setProperty('--forest-x', `${forestX.toFixed(2)}px`);
+    background.style.setProperty('--forest-y', `${forestY.toFixed(2)}px`);
+    animationFrame = requestAnimationFrame(drawAmbient);
+  }
+
+  const startAmbient = () => {
+    if (animationFrame || REDUCED_MOTION.matches || document.hidden) return;
+    canvas.hidden = false;
+    lastTime = performance.now();
+    animationFrame = requestAnimationFrame(drawAmbient);
+  };
+  const stopAmbient = () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+  };
+
+  window.addEventListener('pointermove', (event) => {
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+    pointer.active = true;
+    if (finePointer.matches) {
+      targetX = ((event.clientX / Math.max(width, 1)) - .5) * -11;
+      targetY = ((event.clientY / Math.max(height, 1)) - .5) * -8;
+    }
+  }, { passive: true });
+  document.addEventListener('pointerleave', () => {
+    pointer.active = false;
+    targetX = 0;
+    targetY = 0;
+  });
+  window.addEventListener('resize', resizeAmbient, { passive: true });
+  document.addEventListener('visibilitychange', () => document.hidden ? stopAmbient() : startAmbient());
+  REDUCED_MOTION.addEventListener?.('change', (event) => {
+    if (event.matches) {
+      stopAmbient();
+      canvas.hidden = true;
+      background.style.removeProperty('--forest-x');
+      background.style.removeProperty('--forest-y');
+    } else {
+      startAmbient();
+    }
+  });
+
+  resizeAmbient();
+  startAmbient();
+}
+
+function preloadThemeArtwork() {
+  if (!window.matchMedia('(pointer: fine)').matches) return;
+  const preload = () => {
+    ['images/patchlog-bg-night.jpg', 'images/patchlog-bg-light.jpg'].forEach((src) => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = src;
+    });
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(preload, { timeout: 2400 });
+  else setTimeout(preload, 900);
+}
+
+let themeSwitching = false;
+async function fallbackThemeWipe(update, nextTheme, x, y, radius) {
+  const wipe = document.createElement('div');
+  wipe.className = `theme-wipe to-${nextTheme}`;
+  wipe.style.setProperty('--theme-x', `${x}px`);
+  wipe.style.setProperty('--theme-y', `${y}px`);
+  document.body.appendChild(wipe);
+  let updated = false;
+
+  try {
+    const cover = wipe.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+      { duration: 460, easing: 'cubic-bezier(.2,.78,.2,1)', fill: 'forwards' }
+    );
+    await cover.finished;
+    update();
+    updated = true;
+    const dissolve = wipe.animate(
+      { opacity: [1, 0] },
+      { duration: 340, easing: 'ease-out', fill: 'forwards' }
+    );
+    await dissolve.finished;
+  } finally {
+    if (!updated) update();
+    wipe.remove();
+  }
+}
+
+async function toggleThemeWithMotion() {
+  if (themeSwitching) return;
+  const nextTheme = theme === 'night' ? 'day' : 'night';
+  const update = () => {
+    theme = nextTheme;
+    localStorage.setItem('theme', theme);
+    applyTheme();
+  };
+
+  if (REDUCED_MOTION.matches) {
+    update();
+    return;
+  }
+  const lamp = document.getElementById('lamp');
+  const rect = lamp.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+
+  if (!document.startViewTransition) {
+    themeSwitching = true;
+    try {
+      await fallbackThemeWipe(update, nextTheme, x, y, radius);
+    } finally {
+      themeSwitching = false;
+    }
+    return;
+  }
+
+  themeSwitching = true;
+  document.documentElement.classList.add('theme-changing');
+
+  try {
+    const transition = document.startViewTransition(update);
+    await transition.ready;
+    const reveal = document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+      {
+        duration: 780,
+        easing: 'cubic-bezier(.2,.78,.2,1)',
+        pseudoElement: '::view-transition-new(root)',
+      }
+    );
+    await Promise.allSettled([reveal.finished, transition.finished]);
+  } catch {
+    update();
+  } finally {
+    document.documentElement.classList.remove('theme-changing');
+    themeSwitching = false;
+  }
+}
+
+/* ============================================================
    NAVIGATION
    ============================================================ */
+let stageRenderEpoch = 0;
 function go(section) {
   if (!navMap.includes(section)) section = 'about';
+  const renderEpoch = ++stageRenderEpoch;
   activeSection = section;
   if (location.hash.slice(1) !== section) history.replaceState(null, '', '#' + section);
   document.querySelectorAll('.nav-i').forEach(b => b.classList.toggle('on', b.dataset.section === section));
   overlayRoot.innerHTML = '';
+  let renderTask;
   switch (section) {
-    case 'about':     renderAbout();     break;
-    case 'projects':  renderProjects();  break;
-    case 'tools':     renderTools();     break;
-    case 'patchlog':  renderPatchlog();  break;
-    case 'gallery':   renderGallery();   break;
-    case 'downloads': renderDownloads(); break;
-    default:          renderAbout();
+    case 'about':     renderTask = renderAbout();     break;
+    case 'projects':  renderTask = renderProjects();  break;
+    case 'tools':     renderTask = renderTools();     break;
+    case 'patchlog':  renderTask = renderPatchlog();  break;
+    case 'gallery':   renderTask = renderGallery();   break;
+    case 'downloads': renderTask = renderDownloads(); break;
+    default:          renderTask = renderAbout();
   }
+  Promise.resolve(renderTask).then(() => {
+    if (renderEpoch === stageRenderEpoch) enhanceMotion(stage);
+  });
 }
 
 /* ============================================================
@@ -814,10 +1086,7 @@ document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () 
 document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => {
   lang = b.dataset.lang; localStorage.setItem('lang', lang); applyLang();
 }));
-document.getElementById('lamp').addEventListener('click', () => {
-  theme = theme === 'night' ? 'day' : 'night';
-  localStorage.setItem('theme', theme); applyTheme();
-});
+document.getElementById('lamp').addEventListener('click', toggleThemeWithMotion);
 document.getElementById('home-btn').addEventListener('click', () => go('about'));
 window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s && s !== activeSection) go(s); });
 
@@ -826,3 +1095,6 @@ const initial = location.hash.slice(1);
 if (navMap.includes(initial)) activeSection = initial;
 applyTheme();
 applyLang();   // sets nav labels + renders the active section
+initSurfaceLight();
+initAmbientMotion();
+preloadThemeArtwork();

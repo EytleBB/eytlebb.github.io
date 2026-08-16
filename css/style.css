@@ -26,6 +26,8 @@
   --scrim:linear-gradient(180deg, rgba(13,24,48,.72), rgba(13,24,48,.86));
   --panel:rgba(13,22,42,.55);
   --field:rgba(0,0,0,.16);
+  --surface-sheen:rgba(230,169,43,.11);
+  --amber-flare:#f7d78f;
   --bg-img:url('../images/patchlog-bg-night.jpg');
   --disp:'Fraunces',Georgia,serif;
   --body:'Hanken Grotesk','PingFang SC','Microsoft YaHei','Malgun Gothic','Noto Sans KR',system-ui,sans-serif;
@@ -40,6 +42,8 @@
   --scrim:linear-gradient(180deg, rgba(169,206,230,.34), rgba(169,206,230,.58));
   --panel:rgba(255,255,255,.34);
   --field:rgba(255,255,255,.45);
+  --surface-sheen:rgba(255,255,255,.34);
+  --amber-flare:#fff0ba;
   --bg-img:url('../images/patchlog-bg-light.jpg');
 }
 
@@ -57,13 +61,19 @@ a { color:inherit; }
 ::selection { background:var(--amber); color:var(--amber-ink); }
 
 /* ---- ambient layers ---- */
-.bg, .scrim, .grain { position:fixed; inset:0; pointer-events:none; z-index:0; }
-.bg     { background:var(--bg-img) center 18% / cover no-repeat; transition:opacity .4s; }
+.bg, .scrim, .grain, .ambient-motes { position:fixed; inset:0; pointer-events:none; }
+.bg, .scrim, .grain { z-index:0; }
+.bg {
+  background:var(--bg-img) center 18% / cover no-repeat;
+  transform:scale(1.035) translate3d(var(--forest-x,0px),var(--forest-y,0px),0);
+  transform-origin:center; transition:opacity .4s; will-change:transform;
+}
 .scrim  { background:var(--scrim); }
 .grain  {
   opacity:.05; mix-blend-mode:overlay;
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 }
+.ambient-motes { z-index:1; width:100%; height:100%; opacity:.9; }
 
 /* ============================================================
    APP SHELL
@@ -85,7 +95,11 @@ a { color:inherit; }
   background:none; border:0; padding:0; cursor:pointer; font:inherit;
   color:var(--parchment); text-align:left;
 }
-.brand img { width:34px; height:34px; border-radius:6px; display:block; }
+.brand img {
+  width:34px; height:34px; border-radius:6px; display:block;
+  transform-origin:50% 70%; transition:transform .4s cubic-bezier(.2,.8,.2,1);
+}
+.brand:hover img { transform:translateY(-2px) rotate(-7deg); }
 .brand b { font-family:var(--disp); font-weight:500; font-size:18px; letter-spacing:.2px; }
 .brand b em { font-style:italic; color:var(--amber); }
 
@@ -117,6 +131,8 @@ a { color:inherit; }
   transition:border-color .18s, color .18s;
 }
 .lamp:hover { border-color:var(--amber-deep); color:var(--parchment); }
+.lamp #lamp-ico { display:inline-block; transition:transform .45s cubic-bezier(.2,.8,.2,1); }
+.lamp:hover #lamp-ico { transform:rotate(28deg) scale(1.12); }
 .contact { font-size:11.5px; color:var(--faint); line-height:1.9; letter-spacing:.02em; }
 .contact a { color:var(--dim); text-decoration:none; transition:color .18s; }
 .contact a:hover { color:var(--amber); }
@@ -138,7 +154,13 @@ a { color:inherit; }
   font-family:var(--disp); font-weight:400;
   font-size:clamp(44px,5.4vw,72px); line-height:.94; letter-spacing:-.025em;
 }
-.hero h1 em { font-style:italic; color:var(--amber); }
+.hero h1 em {
+  font-style:italic; color:var(--amber);
+  background:linear-gradient(110deg,var(--amber) 20%,var(--amber-flare) 43%,var(--amber) 66%);
+  background-size:240% 100%; background-position:130% 0;
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  animation:amber-title-sweep 6.5s ease-in-out infinite;
+}
 .hero .url {
   margin-top:18px; font-size:11px; letter-spacing:.25em; color:var(--dim);
   text-transform:uppercase;
@@ -153,6 +175,54 @@ a { color:inherit; }
 .panel {
   background:var(--panel); border:1px solid var(--line); border-radius:8px;
   padding:clamp(20px,2.3vw,28px); backdrop-filter:blur(3px);
+}
+
+/* Motion layer: restrained forest ambience and responsive surfaces. */
+.motion-surface { position:relative; isolation:isolate; overflow:hidden; }
+.motion-surface::after {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none; border-radius:inherit;
+  background:radial-gradient(280px circle at var(--surface-x,50%) var(--surface-y,50%),var(--surface-sheen),transparent 68%);
+  opacity:0; transition:opacity .34s ease;
+}
+.motion-surface:hover::after,
+.motion-surface:focus-within::after { opacity:1; }
+.motion-surface > * { position:relative; z-index:1; }
+.motion-reveal {
+  animation:forest-content-in .66s cubic-bezier(.16,1,.3,1) both;
+  animation-delay:var(--reveal-delay,0ms);
+}
+@keyframes forest-content-in {
+  from { opacity:0; transform:translateY(15px); filter:blur(5px); }
+  to { opacity:1; transform:translateY(0); filter:blur(0); }
+}
+@keyframes amber-title-sweep {
+  0%,58%,100% { background-position:130% 0; }
+  74% { background-position:-35% 0; }
+}
+
+html.theme-changing::view-transition-old(root),
+html.theme-changing::view-transition-new(root) {
+  animation:none; mix-blend-mode:normal;
+}
+html.theme-changing::view-transition-old(root) { z-index:1; }
+html.theme-changing::view-transition-new(root) { z-index:2; }
+.theme-wipe {
+  position:fixed; inset:0; z-index:100; pointer-events:none;
+  background:radial-gradient(
+    circle at var(--theme-x) var(--theme-y),
+    rgba(247,215,143,.98) 0 6%,
+    rgba(178,126,22,.94) 38%,
+    rgba(13,24,48,.97) 100%
+  );
+  will-change:clip-path,opacity;
+}
+.theme-wipe.to-day {
+  background:radial-gradient(
+    circle at var(--theme-x) var(--theme-y),
+    rgba(255,244,194,.99) 0 7%,
+    rgba(230,169,43,.92) 39%,
+    rgba(169,206,230,.97) 100%
+  );
 }
 
 /* ============================================================
@@ -478,4 +548,9 @@ a { color:inherit; }
   .msg-send { padding-inline:17px; }
   .gal { height:420px; min-height:320px; }
 }
-@media (prefers-reduced-motion:reduce) { *{ transition:none !important; animation:none !important; } }
+@media (prefers-reduced-motion:reduce) {
+  * { transition:none !important; animation:none !important; }
+  .motion-reveal { opacity:1 !important; transform:none !important; filter:none !important; }
+  .ambient-motes { display:none !important; }
+  .bg { transform:none !important; }
+}
