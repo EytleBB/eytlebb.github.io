@@ -99,10 +99,12 @@ const SMALL_IMAGE_BYTES = 1024 * 1024;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
-// The first four chunks sit behind the spawn point. Preload only the six
-// initially visible chunks ahead (4 artworks each), then stream the rest.
-const INITIAL_TEXTURE_START = 16;
-const INITIAL_TEXTURE_COUNT = 24;
+// Keep every artwork from the rear wall through the first 100 m resident before
+// the entrance becomes interactive. This makes the loading screen truthful:
+// walking can begin without decode/upload work competing with the first frames.
+const INITIAL_TEXTURE_START = 0;
+const INITIAL_TEXTURE_COUNT = 48;
+const HOMEPAGE_TEXTURE_INSERTION_INDEX = 16;
 const STREAM_BATCH_SIZE = 20;
 const TEXTURE_LOAD_CONCURRENCY = 4;
 const PREFETCH_AHEAD_DISTANCE = 100;
@@ -113,6 +115,34 @@ const BATCH_RETRY_DELAY_MS = 8000;
 const TEXTURE_UPLOAD_MIN_INTERVAL_MS = 54;
 const TEXTURE_UPLOAD_FRAME_BUDGET_MS = 11.5;
 const TEXTURE_UPLOAD_MAX_WAIT_MS = 650;
+const PERF_AUTOWALK = new URLSearchParams(location.search).get('perf') === 'walk';
+const PERF_SAMPLE_LIMIT = 600;
+const perfFrameSamples = [];
+let perfFrameNumber = 0;
+let perfTextureUploads = 0;
+let perfChunkRetargets = 0;
+
+function recordPerformanceFrame(frameMs) {
+  if (!PERF_AUTOWALK) return;
+  perfFrameSamples.push(frameMs);
+  if (perfFrameSamples.length > PERF_SAMPLE_LIMIT) perfFrameSamples.shift();
+  perfFrameNumber++;
+  if (perfFrameNumber % 30 !== 0) return;
+
+  const sorted = [...perfFrameSamples].sort((a, b) => a - b);
+  const percentile = p => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] || 0;
+  canvas.dataset.perf = JSON.stringify({
+    frames: perfFrameSamples.length,
+    p95: Number(percentile(0.95).toFixed(2)),
+    p99: Number(percentile(0.99).toFixed(2)),
+    max: Number(Math.max(...perfFrameSamples).toFixed(2)),
+    over25: perfFrameSamples.filter(ms => ms > 25).length,
+    over40: perfFrameSamples.filter(ms => ms > 40).length,
+    uploads: perfTextureUploads,
+    retargets: perfChunkRetargets,
+    z: Number(camera.position.z.toFixed(2)),
+  });
+}
 
 async function loadImageList() {
   const [res, previewResponse] = await Promise.all([
@@ -147,8 +177,8 @@ async function loadImageList() {
   const entriesByUrl = new Map(entries.map(entry => [entry.url, entry]));
   const urls = entries.map(entry => entry.url);
 
-  // Put the 12 homepage images inside the visible preload window so the museum
-  // reuses their disk cache without spending entry time on chunks behind spawn.
+  // Keep the 12 homepage images in the first visible stretch so the museum can
+  // reuse their disk cache while preserving the intended opening composition.
   let homepageImages = [];
   try {
     const stored = JSON.parse(sessionStorage.getItem(GALLERY_PREVIEW_KEY) || '[]');
@@ -160,7 +190,7 @@ async function loadImageList() {
   const prioritized = [...new Set(homepageImages)].filter(url => available.has(url));
   const prioritizedSet = new Set(prioritized);
   const remainingUrls = urls.filter(url => !prioritizedSet.has(url));
-  const insertionPoint = Math.min(INITIAL_TEXTURE_START, remainingUrls.length);
+  const insertionPoint = Math.min(HOMEPAGE_TEXTURE_INSERTION_INDEX, remainingUrls.length);
   const orderedUrls = [
     ...remainingUrls.slice(0, insertionPoint),
     ...prioritized,
@@ -243,11 +273,14 @@ const clock = new THREE.Clock();
 const updaters = [];
 function frame() {
   const frameStartedAt = performance.now();
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDelta = clock.getDelta();
+  const dt = Math.min(rawDelta, 0.05);
   for (const fn of updaters) fn(dt);
   updatePictureSpotPool();
   renderGalleryFrame();
-  processTextureUploadQueue(frameStartedAt);
+  const retargetedChunkArtwork = processChunkRetargetQueue(frameStartedAt);
+  if (!retargetedChunkArtwork) processTextureUploadQueue(frameStartedAt);
+  recordPerformanceFrame(rawDelta * 1000);
 }
 let looping = false;
 function startLoop() {
@@ -536,6 +569,11 @@ const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const RECYCLE_BACK_BUFFER = 112;
 const REAR_WALL_OFFSET = 72;
 const FORWARD_VIEW_BUFFER = 170;
+// Prepare a recycled chunk only after it is fully hidden behind the fog. Each
+// artwork is retargeted on a separate frame so crossing a chunk boundary never
+// rebuilds four picture layouts in one visible frame.
+const CHUNK_RETARGET_PREPARE_DISTANCE = 88;
+const CHUNK_RETARGET_FRAME_BUDGET_MS = 11.5;
 const ART_PER_SIDE = 2;
 const ART_SPACING = CHUNK_LEN / ART_PER_SIDE;
 const PILLAR_SPACING = CHUNK_LEN; // one left/right pilaster pair per chunk
@@ -590,6 +628,7 @@ const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
 const pictureSpotPool = [];
 const chunks = [];
+const chunkRetargetQueue = [];
 const speakerRigs = [];
 let floorRig = null;
 let rearWall = null;
@@ -903,13 +942,13 @@ async function normalizeImageBlobType(blob) {
 }
 
 async function galleryImageSource(url, imageIndex) {
-  if (!('caches' in window)) return { url, objectUrl: null };
+  if (!('caches' in window)) return { url, blob: null };
   try {
     const cache = await caches.open(GALLERY_CACHE);
     let response = await cache.match(url);
     if (!response) {
       response = await fetch(url);
-      if (!response.ok) return { url, objectUrl: null };
+      if (!response.ok) return { url, blob: null };
       void cache.put(url, response.clone()).catch(() => {});
     }
     const blob = await normalizeImageBlobType(await response.blob());
@@ -919,11 +958,45 @@ async function galleryImageSource(url, imageIndex) {
         scale: blob.size <= SMALL_IMAGE_BYTES ? 0.5 : 1,
       };
     }
-    const objectUrl = URL.createObjectURL(blob);
-    return { url: objectUrl, objectUrl };
+    return { url, blob };
   } catch {
-    return { url, objectUrl: null };
+    return { url, blob: null };
   }
+}
+
+async function decodeGalleryTexture(source) {
+  if (source.blob && typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(source.blob, {
+        imageOrientation: 'flipY',
+        premultiplyAlpha: 'none',
+      });
+      const texture = new THREE.Texture(bitmap);
+      texture.flipY = false;
+      texture.needsUpdate = true;
+      texture.userData.imageBitmap = bitmap;
+      return texture;
+    } catch {}
+  }
+
+  let loadUrl = source.url;
+  let objectUrl = null;
+  if (source.blob) {
+    objectUrl = URL.createObjectURL(source.blob);
+    loadUrl = objectUrl;
+  }
+  return new Promise(resolve => {
+    const finish = texture => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      resolve(texture);
+    };
+    texLoader.load(loadUrl, finish, undefined, () => finish(null));
+  });
+}
+
+function disposeGalleryTexture(texture) {
+  texture?.userData?.imageBitmap?.close?.();
+  texture?.dispose();
 }
 
 function scheduleTextureUpload(imageIndex, texture) {
@@ -954,6 +1027,7 @@ function processTextureUploadQueue(frameStartedAt) {
   lastTextureUpload = now;
   try {
     renderer.initTexture(next.texture);
+    if (PERF_AUTOWALK) perfTextureUploads++;
     next.resolve(true);
   } catch {
     next.resolve(false);
@@ -963,26 +1037,24 @@ function processTextureUploadQueue(frameStartedAt) {
 function loadTexture(i) {
   if (texCache[i]) return Promise.resolve(texCache[i]);
   if (textureLoads[i]) return textureLoads[i];
-  const promise = galleryImageSource(TEXTURE_IMAGES[i] || IMAGES[i], i).then(source => new Promise((resolve) => {
-    const finish = (value) => {
-      if (source.objectUrl) URL.revokeObjectURL(source.objectUrl);
-      resolve(value);
-    };
-    texLoader.load(source.url, (tex) => {
+  const promise = galleryImageSource(TEXTURE_IMAGES[i] || IMAGES[i], i)
+    .then(decodeGalleryTexture)
+    .then(async (tex) => {
+      if (!tex) {
+        texCache[i] = null;
+        return null;
+      }
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      void scheduleTextureUpload(i, tex).then(uploaded => {
-        if (!uploaded) {
-          tex.dispose();
-          finish(null);
-          return;
-        }
-        texCache[i] = tex;
-        textureLastUsed[i] = performance.now();
-        finish(tex);
-      });
-    }, undefined, () => { texCache[i] = null; finish(null); });
-  })).finally(() => {
+      const uploaded = await scheduleTextureUpload(i, tex);
+      if (!uploaded) {
+        disposeGalleryTexture(tex);
+        return null;
+      }
+      texCache[i] = tex;
+      textureLastUsed[i] = performance.now();
+      return tex;
+    }).finally(() => {
     if (textureLoads[i] === promise) textureLoads[i] = null;
   });
   textureLoads[i] = promise;
@@ -1022,12 +1094,12 @@ function fitArtwork(pic, frame, tex, imageIndex) {
   const maxW = ART_MAX_W * scale;
   if (w > maxW) { w = maxW; h = w / ar; }
   const layoutKey = `${imageIndex}:${w.toFixed(4)}:${h.toFixed(4)}:${scale}`;
+  const slot = pic.userData.slot;
+  if (slot?.layoutKey === layoutKey) return;
   const geometry = artworkGeometryFor(layoutKey, w, h);
   if (pic.geometry !== geometry) pic.geometry = geometry;
   resizePictureFrame(frame, w, h, metrics, layoutKey);
-  if (pic.userData.slot) {
-    const slot = pic.userData.slot;
-    if (slot.layoutKey === layoutKey) return;
+  if (slot) {
     slot.layoutKey = layoutKey;
     slot.artScale = scale;
     const frameX = frameXForSide(slot.side, metrics);
@@ -1057,9 +1129,11 @@ function setArtTexture(slot, imageIndex) {
   const cacheIndex = imageIndex % IMAGES.length;
   slot.imageIndex = cacheIndex;
   const tex = texCache[cacheIndex];
-  fitArtwork(slot.pic, slot.frame, tex, cacheIndex);
   if (tex) showArtworkTexture(slot, tex, cacheIndex);
-  else showArtworkPlaceholder(slot);
+  else {
+    fitArtwork(slot.pic, slot.frame, tex, cacheIndex);
+    showArtworkPlaceholder(slot);
+  }
 }
 
 function pictureLightY(artH) {
@@ -1190,11 +1264,11 @@ function updatePictureSpotPool() {
 
   for (const fixture of pictureLightFixtures) {
     if (!fixture.lightActive || !fixture.group.visible) continue;
-    fixture.parent.updateWorldMatrix(true, false);
-    fixture.worldLightPosition.copy(fixture.lightLocalPosition);
-    fixture.parent.localToWorld(fixture.worldLightPosition);
-    fixture.worldTargetPosition.copy(fixture.targetLocalPosition);
-    fixture.parent.localToWorld(fixture.worldTargetPosition);
+    // Hall chunks only translate along Z. Adding the parent translation gives
+    // the exact same world position without walking the scene graph twice for
+    // every one of the 160 picture-light fixtures on every frame.
+    fixture.worldLightPosition.copy(fixture.lightLocalPosition).add(fixture.parent.position);
+    fixture.worldTargetPosition.copy(fixture.targetLocalPosition).add(fixture.parent.position);
     fixture.distanceSq = fixture.worldLightPosition.distanceToSquared(camera.position);
     activeFixtures.push(fixture);
   }
@@ -1480,8 +1554,56 @@ function positionRearWall() {
   rearWall.position.z = Math.max(...chunks.map(chunk => chunk.group.position.z));
 }
 
-function retargetChunk(chunk) {
-  for (const slot of chunk.slots) setArtTexture(slot, nextImageIndex++);
+function reserveChunkRetarget(chunk) {
+  if (chunk.pendingRetarget) return chunk.pendingRetarget;
+  const plan = {
+    indices: chunk.slots.map(() => nextImageIndex++),
+    cursor: 0,
+  };
+  chunk.pendingRetarget = plan;
+  chunkRetargetQueue.push(chunk);
+  return plan;
+}
+
+function removeChunkRetargetFromQueue(chunk) {
+  const queueIndex = chunkRetargetQueue.indexOf(chunk);
+  if (queueIndex >= 0) chunkRetargetQueue.splice(queueIndex, 1);
+}
+
+function processChunkRetargetQueue(frameStartedAt) {
+  while (chunkRetargetQueue.length && !chunkRetargetQueue[0].pendingRetarget) {
+    chunkRetargetQueue.shift();
+  }
+  const chunk = chunkRetargetQueue[0];
+  if (!chunk) return false;
+  if (performance.now() - frameStartedAt > CHUNK_RETARGET_FRAME_BUDGET_MS) return false;
+
+  const plan = chunk.pendingRetarget;
+  setArtTexture(chunk.slots[plan.cursor], plan.indices[plan.cursor]);
+  plan.cursor++;
+  if (plan.cursor >= chunk.slots.length) chunkRetargetQueue.shift();
+  return true;
+}
+
+function finishChunkRetarget(chunk) {
+  const plan = reserveChunkRetarget(chunk);
+  removeChunkRetargetFromQueue(chunk);
+  while (plan.cursor < chunk.slots.length) {
+    setArtTexture(chunk.slots[plan.cursor], plan.indices[plan.cursor]);
+    plan.cursor++;
+  }
+  chunk.pendingRetarget = null;
+  if (PERF_AUTOWALK) perfChunkRetargets++;
+}
+
+function prepareHiddenRearChunk(playerZ) {
+  let rearChunk = null;
+  for (const chunk of chunks) {
+    if (!rearChunk || chunk.group.position.z > rearChunk.group.position.z) rearChunk = chunk;
+  }
+  if (rearChunk && rearChunk.group.position.z - playerZ >= CHUNK_RETARGET_PREPARE_DISTANCE) {
+    reserveChunkRetarget(rearChunk);
+  }
 }
 
 function buildHall() {
@@ -1507,21 +1629,22 @@ function recycleChunks() {
 
   let leadingZ = Math.min(...chunks.map(chunk => chunk.group.position.z));
   let rearZ = Math.max(...chunks.map(chunk => chunk.group.position.z));
+  prepareHiddenRearChunk(playerZ);
   while (playerZ - leadingZ < FORWARD_VIEW_BUFFER) {
     const rearChunk = chunks.find(chunk => chunk.group.position.z === rearZ);
     if (!rearChunk) break;
+    finishChunkRetarget(rearChunk);
     rearChunk.group.position.z = leadingZ - CHUNK_LEN;
     leadingZ = rearChunk.group.position.z;
     rearZ = Math.max(...chunks.map(chunk => chunk.group.position.z));
-    retargetChunk(rearChunk);
   }
 
   const farBehind = playerZ + RECYCLE_BACK_BUFFER;
   for (const chunk of chunks) {
     if (chunk.group.position.z > farBehind && playerZ - leadingZ > FORWARD_VIEW_BUFFER + CHUNK_LEN) {
+      finishChunkRetarget(chunk);
       chunk.group.position.z = leadingZ - CHUNK_LEN;
       leadingZ = chunk.group.position.z;
-      retargetChunk(chunk);
     }
   }
   positionRearWall();
@@ -1578,7 +1701,7 @@ function evictDistantTextures(maxRemove = 1) {
         if (slot.pic.material.map === texture) showArtworkPlaceholder(slot);
       }
     }
-    texture.dispose();
+    disposeGalleryTexture(texture);
     texCache[imageIndex] = null;
     textureLastUsed[imageIndex] = 0;
   }
@@ -1758,6 +1881,11 @@ updaters.push((dt) => {
   }
 
   if (!roamEnabled || !isLocked()) {
+    if (PERF_AUTOWALK) {
+      camera.position.z -= RUN_SPEED * dt;
+      clampToHall(camera.position);
+      return;
+    }
     _moveVelocity.set(0, 0, 0);
     moveSpeed = 0;
     return;
@@ -1976,5 +2104,10 @@ async function boot() {
   startLoop();        // render the hall behind the translucent start overlay
   updateTextureStreaming(true); // use the start overlay time to prepare the next visible batches
   readyToEnter();
+  if (PERF_AUTOWALK) {
+    entered = true;
+    enterEl.hidden = true;
+    clock.getDelta();
+  }
 }
 boot();
