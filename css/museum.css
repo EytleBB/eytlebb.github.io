@@ -23,7 +23,7 @@ body { font-family:'Hanken Grotesk','PingFang SC',system-ui,sans-serif; color:#e
   transition:opacity .25s, transform .15s;
 }
 #enter .go:hover { transform:translateY(-1px); }
-#enter .go[disabled] { opacity:.45; cursor:default; transform:none; }
+#enter .go[disabled] { display:none; }
 #enter .prog { font-size:12px; color:#7e8cab; letter-spacing:.05em; min-height:16px; }
 #enter .back {
   margin-top:14px; background:none; border:0; color:#7e8cab; font:inherit; font-size:12px;

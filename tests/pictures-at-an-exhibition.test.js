@@ -32,6 +32,14 @@ test('long-title layout hooks remain present', () => {
   assert.match(museumStyle, /#title\s*\{[^}]*max-width:/s);
 });
 
+test('entry button stays hidden until the museum is ready', () => {
+  const museumStyle = read('css/museum.css');
+  const museum = read('js/museum.js');
+
+  assert.match(museumStyle, /#enter \.go\[disabled\]\s*\{[^}]*display:\s*none/s);
+  assert.match(museum, /enterGo\.textContent = T\('点击进入', 'Enter', '입장'\);\s*enterGo\.disabled = false;/s);
+});
+
 test('retired visitor-facing labels are absent', () => {
   const publicSources = [
     read('index.html'),
