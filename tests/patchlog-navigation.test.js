@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
@@ -18,7 +19,7 @@ test('patch log content bypasses stale browser caches', () => {
   assert.match(main, /fetch\('\.\/logs\/index\.json', \{ cache: 'no-store' \}\)/);
   assert.match(main, /fetch\(`\.\/logs\/\$\{latest\}\.txt`, \{ cache: 'no-store' \}\)/);
   assert.match(main, /fetch\(`\.\/logs\/\$\{dateStr\}\.txt`, \{ cache: 'no-store' \}\)/);
-  assert.match(html, /js\/main\.js\?v=log-font-scope-20260816/);
+  assert.match(html, /<script\s+src="js\/main\.js\?v=[^"\s]+"/);
 });
 
 test('day-mode patch log cards use a light frosted surface', () => {
@@ -55,4 +56,47 @@ test('patch log layout avoids duplicated archive labels', () => {
 
 test('patch log navigation is localized', () => {
   assert.match(html, /data-section="patchlog" data-zh="斑驳日志" data-en="Patch Log" data-ko="패치 로그"/);
+});
+
+test('pending page loads cannot overwrite a newer navigation or language render', async () => {
+  for (const name of ['renderAbout', 'renderPatchlog', 'renderGallery']) {
+    let finishLoad;
+    const pending = new Promise(resolve => { finishLoad = resolve; });
+    const stage = { innerHTML: '' };
+    let staleDomReads = 0;
+    const context = vm.createContext({
+      stage,
+      stageRenderEpoch: 1,
+      t: zh => zh,
+      enhanceMotion() {},
+      wireMessageForm() {},
+      loadLogs: () => pending,
+      loadGallery: () => pending,
+      renderPatchlogLevel() { stage.innerHTML = 'stale patch log'; },
+      document: { getElementById() { staleDomReads++; return { addEventListener() {} }; } }
+    });
+    const source = main.match(new RegExp(`async function ${name}\\(\\) \\{[\\s\\S]*?\\n\\}`));
+    assert.ok(source, `${name} exists`);
+    vm.runInContext(source[0], context);
+    const render = context[name]();
+    context.stageRenderEpoch++;
+    stage.innerHTML = 'new page';
+    staleDomReads = 0;
+    finishLoad();
+    await render;
+    assert.equal(stage.innerHTML, 'new page', `${name} preserves the current page`);
+    assert.equal(staleDomReads, 0, `${name} leaves current DOM nodes alone`);
+  }
+});
+
+test('the current patch log render still completes after loading', async () => {
+  let rendered = false;
+  const context = vm.createContext({
+    stageRenderEpoch: 1,
+    loadLogs: async () => {},
+    renderPatchlogLevel() { rendered = true; }
+  });
+  vm.runInContext(main.match(/async function renderPatchlog\(\) \{[\s\S]*?\n\}/)[0], context);
+  await context.renderPatchlog();
+  assert.equal(rendered, true);
 });

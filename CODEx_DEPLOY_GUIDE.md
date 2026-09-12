@@ -2,6 +2,41 @@
 
 > 给本地 Codex / AI 助手使用的项目说明。执行网站维护、修改、部署前，先阅读本文件。
 
+## 2026-09-12：重装系统后的本地入口
+
+当前开发环境为 Linux，工作目录是 `/home/yeom/Documents/ChatGPT/thisIsEytle`。下文保留原 Windows 部署记录，其中的 `D:\eyt_web` 和 PowerShell 示例应换用当前目录与 Bash。迁移与版本核对详情见 [恢复记录](docs/maintenance/2026-09-12-recovery.md)。
+
+```bash
+cd /home/yeom/Documents/ChatGPT/thisIsEytle
+git status
+node --test tests/*.test.js
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+浏览器访问 `http://127.0.0.1:8000/`；按 `Ctrl+C` 停止预览。生成画廊预览使用 `python3 scripts/gallery-previews.py`，图片重命名仍使用 `node scripts/gallery-renamer.js`。
+
+项目 Git 提交身份、`.githooks` 路径和旧工作树路径已恢复。`origin` 和 `tencent` 均保留；此次没有推送或部署。2026-09-12 已配置本机专用 Ed25519 密钥，并通过全新连接验证密钥登录。现在直接使用：
+
+```bash
+ssh eytle-server
+```
+
+持久设置保存在本机 `/home/yeom/.ssh/config`，同时匹配 `eytle-server` 和 `81.71.120.60`。其中包含专用私钥 `/home/yeom/.ssh/id_ed25519_eytle_server`、`BindInterface wlp0s20f3`、`ControlMaster auto` 和 `ControlPersist 10m`。网卡绑定解决了最初 Mihomo TUN 导致的 SSH 超时；改用其他网卡时需更新 `BindInterface`。
+
+已移除仓库里临时的 `core.sshCommand` 覆盖，`git ls-remote tencent` 已通过，新任务和普通 SSH 均可使用上述持久配置。连接过期后可重新用密钥认证，无需输入服务器密码。私钥权限为 `600`，未设置额外口令以支持非交互连接；只存放在本机 `.ssh`，公钥已追加到服务器 `ubuntu` 用户的 `authorized_keys`，原密码登录方式和已有公钥保留。
+
+在 Codex 的 SSH 设置中可选择别名 `eytle-server`；手动添加时主机填 `ubuntu@81.71.120.60`、端口 `22`，Identity 指向上述私钥文件（不带 `.pub`）。SSH 密钥配置不等于远程 Codex 环境已经安装；远程项目功能仍需另行安装并登录服务器上的 Codex CLI。
+
+已通过共享 SSH 连接直接核对：服务器裸仓库 `main` 与部署工作目录 `HEAD` 都是 `5df346d`，部署工作目录无未提交改动；线上目录的 10 个核心文件 SHA-256 与本地完全一致。`post-receive` hook 存在且可执行，但此次未触发部署。GitHub 写入认证尚未验证。
+
+## 本次双升级同步（2026-09-12）
+
+森林首页和 Nocturne 展馆来自同一工作目录中的两个任务，按一个完整版本同步，新增 JS 模块、WebP 和字体必须一起发布。内容和整合检查见 [同步记录](docs/maintenance/2026-09-12-sync.md)。上方 `5df346d` 是恢复时的基线，当前版本以 `git log -1` 为准。
+
+部署排除规则现由仓库的 `scripts/deploy-excludes.txt` 维护，发布前同步到 `/srv/eytle-site/deploy-excludes.txt`。维护文档、测试、脚本只保留在源码仓库。新加排除规则不会自动清理已在线的同名文件；首次调整时先备份，再移出网站目录。
+
+本机 HTTPS Git 暂无写入凭据；此次可使用已连接的 EytleBB GitHub 账号，通过 Git blob/tree/commit API 发布完整源码树，使用非强制的 ref 更新，再 fetch 同一提交到本地并 push 到腾讯云。此方式不代表本机 `git push origin main` 的认证已恢复。后续优先使用配置好认证的普通 Git 推送；不要把令牌放进 remote URL 或仓库。
+
 ## 1. 项目基本信息
 
 本项目是 `eytle.cn` 个人网站源码仓库。
@@ -170,7 +205,7 @@ ls -l /srv/eytle-site/site.git/hooks/post-receive
 /srv/eytle-site/deploy-excludes.txt
 ```
 
-当前内容应类似：
+当前完整内容以仓库 `scripts/deploy-excludes.txt` 为准，包括以下基础规则：
 
 ```text
 .git/

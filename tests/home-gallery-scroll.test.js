@@ -18,6 +18,9 @@ test('home exhibition preview uses a seamless auto-scrolling loop', () => {
   assert.match(style, /var\(--gal-scroll-duration,29\.333s\)/);
   assert.match(style, /\.gal:hover \.gal-track,[\s\S]*\.gal:focus-within \.gal-track \{ animation-play-state:paused; \}/);
   assert.match(style, /@keyframes home-gallery-scroll[\s\S]*translate3d\(0,-50%,0\)/);
-  assert.match(html, /css\/style\.css\?v=home-gallery-speed-20260817/);
-  assert.match(html, /js\/main\.js\?v=log-font-scope-20260816/);
+  for (const asset of ['css/style.css', 'js/main.js']) {
+    const references = [...html.matchAll(/(?:href|src)="([^"?]+)\?v=([^"&]+)"/g)];
+    assert.ok(references.some(([, file, version]) => file === asset && version.trim()), `${asset} has a cache version`);
+    assert.ok(fs.existsSync(path.join(root, asset)), `${asset} resolves locally`);
+  }
 });

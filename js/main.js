@@ -251,19 +251,28 @@ async function loadLogs() {
    RENDER — about / home
    ============================================================ */
 async function renderAbout() {
+  const epoch = stageRenderEpoch;
   stage.innerHTML = `
     <header class="hero">
-      <h1>This is <em>Eytle</em></h1>
-      <div class="url">eytle.cn</div>
+      <div class="hero-topline"><span class="hero-status"><i></i>${t('一个人的世界','A personal world','나만의 세계')}</span><span class="hero-edition">THE BIRCH FOREST</span></div>
+      <div class="hero-copy">
+        <h1><span>This is</span><em>Eytle<span class="hero-period">.</span></em></h1>
+        <p class="hero-description">${t('在代码、图像与日常之间，','Between code, images and everyday life,','코드와 이미지, 일상 사이에,')}<br>${t('留一片自己的森林。','a little forest of my own.','나만의 작은 숲을 남깁니다.')}</p>
+        <button class="hero-link" id="home-explore"><span>${t('随处看看','Wander a little','천천히 둘러보기')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></button>
+      </div>
+      <div class="hero-art-note" aria-hidden="true"><span class="art-rule"></span><span class="night-copy">01 — NOCTURNE</span><span class="day-copy">02 — FIRST LIGHT</span><small>Betula · ${t('白桦','Silver birch','자작나무')}</small></div>
+      <div class="hero-bottom"><span>${t('写一些代码，收集一些光。','A little code. A little collected light.','코드를 쓰고, 빛을 모읍니다.')}</span><span class="hero-scroll">SCROLL TO DISCOVER <i>↓</i></span></div>
     </header>
+    <div class="home-body" id="home-content">
+    <div class="home-section-heading"><div><span class="section-index">01 / FIELD NOTES</span><h2>${t('林间拾遗','Collected along the way','숲에서 모은 조각들')}</h2></div><p>${t('近来的文字、看见的风景，和想说的话。','Recent words, passing views, and a place to say hello.','최근의 글, 스쳐 간 풍경, 그리고 안부.')}</p></div>
     <section class="grid2">
       <div class="col-left">
         <div class="panel plog-card" id="home-plog">
           <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
           <div class="r-loading placeholder-text">${t('加载中…','Loading…','로딩 중…')}</div>
         </div>
-        <div class="panel">
-          <div class="eyebrow">${t('给 Eytle 留言', 'Leave Eytle a message', 'Eytle에게 메시지')}</div>
+        <div class="panel message-card">
+          <div class="message-heading"><div><div class="eyebrow">A SMALL HELLO</div><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Leave a little note', 'Eytle에게 메시지')}</label></div><span class="postmark" aria-hidden="true">E<span>↗</span></span></div>
           <textarea id="msg-text" class="msg-text" maxlength="140"
             placeholder="${t('写点什么…','Write something…','내용을 입력하세요…')}"></textarea>
           <input type="text" id="msg-hp" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
@@ -281,18 +290,28 @@ async function renderAbout() {
         </div>
       </div>
       <div class="col-right">
-        <div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
+        <div class="gallery-heading"><div><div class="eyebrow">A WAY OF SEEING</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
         <div class="gal" id="home-gal"></div>
+        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('走进展览','Enter the exhibition','전시 둘러보기')} <span aria-hidden="true">↗</span></button></div>
       </div>
     </section>
+    <div class="home-endnote"><span>CODE / IMAGES / LIFE</span><span>${t('未完，待续。','Always a work in progress.','계속 자라는 이야기.')}</span></div>
+    </div>
   `;
 
   // Apply the hidden animation start state before the first async wait/paint.
   enhanceMotion(stage);
   wireMessageForm();
+  document.getElementById('home-explore').addEventListener('click', () => {
+    document.getElementById('home-content').scrollIntoView({ behavior: REDUCED_MOTION.matches ? 'instant' : 'smooth', block: 'start' });
+  });
+  document.getElementById('home-exhibition').addEventListener('click', () => {
+    document.querySelector('.nav-i[data-section="gallery"]').click();
+  });
 
   // latest patch log (real content, no fabrication)
   await loadLogs();
+  if (epoch !== stageRenderEpoch) return;
   const card = document.getElementById('home-plog');
   if (DATA.patchlog.length) {
     const latest = DATA.patchlog[0];               // index.json is newest-first
@@ -301,6 +320,7 @@ async function renderAbout() {
       const r = await fetch(`./logs/${latest}.txt`, { cache: 'no-store' });
       if (r.ok) body = normalizeLogBody(await r.text());
     } catch {}
+    if (epoch !== stageRenderEpoch) return;
     card.innerHTML = `
       <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
       <div class="date">${fmtDot(latest)}</div>
@@ -314,7 +334,9 @@ async function renderAbout() {
 
   // Gallery preview — a seamless vertical loop that pauses for interaction.
   await loadGallery();
+  if (epoch !== stageRenderEpoch) return;
   const gal = document.getElementById('home-gal');
+  document.getElementById('home-gallery-count').textContent = t(`${DATA.gallery.length} 帧风景，持续收集中`, `${DATA.gallery.length} pictures & counting`, `${DATA.gallery.length}장의 풍경, 계속 수집 중`);
   if (DATA.gallery.length) {
     const idx = randomGalleryPreview();
     const label = t('查看展览图片','View exhibition picture','전시 이미지 보기');
@@ -338,6 +360,10 @@ async function renderAbout() {
 /* ============================================================
    RENDER — projects (with inline sub-projects)
    ============================================================ */
+function sectionHeading(number, label, title, description) {
+  return `<header class="section-heading"><div class="section-index">${number} / ${escapeHtml(label)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
+}
+
 function renderProjects() {
   const items = DATA.projects.map(p => {
     const hasSub = p.sub && p.sub.length;
@@ -355,7 +381,7 @@ function renderProjects() {
   }).join('');
 
   stage.innerHTML = `
-    <div><div class="eyebrow">${t('项目','Projects','프로젝트')}</div>
+    <div class="collection-page">${sectionHeading('02', 'SELECTED WORK', t('项目','Projects','프로젝트'), t('把好奇心，变成可以运行的东西。','Curiosity, made into things that work.','호기심을 작동하는 무언가로.'))}
     <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div></div>`;
 
   stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
@@ -410,7 +436,7 @@ function renderTools() {
     </a>`).join('');
 
   stage.innerHTML = `
-    <div><div class="eyebrow">${t('工具','Tools','도구')}</div>
+    <div class="collection-page">${sectionHeading('03', 'THE WORKBENCH', t('工具','Tools','도구'), t('一些顺手的小工具。','A few useful things, within reach.','가까이 두고 쓰는 작은 도구들.'))}
     <div class="list">${items || placeholder(t('暂无工具','No tools yet','도구 없음'))}</div></div>`;
 }
 
@@ -431,7 +457,7 @@ function renderDownloads() {
       </svg>
     </a>`).join('');
 
-  stage.innerHTML = `<div><div class="eyebrow">${t('下载','Downloads','다운로드')}</div>${items}</div>`;
+  stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'TAKE SOMETHING WITH YOU', t('下载','Downloads','다운로드'), t('带走一点这里的东西。','A little something to take with you.','이곳의 작은 무언가를 가져가세요.'))}${items}</div>`;
 }
 
 /* ============================================================
@@ -445,7 +471,9 @@ const DAY_EN = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 const DAY_KO = ['월','화','수','목','금','토','일'];
 
 async function renderPatchlog() {
+  const epoch = stageRenderEpoch;
   await loadLogs();
+  if (epoch !== stageRenderEpoch) return;
   renderPatchlogLevel();
 }
 
@@ -573,8 +601,9 @@ function renderPatchlogLevel() {
   stage.innerHTML = `
     <div class="patchlog-shell">
       <header class="patchlog-header">
-        <div class="eyebrow">${t('斑驳日志','Patch Log','패치 로그')}</div>
-        ${title ? `<h1 class="patchlog-title">${title}</h1>` : ''}
+        <div class="section-index">04 / DAYS & FRAGMENTS</div>
+        <h1 class="patchlog-title">${title || t('斑驳日志','Patch Log','패치 로그')}</h1>
+        <p class="section-description">${t('日子经过，留下一点斑驳。','The days pass. A few traces remain.','지나간 날들이 남긴 작은 흔적들.')}</p>
       </header>
       <div class="patchlog-surface${patchlogSelection.month !== null ? ' patchlog-surface-calendar' : ''}">
         ${patchlogBreadcrumb()}
@@ -635,14 +664,17 @@ function buildMonth(year, month, todayStr, logDates) {
    RENDER — gallery grid
    ============================================================ */
 async function renderGallery() {
+  const epoch = stageRenderEpoch;
   await loadGallery();
+  if (epoch !== stageRenderEpoch) return;
+  const heading = sectionHeading('05', 'A WAY OF SEEING', t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('目光停留过的地方。','Places where the gaze has lingered.','시선이 머물렀던 곳.'));
   if (!DATA.gallery.length) {
-    stage.innerHTML = `<div><div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
+    stage.innerHTML = `<div>${heading}
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
     return;
   }
   stage.innerHTML = `
-    <div><div class="eyebrow">${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</div>
+    <div>${heading}
     <div class="gallery-grid gallery-masonry" id="gallery-grid"></div>
     <div class="gallery-sentinel" id="gallery-sentinel" aria-hidden="true"></div></div>`;
   const grid = document.getElementById('gallery-grid');
@@ -954,134 +986,109 @@ function initSurfaceLight() {
 }
 
 function initAmbientMotion() {
+  if (!('IntersectionObserver' in window)) return;
   const canvas = document.getElementById('ambient-motes');
-  const background = document.querySelector('.bg');
   const context = canvas?.getContext('2d');
-  if (!canvas || !background || !context) return;
-
-  const finePointer = window.matchMedia('(pointer: fine)');
-  let width = 0;
-  let height = 0;
-  let dpr = 1;
+  if (!canvas || !context) return;
+  let width = 1;
+  let height = 1;
   let motes = [];
   let animationFrame = 0;
-  let lastTime = performance.now();
-  let targetX = 0;
-  let targetY = 0;
-  let forestX = 0;
-  let forestY = 0;
+  let lastTime = 0;
+  let hero = null;
+  let heroVisible = false;
   const pointer = { x: -1000, y: -1000, active: false };
-
-  const makeMote = (anywhere = true) => ({
-    x: Math.random() * width,
-    y: anywhere ? Math.random() * height : height + 12,
-    radius: .55 + Math.random() * 1.35,
-    speed: .12 + Math.random() * .34,
-    sway: .16 + Math.random() * .32,
-    phase: Math.random() * Math.PI * 2,
-    depth: .45 + Math.random() * .75,
+  const finePointer = window.matchMedia('(pointer: fine)');
+  const canAnimate = () => heroVisible && activeSection === 'about' && !REDUCED_MOTION.matches && !document.hidden;
+  const makeMote = () => ({
+    x: Math.random() * width, y: Math.random() * height,
+    radius: .5 + Math.random(), speed: .1 + Math.random() * .18,
+    phase: Math.random() * Math.PI * 2
   });
-
   function resizeAmbient() {
-    width = window.innerWidth;
+    width = document.documentElement.clientWidth;
     height = window.innerHeight;
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, width < 760 ? 1 : 1.5);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const count = width < 760 ? 15 : Math.min(34, Math.max(20, Math.round(width / 54)));
-    motes = Array.from({ length: count }, () => makeMote(true));
+    motes = Array.from({ length: width < 760 ? 10 : 22 }, makeMote);
   }
-
   function drawAmbient(now) {
     animationFrame = 0;
-    if (REDUCED_MOTION.matches || document.hidden) return;
-    const step = Math.min(2.2, Math.max(.2, (now - lastTime) / 16.67));
+    if (!canAnimate()) return;
+    if (lastTime && now - lastTime < 32) {
+      animationFrame = requestAnimationFrame(drawAmbient);
+      return;
+    }
+    const step = lastTime ? Math.min(3, (now - lastTime) / 16.67) : 1;
     lastTime = now;
     context.clearRect(0, 0, width, height);
-
-    const day = document.documentElement.getAttribute('data-theme') === 'day';
-    const color = day ? '154,97,10' : '230,169,43';
-    motes.forEach((mote) => {
-      mote.y -= mote.speed * mote.depth * step;
-      mote.x += Math.sin(now * .00032 + mote.phase) * mote.sway * step;
-
+    const day = document.documentElement.dataset.theme === 'day';
+    motes.forEach(mote => {
+      mote.y -= mote.speed * step;
+      mote.x += Math.sin(now * .0002 + mote.phase) * .2 * step;
       if (pointer.active && finePointer.matches) {
         const dx = mote.x - pointer.x;
         const dy = mote.y - pointer.y;
         const distance = Math.hypot(dx, dy);
-        if (distance > 0 && distance < 125) {
-          const breeze = (1 - distance / 125) * 1.1 * step;
+        if (distance > 0 && distance < 100) {
+          const breeze = (1 - distance / 100) * .7 * step;
           mote.x += dx / distance * breeze;
           mote.y += dy / distance * breeze;
         }
       }
-
-      if (mote.y < -12) Object.assign(mote, makeMote(false));
-      if (mote.x < -12) mote.x = width + 12;
-      if (mote.x > width + 12) mote.x = -12;
-
-      const pulse = .5 + .5 * Math.sin(now * .0011 + mote.phase);
-      const alpha = (day ? .055 : .08) + pulse * (day ? .085 : .14);
+      if (mote.y < -5) mote.y = height + 5;
+      if (mote.x < -5) mote.x = width + 5;
+      if (mote.x > width + 5) mote.x = -5;
+      const alpha = .12 + Math.sin(now * .0008 + mote.phase) * .09;
       context.beginPath();
-      context.fillStyle = `rgba(${color},${alpha})`;
-      context.arc(mote.x, mote.y, mote.radius * mote.depth, 0, Math.PI * 2);
+      context.fillStyle = `rgba(${day ? '115,97,64' : '222,197,155'},${alpha})`;
+      context.arc(mote.x, mote.y, mote.radius, 0, Math.PI * 2);
       context.fill();
     });
-
-    forestX += (targetX - forestX) * .045 * step;
-    forestY += (targetY - forestY) * .045 * step;
-    background.style.setProperty('--forest-x', `${forestX.toFixed(2)}px`);
-    background.style.setProperty('--forest-y', `${forestY.toFixed(2)}px`);
     animationFrame = requestAnimationFrame(drawAmbient);
   }
-
-  const startAmbient = () => {
-    if (animationFrame || REDUCED_MOTION.matches || document.hidden) return;
-    canvas.hidden = false;
-    lastTime = performance.now();
-    animationFrame = requestAnimationFrame(drawAmbient);
-  };
-  const stopAmbient = () => {
-    if (animationFrame) cancelAnimationFrame(animationFrame);
-    animationFrame = 0;
-  };
-
-  window.addEventListener('pointermove', (event) => {
-    pointer.x = event.clientX;
-    pointer.y = event.clientY;
-    pointer.active = true;
-    if (finePointer.matches) {
-      targetX = ((event.clientX / Math.max(width, 1)) - .5) * -11;
-      targetY = ((event.clientY / Math.max(height, 1)) - .5) * -8;
-    }
-  }, { passive: true });
-  document.addEventListener('pointerleave', () => {
-    pointer.active = false;
-    targetX = 0;
-    targetY = 0;
-  });
-  window.addEventListener('resize', resizeAmbient, { passive: true });
-  document.addEventListener('visibilitychange', () => document.hidden ? stopAmbient() : startAmbient());
-  REDUCED_MOTION.addEventListener?.('change', (event) => {
-    if (event.matches) {
-      stopAmbient();
+  function syncAmbient() {
+    if (!canAnimate()) {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
       canvas.hidden = true;
-      background.style.removeProperty('--forest-x');
-      background.style.removeProperty('--forest-y');
-    } else {
-      startAmbient();
+      lastTime = 0;
+    } else if (!animationFrame) {
+      canvas.hidden = false;
+      animationFrame = requestAnimationFrame(drawAmbient);
     }
+  }
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.target === hero) heroVisible = entry.isIntersecting;
+    syncAmbient();
   });
-
+  function trackHero() {
+    const next = stage.querySelector('.hero');
+    if (next === hero) return;
+    if (hero) observer.unobserve(hero);
+    hero = next;
+    heroVisible = false;
+    if (hero) observer.observe(hero);
+    syncAmbient();
+  }
+  window.addEventListener('pointermove', event => {
+    pointer.x = event.clientX; pointer.y = event.clientY; pointer.active = true;
+  }, { passive: true });
+  document.addEventListener('pointerleave', () => { pointer.active = false; });
+  window.addEventListener('resize', resizeAmbient, { passive: true });
+  document.addEventListener('visibilitychange', syncAmbient);
+  REDUCED_MOTION.addEventListener?.('change', syncAmbient);
+  new MutationObserver(trackHero).observe(stage, { childList: true });
   resizeAmbient();
-  startAmbient();
+  trackHero();
 }
 
 function preloadThemeArtwork() {
   if (!window.matchMedia('(pointer: fine)').matches) return;
   const preload = () => {
-    ['images/patchlog-bg-night.jpg', 'images/patchlog-bg-light.jpg'].forEach((src) => {
+    ['images/forest-night.webp', 'images/forest-day.webp'].forEach((src) => {
       const image = new Image();
       image.decoding = 'async';
       image.src = src;
@@ -1178,9 +1185,16 @@ let stageRenderEpoch = 0;
 function go(section) {
   if (!navMap.includes(section)) section = 'about';
   const renderEpoch = ++stageRenderEpoch;
+  if (section !== activeSection) window.scrollTo({ top: 0, behavior: 'instant' });
   activeSection = section;
+  document.documentElement.dataset.section = section;
   if (location.hash.slice(1) !== section) history.replaceState(null, '', '#' + section);
-  document.querySelectorAll('.nav-i').forEach(b => b.classList.toggle('on', b.dataset.section === section));
+  document.querySelectorAll('.nav-i').forEach(b => {
+    const selected = b.dataset.section === section;
+    b.classList.toggle('on', selected);
+    if (selected) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
   overlayRoot.innerHTML = '';
   let renderTask;
   switch (section) {
@@ -1205,7 +1219,14 @@ function applyLang() {
     b.querySelector('span').textContent =
       lang === 'zh' ? b.dataset.zh : lang === 'ko' ? (b.dataset.ko || b.dataset.en) : b.dataset.en;
   });
-  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('on', b.dataset.lang === lang);
+    b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+  });
+  document.getElementById('nav').setAttribute('aria-label', t('主导航','Main navigation','주 탐색'));
+  document.querySelectorAll('.footer-note').forEach(element => {
+    element.textContent = lang === 'zh' ? element.dataset.zh : lang === 'ko' ? element.dataset.ko : element.dataset.en;
+  });
   document.documentElement.lang = lang === 'zh' ? 'zh' : lang;
   lampLabel();
   go(activeSection);   // re-render active section in new language
@@ -1222,6 +1243,7 @@ function lampLabel() {
 }
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme);
+  document.querySelector('meta[name="theme-color"]').content = theme === 'day' ? '#eeeee5' : '#080f14';
   lampLabel();
 }
 
@@ -1232,12 +1254,19 @@ document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () 
   const section = b.dataset.section;
   if (section === 'gallery' && isMuseumCapable()) { location.href = 'museum.html'; return; }
   go(section);
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }));
 document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => {
   lang = b.dataset.lang; localStorage.setItem('lang', lang); applyLang();
 }));
 document.getElementById('lamp').addEventListener('click', toggleThemeWithMotion);
-document.getElementById('home-btn').addEventListener('click', () => go('about'));
+function returnHome(event) {
+  event.preventDefault();
+  go('about');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+document.getElementById('home-btn').addEventListener('click', returnHome);
+document.querySelector('.footer-brand').addEventListener('click', returnHome);
 window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s && s !== activeSection) go(s); });
 
 // Boot

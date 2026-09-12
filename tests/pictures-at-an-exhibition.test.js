@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
@@ -14,12 +15,44 @@ test('canonical exhibition names are wired through every visitor-facing surface'
 
   assert.match(index, /data-section="gallery"[^>]+data-zh="图画展览会"[^>]+data-en="Pictures At An Exhibition"[^>]+data-ko="전람회의 그림"/);
   assert.match(main, /name: '图画展览会',\s+nameEn: 'Pictures At An Exhibition',\s+nameKo: '전람회의 그림',\s+github: 'https:\/\/github\.com\/EytleBB\/Eytle-Museum'/);
-  assert.equal((main.match(/t\('图画展览会','Pictures At An Exhibition','전람회의 그림'\)/g) || []).length, 3);
+  const home = main.slice(main.indexOf('async function renderAbout()'), main.indexOf('function renderProjects()'));
+  assert.match(home, /<h2>\$\{t\('图画展览会','Pictures At An Exhibition','전람회의 그림'\)\}<\/h2>/);
   assert.match(museumHtml, /<h1 id="exhibition-title"><\/h1>/);
   assert.match(museum, /exhibitionTitle\.textContent = exhibitionName/);
   assert.match(museum, /const exhibitionName = T\('图画展览会', 'Pictures At An Exhibition', '전람회의 그림'\)/);
   assert.match(museum, /fail\(\s*'图画展览会暂无图片或加载失败。',\s*'Pictures At An Exhibition is empty or failed to load\.',\s*'전람회의 그림을 불러오지 못했습니다\.'\s*\)/s);
   assert.match(main, /location\.href = 'museum\.html'/);
+});
+
+test('empty and populated web exhibitions retain their localized heading', async () => {
+  const main = read('js/main.js');
+  const sources = [
+    main.match(/function sectionHeading\([^\n]+\) \{[\s\S]*?\n\}/)[0],
+    main.match(/async function renderGallery\(\) \{[\s\S]*?\n\}/)[0]
+  ].join('\n');
+  for (const [language, title] of ['图画展览会', 'Pictures At An Exhibition', '전람회의 그림'].entries()) {
+    for (const populated of [false, true]) {
+      const stage = { innerHTML: '' };
+      const context = vm.createContext({
+        stage,
+        stageRenderEpoch: 1,
+        DATA: { gallery: populated ? [{ src: 'photo.jpg', preview: 'preview.webp' }] : [] },
+        GALLERY_BATCH_SIZE: 24,
+        t: (...labels) => labels[language],
+        escapeHtml: text => text,
+        placeholder: text => `<p>${text}</p>`,
+        loadGallery: async () => {},
+        enhanceMotion() {},
+        cacheGalleryImages() {},
+        document: { getElementById: () => ({ insertAdjacentHTML() {}, querySelectorAll: () => [] }) },
+        IntersectionObserver: class { observe() {} }
+      });
+      vm.runInContext(sources, context);
+      await context.renderGallery();
+      assert.ok(stage.innerHTML.includes(`<h1>${title}</h1>`), `${title}: populated=${populated}`);
+      assert.equal(stage.innerHTML.includes('id="gallery-grid"'), populated);
+    }
+  }
 });
 
 test('long-title layout hooks remain present', () => {

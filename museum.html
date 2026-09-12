@@ -8,12 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/museum.css?v=museum-loading-button-20260816" />
+  <link rel="stylesheet" href="css/museum.css?v=museum-lighting-20260912-r3" />
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
     }
   }
   </script>
@@ -44,14 +44,38 @@
 
   <!-- start screen + pause menu (one element; reappears on Esc) -->
   <div id="enter">
-    <h1 id="exhibition-title"></h1>
-    <div class="sub" id="enter-sub"></div>
-    <button class="go" id="enter-go" disabled></button>
+    <div class="enter-masthead" aria-hidden="true">
+      <span class="exhibition-signature">
+        <svg class="gallery-emblem" viewBox="0 0 42 48" fill="none" focusable="false">
+          <path d="M5 44V22a16 16 0 0 1 32 0v22M11 44V22a10 10 0 0 1 20 0v22M17 44V22a4 4 0 0 1 8 0v22M1 44h40" />
+          <path class="emblem-star" d="M21 0v8M17 4h8" />
+        </svg>
+        <span>This is Eytle<span class="signature-index"><span class="localized" lang="zh">艺术 · 空间 · 无限</span><span class="localized" lang="en">ART · SPACE · INFINITY</span><span class="localized" lang="ko">예술 · 공간 · 무한</span></span></span>
+      </span>
+      <span class="masthead-line"></span>
+      <span class="exhibition-edition">I — ∞</span>
+    </div>
+    <div class="enter-copy">
+      <div class="exhibition-eyebrow">
+        <span class="eyebrow-line" aria-hidden="true"></span>
+        <span class="localized" lang="zh">私人艺术收藏 · 无尽长廊</span>
+        <span class="localized" lang="en">A private collection · An infinite gallery</span>
+        <span class="localized" lang="ko">개인 소장전 · 끝없는 갤러리</span>
+      </div>
+      <h1 id="exhibition-title"></h1>
+      <div class="sub" id="enter-sub"></div>
+      <div class="enter-action">
+        <button class="go" id="enter-go" disabled></button>
+        <div class="prog" id="enter-prog" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="entrance-coordinate" aria-hidden="true">
+      <span>01</span><i></i><span>∞</span>
+    </div>
     <div class="control-guide enter-guide" id="enter-keys" aria-label="操作说明"></div>
-    <div class="prog" id="enter-prog"></div>
     <button class="back" id="enter-back"></button>
   </div>
 
-  <script type="module" src="js/museum.js?v=museum-stutter-fix-20260816"></script>
+  <script type="module" src="js/museum.js?v=museum-lighting-20260912-r3"></script>
 </body>
 </html>

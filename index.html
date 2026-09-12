@@ -5,27 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>This is Eytle</title>
   <link rel="icon" href="images/favicon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=home-gallery-speed-20260817" />
+  <meta name="theme-color" content="#080f14" />
+  <meta name="description" content="This is Eytle — 代码、图像与日常之间，一片缓慢生长的森林。" />
+  <script>try { var savedTheme = localStorage.getItem('theme'); if (savedTheme === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}</script>
+  <link rel="stylesheet" href="css/style.css?v=forest-cinema-20260912" />
 </head>
 <body>
 
-  <!-- Ambient: birch-forest painting → scrim → film grain -->
-  <div class="bg"></div>
-  <div class="scrim"></div>
-  <div class="grain"></div>
+  <!-- The photograph is also the fallback when WebGL or motion is unavailable. -->
+  <div class="bg" aria-hidden="true"></div>
+  <canvas id="forest-scene" class="forest-scene" aria-hidden="true"></canvas>
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
   <canvas class="ambient-motes" id="ambient-motes" aria-hidden="true"></canvas>
 
   <div class="app">
 
-    <!-- ============ RAIL ============ -->
-    <aside class="rail">
+    <!-- Masthead; legacy .rail selectors preserve the navigation contract. -->
+    <header class="rail">
 
       <button class="brand" id="home-btn" title="This is Eytle">
         <img src="images/logo.png" alt="" />
-        <b>This is <em>Eytle</em></b>
+        <b>This is <em>Eytle</em><small>PERSONAL WORLD</small></b>
       </button>
 
       <div class="lang">
@@ -48,22 +49,29 @@
           <span id="lamp-ico">☀</span>
           <span id="lamp-tx"></span>
         </button>
-        <div class="contact">
-          <a href="mailto:3035986089@qq.com">3035986089@qq.com</a><br />
-          <a href="https://github.com/EytleBB" target="_blank" rel="noopener">github.com/EytleBB</a>
-        </div>
       </div>
 
-    </aside>
+    </header>
 
     <!-- ============ STAGE (re-rendered per section) ============ -->
     <main class="stage" id="stage"></main>
+
+    <footer class="site-footer">
+      <a class="footer-brand" href="#about">This is <em>Eytle.</em></a>
+      <span class="footer-note" data-zh="一片缓慢生长的森林。" data-en="A forest, slowly growing." data-ko="천천히 자라는 숲."></span>
+      <div class="contact">
+        <a href="mailto:3035986089@qq.com" title="3035986089@qq.com">Email ↗</a>
+        <a href="https://github.com/EytleBB" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+      <span class="footer-domain">EYTLE.CN</span>
+    </footer>
 
   </div>
 
   <!-- Lightbox / reader overlays mount here -->
   <div id="overlay-root"></div>
 
-  <script src="js/main.js?v=log-font-scope-20260816"></script>
+  <script src="js/main.js?v=forest-cinema-20260912"></script>
+  <script src="js/forest-scene.js?v=forest-cinema-20260912" defer></script>
 </body>
 </html>

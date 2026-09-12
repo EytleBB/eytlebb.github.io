@@ -63,5 +63,5 @@ test('entry prewarms audio without lowering visual quality', () => {
   assert.match(museum, /connectMuseumTrack\(\)/);
   assert.match(museum, /url\.split\('\?'\)\[0\]/);
   assert.match(museum, /renderer\.setPixelRatio\(Math\.min\(window\.devicePixelRatio, 2\)\)/);
-  assert.match(html, /js\/museum\.js\?v=museum-stutter-fix-20260816/);
+  assert.match(html, /js\/museum\.js\?v=museum-[a-z0-9-]+/);
 });

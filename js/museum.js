@@ -5,6 +5,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260912-r3';
+import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
+import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
+import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260912-r3';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -69,6 +73,7 @@ enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左�
   'Controls: WASD move, left click inspect, right click zoom, Shift run, Esc pause',
   '조작 안내: WASD 이동, 왼쪽 클릭 감상, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
 enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
+exitBtn.title = T('退出', 'Exit', '나가기');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
 hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
@@ -133,6 +138,10 @@ function recordPerformanceFrame(frameMs) {
   const percentile = p => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] || 0;
   canvas.dataset.perf = JSON.stringify({
     frames: perfFrameSamples.length,
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    textures: renderer.info.memory.textures,
+    geometries: renderer.info.memory.geometries,
     p95: Number(percentile(0.95).toFixed(2)),
     p99: Number(percentile(0.99).toFixed(2)),
     max: Number(Math.max(...perfFrameSamples).toFixed(2)),
@@ -216,12 +225,10 @@ async function loadImageList() {
    ============================================================ */
 const EYE_Y = 1.6;
 const HALL_HALF_WIDTH = 3;
-const CEIL_Y = 4.72;
-const VAULT_RISE = 0.84;
+const CHUNK_LEN = 14;
+const CEIL_Y = 6.7;
+const VAULT_RISE = 3.0;
 const VAULT_SPRING_Y = CEIL_Y - VAULT_RISE;
-const WALL_HEIGHT = VAULT_SPRING_Y;
-const VAULT_SEGMENTS = 18;
-const STAR_INSET = 0.028;
 const LAMP_BASE_DEPTH = 0.045;
 const BLOOM_LAYER = 1;
 const CAMERA_FOV = 64;
@@ -237,10 +244,11 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.info.autoReset = false;
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.04;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
@@ -252,31 +260,34 @@ canvas.addEventListener('webglcontextlost', (e) => {
 }, false);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1220);
-scene.fog = new THREE.Fog(0x0b1220, 18, 85);
+scene.background = new THREE.Color(0x09151b);
+scene.fog = new THREE.Fog(0x09151b, 18, 82);
 
 /* ---- IBL + ambient fill (amber & teal) ---- */
 const _pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 _pmrem.dispose();
-scene.environmentIntensity = 0.7;
-scene.add(new THREE.AmbientLight(0x33425f, 0.5));
-scene.add(new THREE.HemisphereLight(0x3a4f78, 0x140e06, 0.4));
+scene.environmentIntensity = 0.32;
+scene.add(new THREE.AmbientLight(0x92abb3, 0.23));
+scene.add(new THREE.HemisphereLight(0xc4d7de, 0x192a2d, 0.75));
 
-const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 88);
 camera.position.set(0, EYE_Y, SPAWN_Z);
 
 // One listener follows every camera pose, including artwork focus tweens.
 camera.add(audioListener);
 
-const clock = new THREE.Clock();
+const clock = new THREE.Timer();
 const updaters = [];
 function frame() {
   const frameStartedAt = performance.now();
+  clock.update();
   const rawDelta = clock.getDelta();
   const dt = Math.min(rawDelta, 0.05);
   for (const fn of updaters) fn(dt);
   updatePictureSpotPool();
+  fixtureBatch?.update();
+  renderer.info.reset();
   renderGalleryFrame();
   const retargetedChunkArtwork = processChunkRetargetQueue(frameStartedAt);
   if (!retargetedChunkArtwork) processTextureUploadQueue(frameStartedAt);
@@ -294,21 +305,26 @@ function startLoop() {
    ============================================================ */
 const bloomComposer = new EffectComposer(renderer);
 bloomComposer.renderToScreen = false;
+bloomComposer.setPixelRatio(1);
+bloomComposer.setSize(window.innerWidth / 2, window.innerHeight / 2);
 bloomComposer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.32,  // strength — only bloom-layer objects are rendered into this pass
-  0.7,   // radius
-  0.75   // threshold — safe now because artwork is never in the bloom layer
+  0.10,  // restrained optical bloom, isolated from artwork
+  0.45,  // radius
+  1.1    // threshold keeps architecture dark and artwork out of the halo
 );
 bloomComposer.addPass(bloom);
 
-const finalComposer = new EffectComposer(renderer);
+const sceneTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples),
+});
+const finalComposer = new EffectComposer(renderer, sceneTarget);
 finalComposer.addPass(new RenderPass(scene, camera));
 const bloomMixPass = new ShaderPass({
   uniforms: {
     baseTexture: { value: null },
-    bloomTexture: { value: bloomComposer.renderTarget2.texture },
+    bloomTexture: { value: null },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -324,10 +340,13 @@ const bloomMixPass = new ShaderPass({
     void main() {
       vec4 base = texture2D(baseTexture, vUv);
       vec3 bloom = texture2D(bloomTexture, vUv).rgb;
-      gl_FragColor = vec4(base.rgb + bloom, base.a);
+      vec2 p = vUv * 2.0 - 1.0;
+      float vignette = 1.0 - 0.12 * pow(dot(p, p) * 0.5, 1.4);
+      gl_FragColor = vec4((base.rgb + bloom) * vignette, base.a);
     }
   `,
 }, 'baseTexture');
+bloomMixPass.uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
 finalComposer.addPass(bloomMixPass);
 finalComposer.addPass(new OutputPass());
 
@@ -336,10 +355,18 @@ function enableBloomLayer(object) {
   return object;
 }
 
+const bloomBackground = new THREE.Color(0x000000);
+let bloomOcclusion = null;
 function renderGalleryFrame() {
-  camera.layers.set(BLOOM_LAYER);
-  bloomComposer.render();
+  const background = scene.background;
+  scene.background = bloomBackground;
   camera.layers.set(0);
+  try {
+    if (bloomOcclusion) bloomOcclusion.render(() => bloomComposer.render());
+    else bloomComposer.render();
+  } finally {
+    scene.background = background;
+  }
   finalComposer.render();
 }
 
@@ -347,223 +374,50 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  bloomComposer.setSize(window.innerWidth, window.innerHeight);
+  bloomComposer.setSize(window.innerWidth / 2, window.innerHeight / 2);
   finalComposer.setSize(window.innerWidth, window.innerHeight);
-  bloom.setSize(window.innerWidth, window.innerHeight);
+  architecture.resize();
 });
 
 /* ============================================================
    MATERIALS  (+ procedural surface texture, generated on a canvas —
    no external files, keeping the no-build constraint)
    ============================================================ */
-function makeNoiseTexture(size = 256, spread = 26) {
+const architecture = createMuseumArchitecture({
+  scene, renderer, camera, halfWidth: HALL_HALF_WIDTH, ceilingY: CEIL_Y,
+  springY: VAULT_SPRING_Y, chunkLength: CHUNK_LEN,
+});
+const atmosphere = createMuseumAtmosphere({
+  THREE, scene, renderer, camera, width: HALL_HALF_WIDTH * 2, ceilingY: CEIL_Y,
+});
+updaters.push(atmosphere.update);
+
+function makeSpotWashTexture(size = 128) {
   const c = document.createElement('canvas'); c.width = c.height = size;
-  const x = c.getContext('2d');
-  const img = x.createImageData(size, size);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = 205 + (Math.random() * spread - spread / 2);
-    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
-  }
-  x.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
+  const ctx = c.getContext('2d');
+  const gradient = ctx.createRadialGradient(size / 2, size * 0.25, 0, size / 2, size * 0.25, size * 0.64);
+  gradient.addColorStop(0, 'rgba(255,242,218,0.75)');
+  gradient.addColorStop(0.30, 'rgba(255,233,197,0.30)');
+  gradient.addColorStop(1, 'rgba(255,233,197,0)');
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(c); texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
-
-function makeSpotWashTexture(size = 256) {
-  const c = document.createElement('canvas'); c.width = c.height = size;
-  const x = c.getContext('2d');
-  const g = x.createRadialGradient(size * 0.5, size * 0.22, 0, size * 0.5, size * 0.22, size * 0.56);
-  g.addColorStop(0.00, 'rgba(255,246,223,0.92)');
-  g.addColorStop(0.18, 'rgba(255,238,202,0.58)');
-  g.addColorStop(0.58, 'rgba(255,218,150,0.16)');
-  g.addColorStop(1.00, 'rgba(255,218,150,0)');
-  x.fillStyle = g;
-  x.fillRect(0, 0, size, size);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-function seededRandom(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-function makeStarShape(outer = 1, inner = 0.45) {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + i * Math.PI / 5;
-    const r = i % 2 === 0 ? outer : inner;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    if (i === 0) shape.moveTo(x, y);
-    else shape.lineTo(x, y);
-  }
-  shape.closePath();
-  return shape;
-}
-
-function vaultYAtX(x) {
-  const t = THREE.MathUtils.clamp(x / HALL_HALF_WIDTH, -1, 1);
-  return VAULT_SPRING_Y + VAULT_RISE * (1 - t * t);
-}
-
-function vaultNormalAtX(x, target = new THREE.Vector3()) {
-  const slope = -2 * VAULT_RISE * x / (HALL_HALF_WIDTH * HALL_HALF_WIDTH);
-  return target.set(slope, -1, 0).normalize();
-}
-
-function makeVaultCeilingGeometry(width, length, xSegments = VAULT_SEGMENTS, zSegments = 1) {
-  const half = width / 2;
-  const vertices = [];
-  const uvs = [];
-  const indices = [];
-
-  for (let z = 0; z <= zSegments; z++) {
-    const vz = -(z / zSegments) * length;
-    for (let x = 0; x <= xSegments; x++) {
-      const px = -half + (x / xSegments) * width;
-      vertices.push(px, vaultYAtX(px), vz);
-      uvs.push(x / xSegments, z / zSegments);
-    }
-  }
-
-  for (let z = 0; z < zSegments; z++) {
-    for (let x = 0; x < xSegments; x++) {
-      const a = z * (xSegments + 1) + x;
-      const b = a + 1;
-      const d = (z + 1) * (xSegments + 1) + x;
-      const c = d + 1;
-      indices.push(a, c, b, a, d, c);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-function makeArchedEndWallGeometry(width, xSegments = VAULT_SEGMENTS) {
-  const half = width / 2;
-  const vertices = [];
-  const uvs = [];
-  const indices = [];
-
-  for (let x = 0; x <= xSegments; x++) {
-    const px = -half + (x / xSegments) * width;
-    const topY = vaultYAtX(px);
-    vertices.push(px, 0, 0, px, topY, 0);
-    uvs.push(x / xSegments, 0, x / xSegments, topY / CEIL_Y);
-  }
-
-  for (let x = 0; x < xSegments; x++) {
-    const b0 = x * 2;
-    const t0 = b0 + 1;
-    const b1 = b0 + 2;
-    const t1 = b0 + 3;
-    indices.push(b0, t1, t0, b0, b1, t1);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-const starGeo = new THREE.ShapeGeometry(makeStarShape());
-const wallBump = makeNoiseTexture(256, 30);  wallBump.repeat.set(8, 3);   // plaster grain
-function loadRepeatedTexture(url, repeatX, repeatY, colorSpace = THREE.NoColorSpace) {
-  const tex = new THREE.TextureLoader().load(url);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeatX, repeatY);
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  tex.colorSpace = colorSpace;
-  return tex;
-}
-const wallMap = loadRepeatedTexture('images/textures/gallery-wall-plaster.png', 3.2, 1.15, THREE.SRGBColorSpace);
-const wallDetail = loadRepeatedTexture('images/textures/gallery-wall-plaster.png', 3.2, 1.15);
-const floorMap = loadRepeatedTexture('images/textures/gallery-carpet-celestial.png', 1, 18, THREE.SRGBColorSpace);
-floorMap.wrapS = THREE.ClampToEdgeWrapping;
-const floorDetail = makeNoiseTexture(512, 18);
-floorDetail.wrapS = THREE.ClampToEdgeWrapping;
-floorDetail.wrapT = THREE.RepeatWrapping;
-floorDetail.repeat.set(1, floorMap.repeat.y);
-floorDetail.anisotropy = renderer.capabilities.getMaxAnisotropy();
-const trimMap = loadRepeatedTexture('images/textures/gallery-trim-vault.png', 1.55, 1.55, THREE.SRGBColorSpace);
-const trimDetail = loadRepeatedTexture('images/textures/gallery-trim-vault.png', 1.55, 1.55);
-const frameMap = loadRepeatedTexture('images/textures/gallery-frame-wood.png', 1.1, 1.1, THREE.SRGBColorSpace);
-const frameDetail = loadRepeatedTexture('images/textures/gallery-frame-wood.png', 1.1, 1.1);
-function lockFloorTextureToWorld(worldZ) {
-  const offsetY = -(worldZ / FLOOR_LEN) * floorMap.repeat.y;
-  floorMap.offset.y = offsetY;
-  floorDetail.offset.y = offsetY;
-}
-
-function makeCarpetGeometry(width, length, xSegments = 48, zSegments = 360) {
-  const geo = new THREE.PlaneGeometry(width, length, xSegments, zSegments);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const edge = Math.abs(x) / (width / 2);
-    const pile = 0.0035
-      + Math.sin(x * 9.7 + y * 0.31) * 0.0016
-      + Math.sin(x * 23.3 - y * 0.17) * 0.0011
-      + Math.sin(y * 1.9) * 0.0009;
-    const flattenedEdge = THREE.MathUtils.smoothstep(edge, 0.82, 1.0);
-    pos.setZ(i, pile * (1 - flattenedEdge * 0.45));
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
-
 const mats = {
-  wall: new THREE.MeshStandardMaterial({ color: 0x7f8daa, roughness: 1.0, metalness: 0.0,
-    map: wallMap, bumpMap: wallDetail, bumpScale: 0.012 }),
-  ceiling: new THREE.MeshStandardMaterial({ color: 0x0e1626, roughness: 1.0, metalness: 0.0 }),
-  endWall: new THREE.MeshStandardMaterial({ color: 0x8290ac, roughness: 1.0, metalness: 0.0,
-    map: wallMap, bumpMap: wallDetail, bumpScale: 0.012 }),
-  // gilt bronze fixtures — ties to the amber accent
-  frame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.5, metalness: 0.45 }),
-  pictureFrame: new THREE.MeshStandardMaterial({ color: 0xb98a2a, roughness: 0.52, metalness: 0.05,
-    map: frameMap, bumpMap: frameDetail, bumpScale: 0.025 }),
-  floorTexture: new THREE.MeshStandardMaterial({
-    color: 0xd6d9df, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.0,
-    map: floorMap, bumpMap: floorDetail, bumpScale: 0.024, fog: true,
-  }),
-  // architectural rhythm: pilasters + moldings
-  trim: new THREE.MeshStandardMaterial({ color: 0xe2e8f2, roughness: 0.82, metalness: 0.02,
-    map: trimMap, bumpMap: trimDetail, bumpScale: 0.017 }),
-  molding: new THREE.MeshStandardMaterial({ color: 0xf0f2f4, roughness: 0.78, metalness: 0.025,
-    map: trimMap, bumpMap: trimDetail, bumpScale: 0.015 }),
-  trimShadow: new THREE.MeshStandardMaterial({ color: 0x8f98aa, roughness: 0.9, metalness: 0.012,
-    map: trimMap, bumpMap: trimDetail, bumpScale: 0.012 }),
-  // emissive fixtures: picture lights over each piece + recessed ceiling panels
-  pictureLight: new THREE.MeshStandardMaterial({
-    color: 0xffedcc, emissive: 0xffd28a, emissiveIntensity: 1.35, roughness: 0.35,
-    transparent: true, opacity: 0.86, toneMapped: false,
-  }),
+  frame: architecture.materials.bronze,
+  pictureFrame: architecture.materials.frame,
+  pictureLight: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.5, 2.1, 1.45) }),
   pictureLightWash: new THREE.MeshBasicMaterial({
-    color: 0xffe0a8, map: makeSpotWashTexture(), transparent: true, opacity: 0.42,
+    color: 0xffebcc, map: makeSpotWashTexture(), transparent: true, opacity: 0.22,
     depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   }),
-  ceilPanel: new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xbfd0ff, emissiveIntensity: 0.8 }),
 };
 
 /* ============================================================
    INFINITE HALL — fixed chunk pool, recycled as the player walks.
    Textures stream in batches and are released from GPU memory behind the player.
    ============================================================ */
-const CHUNK_LEN = 14;
+
 const POOL = 20;
 const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const RECYCLE_BACK_BUFFER = 112;
@@ -609,8 +463,8 @@ const LIGHT_WASH_HEIGHT = 1.42;
 const LIGHT_FIXTURES_PER_SLOT = 2;
 const MAX_REAL_SPOT_LIGHTS = THREE.MathUtils.clamp(
   Math.floor(((renderer.capabilities.maxFragmentUniforms || 1024) - 384) / 8),
+  16,
   24,
-  64,
 );
 
 const texLoader = new THREE.TextureLoader();
@@ -626,6 +480,7 @@ const pictureFrameGeometryCache = new Map();
 const rodGeometryCache = new Map();
 const artMeshes = [];         // pickable picture meshes for raycasting
 const pictureLightFixtures = [];
+let fixtureBatch = null;
 const pictureSpotPool = [];
 const chunks = [];
 const chunkRetargetQueue = [];
@@ -886,9 +741,9 @@ function makeTieredFrameGeometry(outerW, outerH, insetOuterW, insetOuterH, openi
 }
 
 function resizePictureFrame(frame, artW, artH, metrics = frameMetricsForScale(0), cacheKey = 'placeholder') {
-  const border = THREE.MathUtils.clamp(artH * 0.11, 0.105, 0.18);
-  const inset = Math.max(border * 0.34, 0.046);
-  const outerBand = Math.max(border - inset, 0.07);
+  const border = THREE.MathUtils.clamp(artH * 0.035, 0.036, 0.062);
+  const inset = Math.max(border * 0.30, 0.012);
+  const outerBand = Math.max(border - inset, 0.023);
   const artOverlap = THREE.MathUtils.clamp(Math.min(artW, artH) * 0.018, 0.01, 0.026);
   const innerOuterW = artW + inset * 2;
   const innerOuterH = artH + inset * 2;
@@ -1331,14 +1186,14 @@ function configurePictureSpot(fixture, count, active) {
     return;
   }
   if (count > 1) {
-    fixture.spotIntensity = 22;
+    fixture.spotIntensity = 17;
     fixture.spotDistance = 8.5;
     fixture.spotAngle = Math.PI / 6.0;
     fixture.spotPenumbra = 0.62;
     fixture.spotDecay = 2;
     return;
   }
-  fixture.spotIntensity = 34;
+  fixture.spotIntensity = 27;
   fixture.spotDistance = 9;
   fixture.spotAngle = Math.PI / 6.5;
   fixture.spotPenumbra = 0.5;
@@ -1401,152 +1256,24 @@ function resizePictureLight(slot, artW, artH) {
   }
 }
 
-function wallMountedX(side, depth, overlap = 0.006) {
-  return side * HALL_HALF_WIDTH + (-side) * (depth / 2 - overlap);
-}
-
-function addTrimBox(parent, side, depth, height, widthZ, y, z, material = mats.trim) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(depth, height, widthZ), material);
-  mesh.position.set(wallMountedX(side, depth), y, z);
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function makePilaster(parent, side, z) {
-  const baseH = 0.18;
-  const capH = 0.18;
-  const shaftBottom = baseH;
-  const shaftTop = WALL_HEIGHT - capH - 0.05;
-  const shaftH = Math.max(0.4, shaftTop - shaftBottom);
-  const shaftY = shaftBottom + shaftH / 2;
-
-  addTrimBox(parent, side, 0.24, baseH, 0.54, baseH / 2, z, mats.molding);
-  addTrimBox(parent, side, 0.255, 0.05, 0.5, baseH + 0.025, z, mats.trimShadow);
-  addTrimBox(parent, side, 0.18, shaftH, 0.36, shaftY, z, mats.trim);
-  addTrimBox(parent, side, 0.24, shaftH - 0.28, 0.18, shaftY, z, mats.molding);
-  addTrimBox(parent, side, 0.21, shaftH, 0.055, shaftY, z - 0.17, mats.trimShadow);
-  addTrimBox(parent, side, 0.21, shaftH, 0.055, shaftY, z + 0.17, mats.trimShadow);
-  addTrimBox(parent, side, 0.26, capH, 0.58, WALL_HEIGHT - capH / 2 - 0.04, z, mats.molding);
-  addTrimBox(parent, side, 0.18, 0.055, 0.46, WALL_HEIGHT - capH - 0.11, z, mats.trimShadow);
-}
-
-function makeCrownBeam(parent, side) {
-  const z = -CHUNK_LEN / 2;
-  const y = VAULT_SPRING_Y - 0.03;
-  addTrimBox(parent, side, 0.18, 0.13, CHUNK_LEN, y, z, mats.molding);
-  addTrimBox(parent, side, 0.13, 0.045, CHUNK_LEN, y + 0.09, z, mats.trim);
-  addTrimBox(parent, side, 0.25, 0.055, CHUNK_LEN, y - 0.095, z, mats.trimShadow);
-  addTrimBox(parent, side, 0.11, 0.035, CHUNK_LEN, y - 0.155, z, mats.molding);
-}
-
-function makeBaseboard(parent, side) {
-  const z = -CHUNK_LEN / 2;
-  addTrimBox(parent, side, 0.12, 0.105, CHUNK_LEN, 0.052, z, mats.trimShadow);
-  addTrimBox(parent, side, 0.095, 0.13, CHUNK_LEN, 0.125, z, mats.trim);
-  addTrimBox(parent, side, 0.14, 0.04, CHUNK_LEN, 0.205, z, mats.molding);
-  addTrimBox(parent, side, 0.08, 0.028, CHUNK_LEN, 0.238, z, mats.trimShadow);
-}
-
-function makeRearBaseboard(parent, width) {
-  const depth = 0.12;
-  const overlap = 0.006;
-  const pieces = [
-    { h: 0.105, y: 0.052, d: 0.12, mat: mats.trimShadow },
-    { h: 0.13, y: 0.125, d: 0.095, mat: mats.trim },
-    { h: 0.04, y: 0.205, d: 0.14, mat: mats.molding },
-    { h: 0.028, y: 0.238, d: 0.08, mat: mats.trimShadow },
-  ];
-  for (const p of pieces) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, p.h, p.d), p.mat);
-    mesh.position.set(0, p.y, -(p.d / 2 - overlap));
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-  }
-}
-
 function makeChunk(z, slotOffset) {
   const group = new THREE.Group();
   group.position.z = z;
   scene.add(group);
-
-  const width = HALL_HALF_WIDTH * 2;
-  const ceil = new THREE.Mesh(makeVaultCeilingGeometry(width, CHUNK_LEN), mats.ceiling);
-  group.add(ceil);
-
-  for (const side of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_LEN, WALL_HEIGHT), mats.wall);
-    wall.position.set(side * HALL_HALF_WIDTH, WALL_HEIGHT / 2, -CHUNK_LEN / 2);
-    wall.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-    group.add(wall);
-
-    makeBaseboard(group, side);
-    makeCrownBeam(group, side);
-
-    for (let k = 1; k < ART_PER_SIDE; k++) {
-      const pz = -(k * ART_SPACING);
-      makePilaster(group, side, pz);
-    }
-  }
-
-  const rand = seededRandom(Math.round((z + 1000) * 97));
-  const starCount = 59;
-  const stars = new THREE.InstancedMesh(starGeo, mats.ceilPanel, starCount);
-  enableBloomLayer(stars);
-  const starXform = new THREE.Object3D();
-  const starNormal = new THREE.Vector3();
-  const starNormalSource = new THREE.Vector3(0, 0, 1);
-  for (let i = 0; i < starCount; i++) {
-    const x = (rand() - 0.5) * (HALL_HALF_WIDTH * 1.85);
-    vaultNormalAtX(x, starNormal);
-    const size = 0.035 + Math.pow(rand(), 1.8) * 0.11;
-    starXform.scale.set(size, size, 1);
-    starXform.quaternion.setFromUnitVectors(starNormalSource, starNormal);
-    starXform.rotateZ(rand() * Math.PI * 2);
-    starXform.position.set(
-      x + starNormal.x * STAR_INSET,
-      vaultYAtX(x) + starNormal.y * STAR_INSET,
-      -0.8 - rand() * (CHUNK_LEN - 1.6)
-    );
-    starXform.updateMatrix();
-    stars.setMatrixAt(i, starXform.matrix);
-  }
-  stars.instanceMatrix.needsUpdate = true;
-  group.add(stars);
-
+  architecture.attachChunk(group);
   const slots = [];
   for (let k = 0; k < ART_PER_SIDE; k++) {
     const localZ = -((k + 0.5) * ART_SPACING);
     slots.push(makeArtwork(group, -1, localZ, slotOffset + slots.length));
-    slots.push(makeArtwork(group,  1, localZ, slotOffset + slots.length));
+    slots.push(makeArtwork(group, 1, localZ, slotOffset + slots.length));
   }
   return { group, slots };
 }
-
 function buildMovingFloor() {
-  const group = new THREE.Group();
-  const width = HALL_HALF_WIDTH * 2;
-  const fgeo = makeCarpetGeometry(width, FLOOR_LEN);
-  const textureLayer = new THREE.Mesh(fgeo, mats.floorTexture);
-  textureLayer.renderOrder = 10;
-  textureLayer.rotation.x = -Math.PI / 2;
-  textureLayer.position.set(0, 0, 0);
-  textureLayer.receiveShadow = true;
-  group.add(textureLayer);
-  scene.add(group);
-  floorRig = group;
+  floorRig = architecture.makeFloor(FLOOR_LEN);
 }
-
 function buildRearWall() {
-  const group = new THREE.Group();
-  const width = HALL_HALF_WIDTH * 2;
-  const wall = new THREE.Mesh(makeArchedEndWallGeometry(width), mats.endWall);
-  wall.rotation.y = Math.PI;
-  group.add(wall);
-  makeRearBaseboard(group, width);
-
-  scene.add(group);
-  rearWall = group;
+  rearWall = architecture.makeRearWall();
 }
 
 function positionRearWall() {
@@ -1624,7 +1351,6 @@ function recycleChunks() {
   const playerZ = camera.position.z;
   if (floorRig) {
     floorRig.position.z = playerZ;
-    lockFloorTextureToWorld(playerZ);
   }
 
   let leadingZ = Math.min(...chunks.map(chunk => chunk.group.position.z));
@@ -2099,6 +1825,8 @@ async function boot() {
   prewarmMuseumTrack();
   enterProg.textContent = T('优化场景中', 'Optimizing scene', '장면 최적화 중');
   buildHall();
+  fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
+  bloomOcclusion = createMuseumBloomOcclusion(scene);
   try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
   await prewarmScene();
   startLoop();        // render the hall behind the translucent start overlay
@@ -2107,7 +1835,7 @@ async function boot() {
   if (PERF_AUTOWALK) {
     entered = true;
     enterEl.hidden = true;
-    clock.getDelta();
+    clock.update();
   }
 }
 boot();
