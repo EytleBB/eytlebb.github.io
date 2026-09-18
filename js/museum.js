@@ -34,11 +34,11 @@ const exitBtn = document.getElementById('exit-btn');
 const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
 document.title = `${exhibitionName} · This is Eytle`;
 exhibitionTitle.textContent = exhibitionName;
-enterSub.textContent = T('灯光下的私人展览', 'A private exhibition under focused light', '조명 아래의 개인 전시');
+enterSub.textContent = T('WASD 移动，鼠标调整视角。', 'Use WASD to move and the mouse to look around.', 'WASD로 이동하고 마우스로 시점을 조절하세요.');
 function controlGuideMarkup() {
   const movement = T('移动', 'Move', '이동');
-  const inspect = T('端详', 'Inspect', '감상');
-  const zoom = T('变焦', 'Zoom', '확대');
+  const inspect = T('查看', 'View', '보기');
+  const zoom = T('缩放', 'Zoom', '확대');
   const run = T('快走', 'Run', '달리기');
   const pause = T('暂停', 'Pause', '일시정지');
   return `
@@ -69,9 +69,9 @@ function controlGuideMarkup() {
 }
 const controlGuide = controlGuideMarkup();
 enterKeys.innerHTML = controlGuide;
-enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左键端详，鼠标右键变焦，Shift 快走，Esc 暂停',
-  'Controls: WASD move, left click inspect, right click zoom, Shift run, Esc pause',
-  '조작 안내: WASD 이동, 왼쪽 클릭 감상, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
+enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左键查看，鼠标右键缩放，Shift 快走，Esc 暂停',
+  'Controls: WASD move, left click view, right click zoom, Shift run, Esc pause',
+  '조작 안내: WASD 이동, 왼쪽 클릭 보기, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
 enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
 exitBtn.title = T('退出', 'Exit', '나가기');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
@@ -256,7 +256,7 @@ canvas.addEventListener('webglcontextlost', (e) => {
   audioListener.setMasterVolume(0);
   if (document.pointerLockElement === canvas) document.exitPointerLock();
   document.body.classList.remove('locked', 'focused');
-  fail('渲染上下文丢失，请刷新页面。', 'Rendering context lost — please reload.', '렌더링 컨텍스트가 손실되었습니다. 새로고침하세요.');
+  fail('展馆显示异常，请刷新页面。', 'The exhibition could not be displayed. Please reload.', '전시를 표시하지 못했습니다. 새로고침하세요.');
 }, false);
 
 const scene = new THREE.Scene();
@@ -1823,7 +1823,7 @@ async function boot() {
   let done = 0;
   await preloadInitialTextures(() => setProgress(++done, textureCount));
   prewarmMuseumTrack();
-  enterProg.textContent = T('优化场景中', 'Optimizing scene', '장면 최적화 중');
+  enterProg.textContent = T('正在准备展馆…', 'Preparing exhibition…', '전시 준비 중…');
   buildHall();
   fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
   bloomOcclusion = createMuseumBloomOcclusion(scene);

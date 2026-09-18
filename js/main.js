@@ -121,6 +121,9 @@ if (!['night', 'day'].includes(theme)) theme = 'night';   // migrate old dark/li
 let activeSection = 'about';
 let galleryLoaded = false;
 let patchlogSelection = { year: null, month: null };
+let patchlogLoadError = false;
+let logLoadRequest = 0;
+let lastReadLog = null;
 const GALLERY_BATCH_SIZE = 18;
 const GALLERY_HOME_COUNT = 24;
 const GALLERY_CACHE = 'eytle-gallery-v1';
@@ -241,10 +244,20 @@ function wireGalleryImages(root) {
     item.addEventListener('click', () => openLightbox(Number(item.dataset.idx))));
 }
 async function loadLogs() {
+  const request = ++logLoadRequest;
   try {
     const res = await fetch('./logs/index.json', { cache: 'no-store' });
-    if (res.ok) DATA.patchlog = await res.json();
-  } catch {}
+    if (!res.ok) throw new Error(`log index ${res.status}`);
+    const dates = await res.json();
+    if (!Array.isArray(dates)) throw new Error('Invalid log index');
+    if (request !== logLoadRequest) return false;
+    DATA.patchlog = getLogDates(dates);
+    patchlogLoadError = false;
+    return true;
+  } catch {
+    if (request === logLoadRequest) patchlogLoadError = true;
+    return false;
+  }
 }
 
 /* ============================================================
@@ -254,27 +267,27 @@ async function renderAbout() {
   const epoch = stageRenderEpoch;
   stage.innerHTML = `
     <header class="hero">
-      <div class="hero-topline"><span class="hero-status"><i></i>${t('一个人的世界','A personal world','나만의 세계')}</span><span class="hero-edition">THE BIRCH FOREST</span></div>
+      <div class="hero-topline"><span class="hero-status"><i></i>${t('Eytle 的个人网站','Eytle’s personal website','Eytle의 개인 웹사이트')}</span></div>
       <div class="hero-copy">
         <h1><span>This is</span><em>Eytle<span class="hero-period">.</span></em></h1>
-        <p class="hero-description">${t('在代码、图像与日常之间，','Between code, images and everyday life,','코드와 이미지, 일상 사이에,')}<br>${t('留一片自己的森林。','a little forest of my own.','나만의 작은 숲을 남깁니다.')}</p>
-        <button class="hero-link" id="home-explore"><span>${t('随处看看','Wander a little','천천히 둘러보기')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></button>
+        <p class="hero-description">${t('这里放我的项目、工具、日志和图片。','My projects, tools, logs and pictures.','제 프로젝트, 도구, 일지와 이미지를 모아 둔 곳입니다.')}</p>
+        <button class="hero-link" id="home-explore"><span>${t('查看内容','View content','내용 보기')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></button>
       </div>
-      <div class="hero-art-note" aria-hidden="true"><span class="art-rule"></span><span class="night-copy">01 — NOCTURNE</span><span class="day-copy">02 — FIRST LIGHT</span><small>Betula · ${t('白桦','Silver birch','자작나무')}</small></div>
-      <div class="hero-bottom"><span>${t('写一些代码，收集一些光。','A little code. A little collected light.','코드를 쓰고, 빛을 모읍니다.')}</span><span class="hero-scroll">SCROLL TO DISCOVER <i>↓</i></span></div>
+      <div class="hero-bottom"><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
     </header>
     <div class="home-body" id="home-content">
-    <div class="home-section-heading"><div><span class="section-index">01 / FIELD NOTES</span><h2>${t('林间拾遗','Collected along the way','숲에서 모은 조각들')}</h2></div><p>${t('近来的文字、看见的风景，和想说的话。','Recent words, passing views, and a place to say hello.','최근의 글, 스쳐 간 풍경, 그리고 안부.')}</p></div>
+    <div class="home-section-heading"><div><span class="section-index">01 / HOME</span><h2>${t('日志与图片','Logs and pictures','일지와 이미지')}</h2></div></div>
     <section class="grid2">
       <div class="col-left">
         <div class="panel plog-card" id="home-plog">
-          <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
+          <div class="eyebrow">${t('最新日志', 'Latest entry', '최신 일지')}</div>
           <div class="r-loading placeholder-text">${t('加载中…','Loading…','로딩 중…')}</div>
         </div>
         <div class="panel message-card">
-          <div class="message-heading"><div><div class="eyebrow">A SMALL HELLO</div><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Leave a little note', 'Eytle에게 메시지')}</label></div><span class="postmark" aria-hidden="true">E<span>↗</span></span></div>
+          <div class="message-heading"><div><div class="eyebrow">MESSAGE</div><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Message Eytle', 'Eytle에게 메시지')}</label></div><span class="postmark" aria-hidden="true">E<span>↗</span></span></div>
           <textarea id="msg-text" class="msg-text" maxlength="140"
-            placeholder="${t('写点什么…','Write something…','내용을 입력하세요…')}"></textarea>
+            aria-describedby="msg-count msg-hint"
+            placeholder="${t('输入留言…','Enter your message…','메시지를 입력하세요…')}"></textarea>
           <input type="text" id="msg-hp" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
           <div class="msg-row">
             <span class="msg-count" id="msg-count">0 / 140</span>
@@ -290,12 +303,11 @@ async function renderAbout() {
         </div>
       </div>
       <div class="col-right">
-        <div class="gallery-heading"><div><div class="eyebrow">A WAY OF SEEING</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
+        <div class="gallery-heading"><div><div class="eyebrow">GALLERY</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
         <div class="gal" id="home-gal"></div>
-        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('走进展览','Enter the exhibition','전시 둘러보기')} <span aria-hidden="true">↗</span></button></div>
+        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} <span aria-hidden="true">↗</span></button></div>
       </div>
     </section>
-    <div class="home-endnote"><span>CODE / IMAGES / LIFE</span><span>${t('未完，待续。','Always a work in progress.','계속 자라는 이야기.')}</span></div>
     </div>
   `;
 
@@ -322,21 +334,21 @@ async function renderAbout() {
     } catch {}
     if (epoch !== stageRenderEpoch) return;
     card.innerHTML = `
-      <div class="eyebrow">${t('最新 · Patch Log', 'Latest · Patch Log', '최신 · Patch Log')}</div>
+      <div class="eyebrow">${t('最新日志', 'Latest entry', '최신 일지')}</div>
       <div class="date">${fmtDot(latest)}</div>
       <p class="txt">${escapeHtml(body)}</p>
       <button class="more" id="home-plog-more">${t('读全文 →','Read more →','전문 읽기 →')}</button>
     `;
     document.getElementById('home-plog-more').addEventListener('click', () => openReader(latest));
   } else {
-    card.querySelector('.r-loading').textContent = t('暂无随笔','Nothing yet','아직 없음');
+    card.querySelector('.r-loading').textContent = t('暂无日志','No entries yet','아직 일지가 없습니다');
   }
 
   // Gallery preview — a seamless vertical loop that pauses for interaction.
   await loadGallery();
   if (epoch !== stageRenderEpoch) return;
   const gal = document.getElementById('home-gal');
-  document.getElementById('home-gallery-count').textContent = t(`${DATA.gallery.length} 帧风景，持续收集中`, `${DATA.gallery.length} pictures & counting`, `${DATA.gallery.length}장의 풍경, 계속 수집 중`);
+  document.getElementById('home-gallery-count').textContent = t(`共 ${DATA.gallery.length} 张图片`, `${DATA.gallery.length} pictures`, `이미지 ${DATA.gallery.length}장`);
   if (DATA.gallery.length) {
     const idx = randomGalleryPreview();
     const label = t('查看展览图片','View exhibition picture','전시 이미지 보기');
@@ -381,7 +393,7 @@ function renderProjects() {
   }).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('02', 'SELECTED WORK', t('项目','Projects','프로젝트'), t('把好奇心，变成可以运行的东西。','Curiosity, made into things that work.','호기심을 작동하는 무언가로.'))}
+    <div class="collection-page">${sectionHeading('02', 'PROJECTS', t('项目','Projects','프로젝트'), t('我的项目和源码链接。','My projects and source code.','제 프로젝트와 소스 코드 링크입니다.'))}
     <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div></div>`;
 
   stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
@@ -436,7 +448,7 @@ function renderTools() {
     </a>`).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('03', 'THE WORKBENCH', t('工具','Tools','도구'), t('一些顺手的小工具。','A few useful things, within reach.','가까이 두고 쓰는 작은 도구들.'))}
+    <div class="collection-page">${sectionHeading('03', 'TOOLS', t('工具','Tools','도구'), t('在线工具，点击即可使用。','Click a tool to open it.','도구를 클릭하면 사용할 수 있습니다.'))}
     <div class="list">${items || placeholder(t('暂无工具','No tools yet','도구 없음'))}</div></div>`;
 }
 
@@ -457,7 +469,7 @@ function renderDownloads() {
       </svg>
     </a>`).join('');
 
-  stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'TAKE SOMETHING WITH YOU', t('下载','Downloads','다운로드'), t('带走一点这里的东西。','A little something to take with you.','이곳의 작은 무언가를 가져가세요.'))}${items}</div>`;
+  stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'DOWNLOADS', t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
 }
 
 /* ============================================================
@@ -472,6 +484,7 @@ const DAY_KO = ['월','화','수','목','금','토','일'];
 
 async function renderPatchlog() {
   const epoch = stageRenderEpoch;
+  renderPatchlogLevel({ loading: true });
   await loadLogs();
   if (epoch !== stageRenderEpoch) return;
   renderPatchlogLevel();
@@ -481,9 +494,17 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function getLogDates(dates = DATA.patchlog) {
+  return [...new Set(dates.filter(date => {
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+    const parsed = new Date(`${date}T12:00:00`);
+    return !Number.isNaN(parsed.getTime()) && fmtDate(parsed) === date;
+  }))].sort().reverse();
+}
+
 function buildPatchlogIndex() {
   const years = new Map();
-  DATA.patchlog.forEach(date => {
+  getLogDates().forEach(date => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
     if (!match) return;
     const year = Number(match[1]);
@@ -536,20 +557,29 @@ function patchlogBreadcrumb() {
   return `<nav class="patch-breadcrumb" aria-label="${t('日志层级','Log hierarchy','로그 계층')}">${html}</nav>`;
 }
 
-function renderPatchlogLevel() {
+function renderPatchlogLevel({ loading = false, focusSelector = null } = {}) {
   const index = buildPatchlogIndex();
   const selectedYear = index.find(item => item.year === patchlogSelection.year);
   if (patchlogSelection.year !== null && !selectedYear) {
     patchlogSelection = { year: null, month: null };
-  } else if (patchlogSelection.month !== null
+  } else if (selectedYear && patchlogSelection.month !== null
       && !selectedYear.months.some(item => item.month === patchlogSelection.month)) {
     patchlogSelection.month = null;
   }
 
   const totalCount = index.reduce((total, item) => total + item.count, 0);
+  const latest = getLogDates()[0];
+  const months = index.flatMap(item => item.months.map(month => ({ year: item.year, month: month.month })));
   let title = '';
   let content = '';
-  if (!index.length) {
+  if (loading) {
+    content = `<p class="patch-status" role="status">${t('加载中…','Loading…','로딩 중…')}</p>`;
+  } else if (!index.length && patchlogLoadError) {
+    content = `<div class="patch-status" role="status">
+      <p>${t('日志列表加载失败','Could not load the log list','로그 목록을 불러오지 못했습니다')}</p>
+      <button class="patch-action" data-log-retry>${t('重试','Retry','다시 시도')}</button>
+    </div>`;
+  } else if (!index.length) {
     content = placeholder(t('暂无日志','No entries yet','아직 로그가 없습니다'));
   } else if (patchlogSelection.year === null) {
     content = `
@@ -582,12 +612,21 @@ function renderPatchlogLevel() {
         </button>`).join('')}</div>`;
   } else {
     const selectedMonth = selectedYear.months.find(item => item.month === patchlogSelection.month);
+    const monthIndex = months.findIndex(item => item.year === selectedYear.year && item.month === selectedMonth.month);
+    const monthButton = (offset, symbol) => {
+      const target = months[monthIndex + offset];
+      const label = target
+        ? t(`查看 ${patchlogMonthLabel(target.year, target.month, true)}`, `View ${patchlogMonthLabel(target.year, target.month, true)}`, `${patchlogMonthLabel(target.year, target.month, true)} 보기`)
+        : offset > 0 ? t('没有更早的月份','No earlier month','이전 달 없음') : t('没有更新的月份','No later month','다음 달 없음');
+      return `<button class="patch-month-step" data-log-step="${offset}" ${target ? '' : 'disabled'} aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><span aria-hidden="true">${symbol}</span></button>`;
+    };
     title = patchlogMonthLabel(selectedYear.year, selectedMonth.month, true);
     content = `
       <section class="patch-calendar-card" aria-label="${t('月历','Monthly calendar','월간 달력')}">
         <div class="patch-calendar-bar">
-          <span>${t('月历','Calendar','달력')}</span>
-          <span class="patch-calendar-legend"><i aria-hidden="true"></i>${t('有日志','Entry','기록 있음')}</span>
+          ${monthButton(1, '←')}
+          <span class="patch-calendar-legend"><i aria-hidden="true"></i>${patchlogCount(selectedMonth.dates.length)}</span>
+          ${monthButton(-1, '→')}
         </div>
         <div class="cal-wrap">${buildMonth(
           selectedYear.year,
@@ -601,37 +640,63 @@ function renderPatchlogLevel() {
   stage.innerHTML = `
     <div class="patchlog-shell">
       <header class="patchlog-header">
-        <div class="section-index">04 / DAYS & FRAGMENTS</div>
-        <h1 class="patchlog-title">${title || t('斑驳日志','Patch Log','패치 로그')}</h1>
-        <p class="section-description">${t('日子经过，留下一点斑驳。','The days pass. A few traces remain.','지나간 날들이 남긴 작은 흔적들.')}</p>
+        <div class="section-index">04 / PATCH LOG</div>
+        <h1 class="patchlog-title" tabindex="-1">${title || t('斑驳日志','Patch Log','패치 로그')}</h1>
+        <p class="section-description">${t('按年份、月份和日期查看日志。','Browse logs by year, month and date.','연도, 월, 날짜별로 일지를 볼 수 있습니다.')}</p>
       </header>
       <div class="patchlog-surface${patchlogSelection.month !== null ? ' patchlog-surface-calendar' : ''}">
-        ${patchlogBreadcrumb()}
+        <div class="patch-toolbar">
+          ${patchlogBreadcrumb()}
+          ${latest && !loading ? `<button class="patch-latest" data-log-latest>${t('最新日志','Latest entry','최신 로그')} <time datetime="${latest}">${fmtDot(latest)}</time><span aria-hidden="true">↗</span></button>` : ''}
+        </div>
+        ${patchlogLoadError && index.length && !loading ? `<div class="patch-load-warning" role="status">${t('更新失败，当前显示上次加载的列表。','Refresh failed. Showing the last loaded list.','새로고침에 실패하여 이전 목록을 표시합니다.')} <button class="patch-action" data-log-retry>${t('重试','Retry','다시 시도')}</button></div>` : ''}
         <div class="patch-level">${content}</div>
       </div>
     </div>`;
 
   stage.querySelector('[data-log-years]')?.addEventListener('click', () => {
+    const year = patchlogSelection.year;
     patchlogSelection = { year: null, month: null };
-    renderPatchlogLevel();
+    renderPatchlogLevel({ focusSelector: `[data-log-year="${year}"]` });
   });
   stage.querySelector('[data-log-year-crumb]')?.addEventListener('click', () => {
+    const month = patchlogSelection.month;
     patchlogSelection.month = null;
-    renderPatchlogLevel();
+    renderPatchlogLevel({ focusSelector: `[data-log-month="${month}"]` });
   });
   stage.querySelectorAll('[data-log-year]').forEach(button =>
     button.addEventListener('click', () => {
       patchlogSelection = { year: Number(button.dataset.logYear), month: null };
-      renderPatchlogLevel();
+      renderPatchlogLevel({ focusSelector: '.patchlog-title' });
     }));
   stage.querySelectorAll('[data-log-month]').forEach(button =>
     button.addEventListener('click', () => {
       patchlogSelection.month = Number(button.dataset.logMonth);
-      renderPatchlogLevel();
+      renderPatchlogLevel({ focusSelector: '.patchlog-title' });
     }));
+  stage.querySelectorAll('[data-log-step]').forEach(button =>
+    button.addEventListener('click', () => {
+      const current = months.findIndex(item => item.year === patchlogSelection.year && item.month === patchlogSelection.month);
+      const target = months[current + Number(button.dataset.logStep)];
+      if (!target) return;
+      patchlogSelection = { ...target };
+      renderPatchlogLevel({ focusSelector: `[data-log-step="${button.dataset.logStep}"]:not(:disabled)` });
+    }));
+  stage.querySelector('[data-log-latest]')?.addEventListener('click', () => openReader(latest));
+  stage.querySelector('[data-log-retry]')?.addEventListener('click', async () => {
+    const epoch = stageRenderEpoch;
+    await renderPatchlog();
+    if (epoch === stageRenderEpoch) stage.querySelector('[data-log-retry], .patchlog-title')?.focus({ preventScroll: true });
+  });
   stage.querySelectorAll('.cal-day-entry').forEach(button =>
     button.addEventListener('click', () => openReader(button.dataset.date)));
   enhanceMotion(stage);
+  if (focusSelector) {
+    const target = stage.querySelector(focusSelector) || stage.querySelector('.patchlog-title');
+    target?.focus({ preventScroll: true });
+    if (target?.matches('.patchlog-title')) window.scrollTo({ top: 0, behavior: 'instant' });
+    else target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }
 }
 
 function buildMonth(year, month, todayStr, logDates) {
@@ -651,10 +716,11 @@ function buildMonth(year, month, todayStr, logDates) {
     const future = new Date(year, month, d) > nowTime;
     let cls = 'cal-day';
     if (hasLog) cls += ' cal-day-entry';
+    if (ds === lastReadLog) cls += ' cal-day-active';
     if (isToday) cls += ' cal-day-today';
     if (future) cls += ' cal-day-future';
     cells += hasLog
-      ? `<button class="${cls}" data-date="${ds}" aria-label="${ds}">${d}</button>`
+      ? `<button class="${cls}" data-date="${ds}" aria-label="${ds}"${isToday ? ' aria-current="date"' : ''}>${d}</button>`
       : `<div class="${cls}">${d}</div>`;
   }
   return `<div class="cal-month"><div class="cal-grid">${heads}${cells}</div></div>`;
@@ -667,7 +733,7 @@ async function renderGallery() {
   const epoch = stageRenderEpoch;
   await loadGallery();
   if (epoch !== stageRenderEpoch) return;
-  const heading = sectionHeading('05', 'A WAY OF SEEING', t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('目光停留过的地方。','Places where the gaze has lingered.','시선이 머물렀던 곳.'));
+  const heading = sectionHeading('05', 'GALLERY', t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
   if (!DATA.gallery.length) {
     stage.innerHTML = `<div>${heading}
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
@@ -685,9 +751,17 @@ async function renderGallery() {
     const batch = DATA.gallery.slice(shown, shown + GALLERY_BATCH_SIZE);
     if (!batch.length) { observer?.disconnect(); sentinel.remove(); return; }
     grid.insertAdjacentHTML('beforeend', batch.map((img, offset) =>
-      `<img src="${img.preview || img.src}" alt="" loading="lazy" data-idx="${shown + offset}" />`).join(''));
+      `<img src="${img.preview || img.src}" alt="" loading="lazy" data-idx="${shown + offset}"
+        role="button" tabindex="0" aria-label="${t('查看展览图片','View exhibition picture','전시 이미지 보기')} ${shown + offset + 1}" />`).join(''));
     const newImages = [...grid.querySelectorAll('img[data-idx]')].slice(-batch.length);
-    newImages.forEach(im => im.addEventListener('click', () => openLightbox(Number(im.dataset.idx))));
+    newImages.forEach(im => {
+      im.addEventListener('click', () => openLightbox(Number(im.dataset.idx)));
+      im.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        im.click();
+      });
+    });
     cacheGalleryImages(batch);
     shown += batch.length;
     enhanceMotion(grid);
@@ -702,43 +776,168 @@ async function renderGallery() {
 /* ============================================================
    OVERLAYS — patch reader + gallery lightbox
    ============================================================ */
-function mountOverlay(inner, extraClass, onClose) {
+let closeActiveOverlay = null;
+function mountOverlay(inner, extraClass, onClose, label) {
+  closeActiveOverlay?.();
+  const opener = document.activeElement;
+  const app = document.querySelector('.app');
+  const wasInert = app.inert;
+  const previousOverflow = document.documentElement.style.overflow;
   overlayRoot.innerHTML = `
-    <div class="overlay ${extraClass || ''}" id="ov">
-      <button class="ov-close" id="ov-close">✕ ${t('关闭','Close','닫기')}</button>
+    <div class="overlay ${extraClass || ''}" id="ov" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}">
+      <button class="ov-close" id="ov-close" type="button">✕ ${t('关闭','Close','닫기')}</button>
       ${inner}
     </div>`;
   const ov = document.getElementById('ov');
+  const closeButton = document.getElementById('ov-close');
+  app.inert = true;
+  document.documentElement.style.overflow = 'hidden';
   let closed = false;
-  const close = () => {
+  const close = (restoreFocus = true) => {
     if (closed) return;
     closed = true;
-    if (onClose) onClose();
+    const returnTarget = onClose?.(restoreFocus);
     overlayRoot.innerHTML = '';
-    document.removeEventListener('keydown', onEsc);
+    document.removeEventListener('keydown', onKeyDown);
+    app.inert = wasInert;
+    document.documentElement.style.overflow = previousOverflow;
+    closeActiveOverlay = null;
+    const focusTarget = returnTarget || opener;
+    if (restoreFocus && focusTarget?.isConnected) {
+      focusTarget.focus({ preventScroll: true });
+      if (returnTarget) focusTarget.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }
   };
-  function onEsc(e) { if (e.key === 'Escape') close(); }
-  document.getElementById('ov-close').addEventListener('click', close);
+  function onKeyDown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...ov.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter(element => !element.disabled && element.getClientRects().length);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!ov.contains(document.activeElement)
+        || (event.shiftKey && document.activeElement === first)
+        || (!event.shiftKey && document.activeElement === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first)?.focus({ preventScroll: true });
+    }
+  }
+  closeActiveOverlay = close;
+  closeButton.addEventListener('click', () => close());
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
-  document.addEventListener('keydown', onEsc);
+  document.addEventListener('keydown', onKeyDown);
   enhanceMotion(overlayRoot);
+  closeButton.focus({ preventScroll: true });
   return close;
 }
 
 async function openReader(dateStr) {
+  const dates = getLogDates();
+  if (!dates.includes(dateStr)) return;
+  let controller;
+  let requestId = 0;
+  let closed = false;
+  let readDate = null;
+  const opener = document.activeElement;
   mountOverlay(`
-    <div class="reader" role="dialog" aria-modal="true">
-      <div class="r-date">${fmtDot(dateStr)}</div>
-      <div class="r-body" id="r-body">${t('加载中…','Loading…','로딩 중…')}</div>
-    </div>`, 'reader-ov');
-  const body = document.getElementById('r-body');
-  try {
-    const r = await fetch(`./logs/${dateStr}.txt`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(r.status);
-    body.textContent = normalizeLogBody(await r.text());
-  } catch {
-    body.textContent = t('日志加载失败','Failed to load log','로그 로드 실패');
+    <div class="reader">
+      <header class="r-header">
+        <time class="r-date" id="r-date" datetime="${dateStr}" aria-live="polite">${fmtDot(dateStr)}</time>
+        <span class="r-position" id="r-position" aria-label="${t('篇数位置','Entry position','글 순서')}"></span>
+      </header>
+      <div class="r-scroll" tabindex="0" role="region" aria-label="${t('日志正文','Log content','로그 본문')}">
+        <div class="r-status" id="r-status" role="status"></div>
+        <div class="r-body" id="r-body"></div>
+        <button class="patch-action r-retry" id="r-retry" hidden>${t('重新加载','Reload','다시 불러오기')}</button>
+      </div>
+      <nav class="r-nav" aria-label="${t('切换日志','Browse entries','로그 탐색')}">
+        <button class="r-step" id="r-older"><span>← ${t('较早一篇','Older entry','이전 글')}</span><time></time></button>
+        <button class="r-step" id="r-newer"><span>${t('较新一篇','Newer entry','다음 글')} →</span><time></time></button>
+      </nav>
+    </div>`, 'reader-ov', restoreFocus => {
+      closed = true;
+      controller?.abort();
+      // The calendar stays in place while reading; returning restores the last entry.
+      if (restoreFocus && activeSection === 'patchlog' && readDate && stage.querySelector('.patch-calendar-card')) {
+        const [year, month] = readDate.split('-').map(Number);
+        patchlogSelection = { year, month: month - 1 };
+        renderPatchlogLevel();
+        return opener?.matches('.cal-day-entry')
+          ? stage.querySelector(`[data-date="${readDate}"]`)
+          : stage.querySelector('[data-log-latest]');
+      }
+    }, `${t('日志','Patch Log','패치 로그')} · ${fmtDot(dateStr)}`);
+  const overlay = document.getElementById('ov');
+  let body = document.getElementById('r-body');
+  let scroll = overlay.querySelector('.r-scroll');
+  const date = document.getElementById('r-date');
+  let status = document.getElementById('r-status');
+  let retry = document.getElementById('r-retry');
+  const older = document.getElementById('r-older');
+  const newer = document.getElementById('r-newer');
+
+  async function loadEntry(dateStr) {
+    if (closed || !dates.includes(dateStr)) return;
+    controller?.abort();
+    controller = new AbortController();
+    const currentRequest = ++requestId;
+    // Each entry gets its own scroll container, stopping any keyboard/touch momentum
+    // from the previous entry while keeping the header and navigation in place.
+    const contentHadFocus = scroll.contains(document.activeElement);
+    const nextScroll = scroll.cloneNode(true);
+    scroll.replaceWith(nextScroll);
+    scroll = nextScroll;
+    body = scroll.querySelector('#r-body');
+    status = scroll.querySelector('#r-status');
+    retry = scroll.querySelector('#r-retry');
+    retry.addEventListener('click', () => loadEntry(dateStr));
+    const index = dates.indexOf(dateStr);
+    date.textContent = fmtDot(dateStr);
+    date.setAttribute('datetime', dateStr);
+    document.getElementById('r-position').textContent = `${dates.length - index} / ${dates.length}`;
+    overlay.setAttribute('aria-label', `${t('日志','Patch Log','패치 로그')} · ${fmtDot(dateStr)}`);
+    [[older, dates[index + 1]], [newer, dates[index - 1]]].forEach(([button, target]) => {
+      button.disabled = !target;
+      button.dataset.date = target || '';
+      const time = button.querySelector('time');
+      time.textContent = target ? fmtDot(target) : t('没有了','No more entries','더 없음');
+      if (target) time.setAttribute('datetime', target);
+      else time.removeAttribute('datetime');
+    });
+    // A boundary button becoming disabled must not leave keyboard focus behind.
+    if (document.activeElement?.disabled || contentHadFocus) scroll.focus({ preventScroll: true });
+    retry.hidden = true;
+    body.textContent = '';
+    body.setAttribute('aria-busy', 'true');
+    status.textContent = t('加载中…','Loading…','로딩 중…');
+    scroll.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      const r = await fetch(`./logs/${dateStr}.txt`, { cache: 'no-store', signal: controller.signal });
+      if (!r.ok) throw new Error(r.status);
+      const text = normalizeLogBody(await r.text());
+      if (closed || currentRequest !== requestId) return;
+      body.textContent = text;
+      status.textContent = text ? '' : t('这篇日志没有正文','This entry is empty','본문이 없습니다');
+      lastReadLog = dateStr;
+      readDate = dateStr;
+    } catch {
+      if (closed || currentRequest !== requestId) return;
+      status.textContent = t('日志加载失败，请重试。','Could not load this entry. Please try again.','로그를 불러오지 못했습니다. 다시 시도해 주세요.');
+      retry.hidden = false;
+    } finally {
+      if (!closed && currentRequest === requestId) {
+        scroll.scrollTo({ top: 0, behavior: 'instant' });
+        body.setAttribute('aria-busy', 'false');
+      }
+    }
   }
+  older.addEventListener('click', () => loadEntry(older.dataset.date));
+  newer.addEventListener('click', () => loadEntry(newer.dataset.date));
+  await loadEntry(dateStr);
 }
 
 async function developLightboxImage(img, loading) {
@@ -823,7 +1022,7 @@ async function developLightboxImage(img, loading) {
     await finished;
     if (!lightbox.isConnected || loading.controller.signal.aborted) return;
     lightbox.classList.add('is-developed');
-    statusText.textContent = t('显影完成', 'Developed', '현상 완료');
+    statusText.textContent = t('加载完成', 'Loaded', '로딩 완료');
     window.setTimeout(() => {
       if (lightbox.isConnected) lightbox.classList.add('is-settled');
     }, 900);
@@ -850,8 +1049,7 @@ function openLightbox(idx) {
   const height = Math.max(1, Number(img.height) || 1);
   const loading = { controller: new AbortController(), objectUrl: '' };
   mountOverlay(`
-    <div class="lightbox lightbox-developing" role="dialog" aria-modal="true"
-      aria-label="${t('查看展览图片','View exhibition image','전시 이미지 보기')}">
+    <div class="lightbox lightbox-developing">
       <div class="lightbox-photo" style="--photo-ratio:${width / height}">
         <div class="lightbox-unexposed" aria-hidden="true"></div>
         <img class="lightbox-preview" src="${img.preview || img.src}" alt="" />
@@ -859,13 +1057,13 @@ function openLightbox(idx) {
         <div class="lightbox-developer-line" aria-hidden="true"></div>
       </div>
       <div class="lightbox-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <span class="lightbox-status-text">${t('显影中','Developing','현상 중')}</span>
+        <span class="lightbox-status-text">${t('加载原图','Loading original','원본 로딩 중')}</span>
         <span class="lightbox-progress">0%</span>
       </div>
     </div>`, 'lightbox-ov', () => {
       loading.controller.abort();
       if (loading.objectUrl) URL.revokeObjectURL(loading.objectUrl);
-    });
+    }, t('查看展览图片','View exhibition image','전시 이미지 보기'));
   developLightboxImage(img, loading);
 }
 
@@ -881,7 +1079,14 @@ function wireMessageForm() {
   if (!box) return;
 
   const upd = () => { cnt.textContent = `${box.value.length} / 140`; };
-  box.addEventListener('input', upd); upd();
+  box.addEventListener('input', () => {
+    upd();
+    if (box.getAttribute('aria-invalid') === 'true') {
+      box.removeAttribute('aria-invalid');
+      hint.textContent = '';
+    }
+  });
+  upd();
 
   const launchPlane = () => {
     btn.classList.remove('is-launching');
@@ -891,8 +1096,9 @@ function wireMessageForm() {
   };
 
   btn.addEventListener('click', async () => {
-    const text = box.value.trim();
-    if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.focus(); return; }
+    const submittedValue = box.value;
+    const text = submittedValue.trim();
+    if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
     if (hp.value) return;   // honeypot tripped → silently drop
     launchPlane();
 
@@ -902,6 +1108,7 @@ function wireMessageForm() {
     }
 
     btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
     hint.textContent = t('发送中…','Sending…','보내는 중…');
     try {
       const res = await fetch('https://api.web3forms.com/submit', {
@@ -916,12 +1123,18 @@ function wireMessageForm() {
         })
       });
       const data = await res.json();
-      if (data.success) { hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨'); box.value = ''; upd(); }
+      if (res.ok && data.success) {
+        hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
+        // Preserve any new note typed while the previous one was in flight.
+        if (box.value === submittedValue) box.value = '';
+        upd();
+      }
       else throw new Error(data.message || 'failed');
     } catch {
       hint.textContent = t('发送失败，请稍后再试','Send failed, try again later','전송 실패, 나중에 다시 시도');
     } finally {
       btn.disabled = false;
+      btn.removeAttribute('aria-busy');
     }
   });
 }
@@ -1182,9 +1395,23 @@ async function toggleThemeWithMotion() {
    NAVIGATION
    ============================================================ */
 let stageRenderEpoch = 0;
+function revealActiveNav() {
+  const nav = document.getElementById('nav');
+  const current = nav.querySelector('.nav-i.on');
+  if (!current || nav.scrollWidth <= nav.clientWidth) return;
+  const bounds = nav.getBoundingClientRect();
+  const item = current.getBoundingClientRect();
+  const inset = 12;
+  if (item.left < bounds.left + inset) {
+    nav.scrollLeft += item.left - bounds.left - inset;
+  } else if (item.right > bounds.right - inset) {
+    nav.scrollLeft += item.right - bounds.right + inset;
+  }
+}
 function go(section) {
   if (!navMap.includes(section)) section = 'about';
   const renderEpoch = ++stageRenderEpoch;
+  closeActiveOverlay?.(false);
   if (section !== activeSection) window.scrollTo({ top: 0, behavior: 'instant' });
   activeSection = section;
   document.documentElement.dataset.section = section;
@@ -1195,7 +1422,7 @@ function go(section) {
     if (selected) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
-  overlayRoot.innerHTML = '';
+  revealActiveNav();
   let renderTask;
   switch (section) {
     case 'about':     renderTask = renderAbout();     break;
@@ -1215,6 +1442,13 @@ function go(section) {
    LANGUAGE
    ============================================================ */
 function applyLang() {
+  const messageBox = document.getElementById('msg-text');
+  const draft = messageBox ? {
+    value: messageBox.value,
+    start: messageBox.selectionStart,
+    end: messageBox.selectionEnd,
+    scroll: messageBox.scrollTop,
+  } : null;
   document.querySelectorAll('.nav-i').forEach((b, i) => {
     b.querySelector('span').textContent =
       lang === 'zh' ? b.dataset.zh : lang === 'ko' ? (b.dataset.ko || b.dataset.en) : b.dataset.en;
@@ -1224,12 +1458,16 @@ function applyLang() {
     b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
   });
   document.getElementById('nav').setAttribute('aria-label', t('主导航','Main navigation','주 탐색'));
-  document.querySelectorAll('.footer-note').forEach(element => {
-    element.textContent = lang === 'zh' ? element.dataset.zh : lang === 'ko' ? element.dataset.ko : element.dataset.en;
-  });
   document.documentElement.lang = lang === 'zh' ? 'zh' : lang;
   lampLabel();
   go(activeSection);   // re-render active section in new language
+  const translatedBox = document.getElementById('msg-text');
+  if (draft && translatedBox) {
+    translatedBox.value = draft.value;
+    translatedBox.setSelectionRange(draft.start, draft.end);
+    translatedBox.scrollTop = draft.scroll;
+    translatedBox.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 }
 
 /* ============================================================
@@ -1253,21 +1491,24 @@ function applyTheme() {
 document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () => {
   const section = b.dataset.section;
   if (section === 'gallery' && isMuseumCapable()) { location.href = 'museum.html'; return; }
-  go(section);
+  if (section !== activeSection) go(section);
   window.scrollTo({ top: 0, behavior: 'instant' });
 }));
 document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.lang === lang) return;
   lang = b.dataset.lang; localStorage.setItem('lang', lang); applyLang();
 }));
 document.getElementById('lamp').addEventListener('click', toggleThemeWithMotion);
 function returnHome(event) {
   event.preventDefault();
-  go('about');
+  if (activeSection !== 'about') go('about');
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 document.getElementById('home-btn').addEventListener('click', returnHome);
 document.querySelector('.footer-brand').addEventListener('click', returnHome);
 window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s && s !== activeSection) go(s); });
+window.addEventListener('resize', revealActiveNav, { passive: true });
+document.fonts?.ready.then(revealActiveNav);
 
 // Boot
 const initial = location.hash.slice(1);

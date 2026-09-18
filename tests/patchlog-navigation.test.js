@@ -18,7 +18,7 @@ test('patch log preserves leading paragraph indentation', () => {
 test('patch log content bypasses stale browser caches', () => {
   assert.match(main, /fetch\('\.\/logs\/index\.json', \{ cache: 'no-store' \}\)/);
   assert.match(main, /fetch\(`\.\/logs\/\$\{latest\}\.txt`, \{ cache: 'no-store' \}\)/);
-  assert.match(main, /fetch\(`\.\/logs\/\$\{dateStr\}\.txt`, \{ cache: 'no-store' \}\)/);
+  assert.match(main, /fetch\(`\.\/logs\/\$\{dateStr\}\.txt`, \{ cache: 'no-store', signal: controller\.signal \}\)/);
   assert.match(html, /<script\s+src="js\/main\.js\?v=[^"\s]+"/);
 });
 
@@ -42,7 +42,7 @@ test('patch log no longer renders every month from a fixed start date', () => {
 });
 
 test('log entry days are keyboard-accessible buttons', () => {
-  assert.match(main, /<button class="\$\{cls\}" data-date="\$\{ds\}" aria-label="\$\{ds\}">/);
+  assert.match(main, /<button class="\$\{cls\}" data-date="\$\{ds\}" aria-label="\$\{ds\}"/);
 });
 
 test('patch log layout avoids duplicated archive labels', () => {

@@ -12,8 +12,6 @@ body { font-family:'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-
 button { -webkit-tap-highlight-color:transparent; }
 button:focus-visible { outline:2px solid var(--ivory); outline-offset:7px; }
 #scene-canvas { display:block; width:100vw; height:100vh; }
-.localized { display:none; }
-html[lang="zh"] .localized[lang="zh"], html[lang="en"] .localized[lang="en"], html[lang="ko"] .localized[lang="ko"] { display:inline; }
 
 /* ---- start / pause overlay (same element doubles as the pause menu) ---- */
 #enter {
@@ -36,12 +34,8 @@ html[lang="zh"] .localized[lang="zh"], html[lang="en"] .localized[lang="en"], ht
 .gallery-emblem { width:34px; height:40px; stroke:var(--champagne); stroke-width:1; }
 .gallery-emblem .emblem-star { stroke-width:.8; }
 .exhibition-signature > span { font:400 21px/1.1 'Fraunces',Georgia,serif; letter-spacing:.01em; }
-.signature-index { display:block; margin-top:9px; font:400 7px/1 'Hanken Grotesk',sans-serif; color:var(--muted); letter-spacing:.25em; }
 .masthead-line { display:none; }
-.exhibition-edition { margin-left:auto; margin-right:135px; font:400 13px/1 'Fraunces',Georgia,serif; color:var(--champagne); letter-spacing:.15em; }
 .enter-copy { position:absolute; left:var(--edge); top:43%; width:min(820px,75vw); }
-.exhibition-eyebrow { display:flex; align-items:center; gap:14px; margin-bottom:25px; font-size:10px; line-height:1.6; letter-spacing:.22em; color:var(--champagne); }
-.eyebrow-line { width:30px; height:1px; flex-shrink:0; background:var(--champagne); }
 #enter h1 {
   max-width:820px; font-family:'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif;
   font-weight:400; font-size:clamp(45px,6.9vw,104px); line-height:1.06; letter-spacing:-.045em;
@@ -83,8 +77,6 @@ html[lang="ko"] #enter h1 { font-size:clamp(42px,6.3vw,88px); letter-spacing:-.0
 }
 #enter .back::before { content:'↗'; position:absolute; left:0; top:2px; font-size:17px; font-weight:400; color:var(--champagne); }
 #enter .back:hover { color:var(--ivory); }
-.entrance-coordinate { position:absolute; right:var(--edge); bottom:185px; display:flex; flex-direction:column; align-items:center; gap:15px; color:rgba(228,216,194,.62); font:400 11px/1 'Fraunces',Georgia,serif; pointer-events:none; }
-.entrance-coordinate i { height:100px; width:1px; background:linear-gradient(0deg,rgba(228,216,194,.12),rgba(228,216,194,.65)); }
 
 /* ---- in-game chrome (shown only while pointer is locked) ---- */
 #hud { opacity:0; transition:opacity .4s; }
@@ -193,9 +185,7 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
   #enter .enter-guide { bottom:37px; }
 }
 @media (max-width:900px) {
-  .exhibition-edition { display:none; }
   .enter-copy { width:calc(100vw - 2 * var(--edge)); top:39%; }
-  .entrance-coordinate { display:none; }
   #enter h1 { max-width:660px; font-size:clamp(45px,8vw,74px); }
 }
 @media (max-width:600px) {
@@ -205,9 +195,7 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
   .exhibition-signature > span { font-size:18px; }
   .gallery-emblem { width:27px; height:34px; }
   .exhibition-signature { gap:11px; }
-  .signature-index { font-size:6px; }
   #enter .back { top:37px; font-size:9px; }
-  .exhibition-eyebrow { font-size:8px; letter-spacing:.14em; margin-bottom:19px; gap:11px; }
   .enter-copy { top:35%; }
   #enter h1 { font-size:clamp(42px,9.5vw,57px); }
   html[lang="zh"] #enter h1 { font-size:clamp(35px,8.2vw,49px); letter-spacing:.05em; }
@@ -225,11 +213,9 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
   #enter .back { top:37px; }
   .enter-copy { top:32%; }
   #enter h1, html[lang="zh"] #enter h1, html[lang="ko"] #enter h1 { font-size:clamp(40px,5.5vw,66px); }
-  .exhibition-eyebrow { margin-bottom:15px; }
   #enter .sub { margin-top:14px; }
   .enter-action { margin-top:20px; }
   #enter .go { min-height:48px; }
-  .entrance-coordinate { display:none; }
   #enter .enter-guide { bottom:23px; transform:scale(.72); }
 }
 @media (max-height:470px) {
@@ -237,7 +223,6 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
   #enter::before { top:77px; }
   #enter .back { top:28px; }
   .enter-copy { top:28%; }
-  .exhibition-eyebrow { margin-bottom:10px; }
   #enter h1, html[lang="zh"] #enter h1, html[lang="ko"] #enter h1 { font-size:36px; }
   #enter .sub { margin-top:9px; }
   .enter-action { margin-top:10px; }
