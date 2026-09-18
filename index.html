@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#080f14" />
   <meta name="description" content="Eytle 的个人网站，包含项目、工具、日志和图片。" />
   <script>try { var savedTheme = localStorage.getItem('theme'); if (savedTheme === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}</script>
-  <link rel="stylesheet" href="css/style.css?v=surface-spacing-20260918" />
+  <link rel="stylesheet" href="css/style.css?v=surface-spacing-morphicons-20260918" />
 </head>
 <body>
 
@@ -46,7 +46,7 @@
 
       <div class="rail-foot">
         <button class="lamp" id="lamp">
-          <span id="lamp-ico">☀</span>
+          <span id="lamp-ico" aria-hidden="true"></span>
           <span id="lamp-tx"></span>
         </button>
       </div>
@@ -70,7 +70,8 @@
   <!-- Lightbox / reader overlays mount here -->
   <div id="overlay-root"></div>
 
-  <script src="js/main.js?v=patchlog-20260916"></script>
+  <script src="js/site-icons.js?v=morphicons-20260918"></script>
+  <script src="js/main.js?v=morphicons-20260918"></script>
   <script src="js/forest-scene.js?v=forest-cinema-20260912" defer></script>
 </body>
 </html>

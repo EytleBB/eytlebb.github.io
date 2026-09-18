@@ -68,6 +68,7 @@ test('pending page loads cannot overwrite a newer navigation or language render'
       stage,
       stageRenderEpoch: 1,
       t: zh => zh,
+      siteIcon() { return ''; },
       enhanceMotion() {},
       wireMessageForm() {},
       loadLogs: () => pending,

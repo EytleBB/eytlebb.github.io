@@ -271,7 +271,7 @@ async function renderAbout() {
       <div class="hero-copy">
         <h1><span>This is</span><em>Eytle<span class="hero-period">.</span></em></h1>
         <p class="hero-description">${t('这里放我的项目、工具、日志和图片。','My projects, tools, logs and pictures.','제 프로젝트, 도구, 일지와 이미지를 모아 둔 곳입니다.')}</p>
-        <button class="hero-link" id="home-explore"><span>${t('查看内容','View content','내용 보기')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></button>
+        <button class="hero-link" id="home-explore"><span>${t('查看内容','View content','내용 보기')}</span>${siteIcon('chevron-down', '', 'arrow-down')}</button>
       </div>
       <div class="hero-bottom"><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
     </header>
@@ -293,10 +293,7 @@ async function renderAbout() {
             <span class="msg-count" id="msg-count">0 / 140</span>
             <button class="msg-send" id="msg-send">
               <span class="msg-send-label">${t('发送','Send','보내기')}</span>
-              <svg class="msg-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m22 2-7 20-4-8-8-4Z"></path>
-                <path d="M22 2 11 14"></path>
-              </svg>
+              ${siteIcon('plane', 'msg-plane')}
             </button>
           </div>
           <div class="msg-hint" id="msg-hint" aria-live="polite"></div>
@@ -305,7 +302,7 @@ async function renderAbout() {
       <div class="col-right">
         <div class="gallery-heading"><div><div class="eyebrow">GALLERY</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
         <div class="gal" id="home-gal"></div>
-        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} <span aria-hidden="true">↗</span></button></div>
+        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} ${siteIcon('arrow-right', '', 'arrow-up-right')}</button></div>
       </div>
     </section>
     </div>
@@ -337,7 +334,7 @@ async function renderAbout() {
       <div class="eyebrow">${t('最新日志', 'Latest entry', '최신 일지')}</div>
       <div class="date">${fmtDot(latest)}</div>
       <p class="txt">${escapeHtml(body)}</p>
-      <button class="more" id="home-plog-more">${t('读全文 →','Read more →','전문 읽기 →')}</button>
+      <button class="more" id="home-plog-more">${t('读全文','Read more','전문 읽기')}${siteIcon('chevron-right', '', 'arrow-right')}</button>
     `;
     document.getElementById('home-plog-more').addEventListener('click', () => openReader(latest));
   } else {
@@ -381,11 +378,11 @@ function renderProjects() {
     const hasSub = p.sub && p.sub.length;
     return `
       <div class="project-group" data-proj-group="${p.id}">
-        <button class="list-item" data-proj="${p.id}" aria-expanded="false">
+        <button class="list-item" data-proj="${p.id}"${hasSub ? ' aria-expanded="false"' : ''}>
           <span class="label">${escapeHtml(pick(p, 'name'))}</span>
           <span class="right">
             ${hasSub ? `<span class="badge">${p.sub.length} ${t('子项目','sub','하위')}</span>` : ''}
-            ${chev()}
+            ${hasSub ? chev(false) : extIcon()}
           </span>
         </button>
         <div class="project-sub-slot" data-proj-sub="${p.id}"></div>
@@ -410,14 +407,15 @@ function handleProjectClick(id) {
   if (proj.sub && proj.sub.length) {
     const shouldOpen = !button.classList.contains('on');
     stage.querySelectorAll('.list-item[data-proj]').forEach(b => {
-      b.classList.remove('on');
-      b.setAttribute('aria-expanded', 'false');
+      if (!b.hasAttribute('aria-expanded')) return;
+      const open = shouldOpen && b === button;
+      b.classList.toggle('on', open);
+      b.setAttribute('aria-expanded', String(open));
+      EytleIcons.set(b.querySelector('.chev'), open ? 'chevron-down' : 'chevron-right');
     });
     stage.querySelectorAll('.project-sub-slot').forEach(slot => { slot.innerHTML = ''; });
     if (!shouldOpen) return;
 
-    button.classList.add('on');
-    button.setAttribute('aria-expanded', 'true');
     const sub = button.closest('.project-group').querySelector('.project-sub-slot');
     sub.innerHTML = `
       <div class="list-sub">
@@ -463,10 +461,7 @@ function renderDownloads() {
         <p class="dl-name">${escapeHtml(pick(dl, 'name'))}</p>
         <p class="dl-meta">${escapeHtml(pick(dl, 'meta') || dl.meta || '')}</p>
       </span>
-      <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
+      ${siteIcon('download', 'arrow')}
     </a>`).join('');
 
   stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'DOWNLOADS', t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
@@ -785,7 +780,7 @@ function mountOverlay(inner, extraClass, onClose, label) {
   const previousOverflow = document.documentElement.style.overflow;
   overlayRoot.innerHTML = `
     <div class="overlay ${extraClass || ''}" id="ov" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}">
-      <button class="ov-close" id="ov-close" type="button">✕ ${t('关闭','Close','닫기')}</button>
+      <button class="ov-close" id="ov-close" type="button">${siteIcon('close')}${t('关闭','Close','닫기')}</button>
       ${inner}
     </div>`;
   const ov = document.getElementById('ov');
@@ -1078,9 +1073,21 @@ function wireMessageForm() {
   const hp = document.getElementById('msg-hp');
   if (!box) return;
 
+  const feedback = state => {
+    btn.dataset.state = state;
+    btn.classList.remove('is-launching');
+    btn.querySelector('.msg-send-label').textContent = state === 'sent'
+      ? (MSG_CONFIG.web3formsKey ? t('已发送','Sent','전송됨') : t('已记录','Saved','기록됨'))
+      : state === 'error' ? t('重试','Retry','재시도') : t('发送','Send','보내기');
+    EytleIcons.set(btn.querySelector('.msg-plane'), state === 'sent' ? 'check' : state === 'error' ? 'retry' : 'plane');
+  };
   const upd = () => { cnt.textContent = `${box.value.length} / 140`; };
   box.addEventListener('input', () => {
     upd();
+    if (!btn.disabled && ['sent', 'error'].includes(btn.dataset.state)) {
+      feedback('idle');
+      hint.textContent = '';
+    }
     if (box.getAttribute('aria-invalid') === 'true') {
       box.removeAttribute('aria-invalid');
       hint.textContent = '';
@@ -1089,6 +1096,7 @@ function wireMessageForm() {
   upd();
 
   const launchPlane = () => {
+    feedback('idle');
     btn.classList.remove('is-launching');
     void btn.offsetWidth;
     btn.classList.add('is-launching');
@@ -1104,6 +1112,7 @@ function wireMessageForm() {
 
     if (!MSG_CONFIG.web3formsKey) {        // no backend configured → acknowledge locally
       hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
+      feedback('sent');
       box.value = ''; upd(); return;
     }
 
@@ -1128,10 +1137,12 @@ function wireMessageForm() {
         // Preserve any new note typed while the previous one was in flight.
         if (box.value === submittedValue) box.value = '';
         upd();
+        feedback(box.value ? 'idle' : 'sent');
       }
       else throw new Error(data.message || 'failed');
     } catch {
       hint.textContent = t('发送失败，请稍后再试','Send failed, try again later','전송 실패, 나중에 다시 시도');
+      feedback('error');
     } finally {
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
@@ -1142,11 +1153,14 @@ function wireMessageForm() {
 /* ============================================================
    SMALL HTML HELPERS
    ============================================================ */
-function chev() {
-  return `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+function siteIcon(name, className = '', hover = '') {
+  return EytleIcons.markup(name, className, hover);
+}
+function chev(hover = true) {
+  return siteIcon('chevron-right', 'chev', hover ? 'arrow-right' : '');
 }
 function extIcon() {
-  return `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+  return siteIcon('external', 'chev');
 }
 function placeholder(txt) { return `<p class="placeholder-text">${escapeHtml(txt)}</p>`; }
 function escapeHtml(s) {
@@ -1475,7 +1489,10 @@ function applyLang() {
    ============================================================ */
 function lampLabel() {
   const night = document.documentElement.getAttribute('data-theme') === 'night';
-  document.getElementById('lamp-ico').textContent = night ? '☀' : '☾';
+  const icon = document.getElementById('lamp-ico');
+  const name = night ? 'sun' : 'moon';
+  if (!icon.querySelector('svg')) icon.innerHTML = siteIcon(name);
+  else EytleIcons.set(icon.querySelector('svg'), name);
   document.getElementById('lamp-tx').textContent =
     { zh: night ? '开灯' : '关灯', en: night ? 'Lights on' : 'Lights off', ko: night ? '불 켜기' : '불 끄기' }[lang];
 }
