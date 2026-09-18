@@ -218,9 +218,31 @@ html:not([data-section="about"]) .stage { padding:72px var(--gutter) 100px; max-
 .dl-item .arrow { color:var(--dim); flex-shrink:0; stroke-width:1; }
 
 /* Quiet motion, with complete static and reduced-motion paths. */
-.motion-surface { position:relative; isolation:isolate; }
-.motion-surface::after { content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(380px circle at var(--surface-x,50%) var(--surface-y,50%),var(--surface-sheen),transparent 68%); opacity:0; transition:opacity .4s; }
+.motion-surface { --surface-outset-x:0px; --surface-outset-y:0px; position:relative; isolation:isolate; }
+.motion-surface::after {
+  content:''; position:absolute;
+  inset:calc(-1 * var(--surface-outset-y)) calc(-1 * var(--surface-outset-x));
+  z-index:-1; pointer-events:none;
+  background:radial-gradient(380px circle at
+    calc(var(--surface-x, calc(50% - var(--surface-outset-x))) + var(--surface-outset-x))
+    calc(var(--surface-y, calc(50% - var(--surface-outset-y))) + var(--surface-outset-y)),
+    var(--surface-sheen),transparent 68%);
+  opacity:0; transition:opacity .4s;
+}
 .motion-surface:hover::after, .motion-surface:focus-within::after { opacity:1; }
+/* Give the open home panels breathing room without moving their content or hit areas.
+   The fade stays within the column gaps; enclosed cards keep their original bounds. */
+.home-body :is(.panel, .col-right).motion-surface { --surface-outset-x:24px; --surface-outset-y:12px; }
+.home-body :is(.panel, .col-right).motion-surface::after {
+  -webkit-mask-image:
+    linear-gradient(to right,transparent,#000 var(--surface-outset-x),#000 calc(100% - var(--surface-outset-x)),transparent),
+    linear-gradient(to bottom,transparent,#000 var(--surface-outset-y),#000 calc(100% - var(--surface-outset-y)),transparent);
+  -webkit-mask-composite:source-in;
+  mask-image:
+    linear-gradient(to right,transparent,#000 var(--surface-outset-x),#000 calc(100% - var(--surface-outset-x)),transparent),
+    linear-gradient(to bottom,transparent,#000 var(--surface-outset-y),#000 calc(100% - var(--surface-outset-y)),transparent);
+  mask-composite:intersect;
+}
 .motion-reveal { animation:forest-content-in .65s var(--ease) both; animation-delay:var(--reveal-delay,0ms); }
 .hero.motion-reveal { animation:none; }
 .hero-copy h1, .hero-description, .hero-link { animation:forest-content-in 1.1s var(--ease) both; }
@@ -507,6 +529,7 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
 }
 @media (max-width:1200px) {
   :root { --gutter:36px; }
+  .home-body :is(.panel, .col-right).motion-surface { --surface-outset-x:16px; }
   .rail { gap:20px; }
   .rail nav { gap:15px; }
   .nav-i { font-size:12px; }
@@ -535,6 +558,7 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
 }
 @media (max-width:760px) {
   :root { --gutter:24px; --header-height:130px; --bg-img:url('../images/forest-night-mobile.webp'); }
+  .home-body :is(.panel, .col-right).motion-surface { --surface-outset-x:12px; }
   [data-theme="day"] { --bg-img:url('../images/forest-day-mobile.webp'); }
   .bg { background-position:62% center; }
   :root { --scrim:linear-gradient(90deg,rgba(5,12,18,.52),rgba(5,12,18,.1)),linear-gradient(180deg,rgba(5,12,18,.15),transparent 40%,rgba(8,15,20,.2) 68%,#080f14 100%); }
