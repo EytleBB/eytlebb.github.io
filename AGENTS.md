@@ -12,6 +12,20 @@ The current Linux workspace is `/home/yeom/Documents/ChatGPT/thisIsEytle`, resto
 
 For server commands, use `ssh eytle-server`. This machine's `~/.ssh/config` provides a dedicated Ed25519 key, a direct network interface to bypass Mihomo, and optional connection sharing. Fresh key authentication and `git ls-remote tencent` were verified on 2026-09-12. If the active network interface changes from `wlp0s20f3`, update `BindInterface` in the local SSH config.
 
+### Collaboration and release workflow (2026-09-18)
+
+Use one isolated Git worktree (or branch) for each feature task. A feature task may edit, test, and commit only its own scope; it must not publish to `origin` or `tencent`. Do not run multiple feature tasks in the repository root at the same time.
+
+The Codex thread titled **“Eytle 网站发布会话”** is the release thread. It works at the repository root and is the sole owner of the following steps:
+
+1. Inspect every completed feature commit and merge or cherry-pick it into `main`.
+2. Run the complete test suite and relevant local checks.
+3. Create the integration/release commit after confirming the worktree is clean.
+4. Push `main` to GitHub first, then push the identical commit to `tencent`.
+5. Verify local, GitHub, Tencent bare repository, server worktree, and production files all match; keep release verification records outside the public web root.
+
+Before starting a new feature, create its worktree from current `main`. If a feature needs files changed by another unfinished task, pause that dependent change until the prerequisite commit is available. Keep deployment configuration and internal maintenance files out of the public site using `scripts/deploy-excludes.txt`.
+
 ## Architecture
 
 The site uses **sticky top navigation + a rendered stage** (`index.html` + `css/style.css` + `js/main.js`), with cinematic birch-forest artwork. Night uses deep blue and amber; day uses ivory and sage. Responsive `images/forest-{night,day}[-mobile].webp` backgrounds have an optional WebGL2 pond/fog enhancement in `js/forest-scene.js`.
