@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './museum-lighting-layout.js?v=lighting-20260922-r5';
+import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './museum-lighting-layout.js?v=lighting-20260922-r6';
 
 /* Nocturne: all surfaces and architectural profiles are generated locally.
    Shared, merged geometry keeps the endless hall's cost independent of distance. */

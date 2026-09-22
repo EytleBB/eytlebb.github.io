@@ -18,6 +18,23 @@ export const RIB_LIGHT_CHANNEL = Object.freeze({
   emitterThickness: 0.008,
 });
 
+/** Keep the transparent volume off opaque surfaces, with a cone-shaped proxy. */
+export function projectorVolumeBounds() {
+  const { floorY, lensY, apertureRadius, poolRadius } = LIGHTING_LAYOUT;
+  const bottomY = floorY + 0.03;
+  const topY = lensY - 0.02;
+  const radialSegments = 32;
+  // Circumscribe the analytic cone so polygon edges cannot cut into its glow.
+  const coverage = 1 / Math.cos(Math.PI / radialSegments);
+  const radiusAt = y => apertureRadius + (poolRadius - apertureRadius)
+    * (lensY - y) / (lensY - floorY);
+  return {
+    bottomY, topY, radialSegments,
+    bottomRadius: radiusAt(bottomY) * coverage,
+    topRadius: radiusAt(topY) * coverage,
+  };
+}
+
 /** Local Z positions owned by (originZ - length, originZ], without seam duplicates. */
 export function projectorStationsInChunk(originZ, length) {
   const { stationSpacing, stationOffset } = LIGHTING_LAYOUT;

@@ -6,12 +6,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260922-r5';
+import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260922-r6';
 import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
-import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r5';
+import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r6';
 import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r2';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r2';
@@ -2022,8 +2022,8 @@ async function boot() {
   prewarmMuseumTrack();
   enterProg.textContent = T('正在准备展馆…', 'Preparing exhibition…', '전시 준비 중…');
   buildHall();
-  if (PERF_STILL) {
-    // Reproducible, motionless views for visual QA without pointer capture.
+  if (PERF_STILL || PERF_AUTOWALK) {
+    // Reproducible fixed/walking views for visual QA without pointer capture.
     const params = new URLSearchParams(location.search);
     const readNumber = (name, fallback, min, max) => {
       const value = Number(params.get(name) ?? fallback);
