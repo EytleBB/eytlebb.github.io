@@ -5,12 +5,13 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=guestbook-20260922-r2';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260922-r5';
 import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
-import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260912-r3';
+import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r5';
 import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r2';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r2';
@@ -173,6 +174,7 @@ const TEXTURE_UPLOAD_MIN_INTERVAL_MS = 54;
 const TEXTURE_UPLOAD_FRAME_BUDGET_MS = 11.5;
 const TEXTURE_UPLOAD_MAX_WAIT_MS = 650;
 const PERF_AUTOWALK = new URLSearchParams(location.search).get('perf') === 'walk';
+const PERF_STILL = new URLSearchParams(location.search).get('perf') === 'still';
 const PERF_CAPTURE = new URLSearchParams(location.search).has('perf');
 const PERF_SAMPLE_LIMIT = 600;
 const perfFrameSamples = [];
@@ -212,6 +214,7 @@ function recordPerformanceFrame(frameMs, renderMs) {
     fov: Number(camera.fov.toFixed(2)),
     renderMs: Number(renderMs.toFixed(2)),
     pixelRatio: renderer.getPixelRatio(),
+    scenePixels: [finalComposer.readBuffer.width, finalComposer.readBuffer.height],
     frameLimit: settings.fps,
     presented: presentedFrames,
   });
@@ -410,11 +413,16 @@ const bloom = new UnrealBloomPass(
 );
 bloomComposer.addPass(bloom);
 
-const sceneTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+// Multisample only the scene geometry. Post-processing fullscreen quads do not
+// need duplicate multisample buffers, particularly at native HiDPI resolution.
+const sceneTarget = new THREE.WebGLRenderTarget(
+  Math.round(window.innerWidth * renderer.getPixelRatio()),
+  Math.round(window.innerHeight * renderer.getPixelRatio()), {
   type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples),
 });
-const finalComposer = new EffectComposer(renderer, sceneTarget);
-finalComposer.addPass(new RenderPass(scene, camera));
+const finalComposer = new EffectComposer(renderer);
+// Allocate every post target at drawing-buffer resolution on the very first frame.
+finalComposer.setSize(window.innerWidth, window.innerHeight);
 const bloomMixPass = new ShaderPass({
   uniforms: {
     baseTexture: { value: null },
@@ -439,9 +447,16 @@ const bloomMixPass = new ShaderPass({
       gl_FragColor = vec4((base.rgb + bloom) * vignette, base.a);
     }
   `,
-}, 'baseTexture');
-bloomMixPass.uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
+});
+// r186's composer output includes the half-resolution light geometry as well as
+// the glow. Adding that image duplicated hard light edges at half resolution.
+// Composite only UnrealBloomPass's blurred result; the main pass owns the cores.
+bloomMixPass.uniforms.baseTexture.value = sceneTarget.texture;
+bloomMixPass.uniforms.bloomTexture.value = bloom.renderTargetsHorizontal[0].texture;
 finalComposer.addPass(bloomMixPass);
+// r186 SMAA operates in linear space. Keep it before tone mapping/output so it
+// treats subpixel light edges without a full-frame softening filter.
+finalComposer.addPass(new SMAAPass());
 finalComposer.addPass(new OutputPass());
 
 function enableBloomLayer(object) {
@@ -461,14 +476,26 @@ function renderGalleryFrame() {
   } finally {
     scene.background = background;
   }
+  const previousTarget = renderer.getRenderTarget();
+  try {
+    renderer.setRenderTarget(sceneTarget);
+    renderer.clear();
+    renderer.render(scene, camera);
+  } finally {
+    renderer.setRenderTarget(previousTarget);
+  }
   finalComposer.render();
 }
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  sceneTarget.setSize(Math.round(window.innerWidth * renderer.getPixelRatio()),
+    Math.round(window.innerHeight * renderer.getPixelRatio()));
   bloomComposer.setSize(window.innerWidth / 2, window.innerHeight / 2);
+  finalComposer.setPixelRatio(renderer.getPixelRatio());
   finalComposer.setSize(window.innerWidth, window.innerHeight);
   architecture.resize();
   requestSceneFrame();
@@ -1995,6 +2022,20 @@ async function boot() {
   prewarmMuseumTrack();
   enterProg.textContent = T('正在准备展馆…', 'Preparing exhibition…', '전시 준비 중…');
   buildHall();
+  if (PERF_STILL) {
+    // Reproducible, motionless views for visual QA without pointer capture.
+    const params = new URLSearchParams(location.search);
+    const readNumber = (name, fallback, min, max) => {
+      const value = Number(params.get(name) ?? fallback);
+      return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+    };
+    camera.position.z = readNumber('z', 0, -80, 0);
+    pitch = readNumber('pitch', 0, -1.2, 1.2);
+    yaw = readNumber('yaw', 0, -Math.PI, Math.PI);
+    player.reset(camera.position);
+    recycleChunks();
+    atmosphere.update(0);
+  }
   void refreshPlaqueTitles();
   fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
   bloomOcclusion = createMuseumBloomOcclusion(scene);
@@ -2004,7 +2045,7 @@ async function boot() {
   startLoop();        // render the hall behind the translucent start overlay
   updateTextureStreaming(true); // use the start overlay time to prepare the next visible batches
   readyToEnter();
-  if (PERF_AUTOWALK) {
+  if (PERF_AUTOWALK || PERF_STILL) {
     entered = true;
     enterEl.hidden = true;
     resetFrameTiming();

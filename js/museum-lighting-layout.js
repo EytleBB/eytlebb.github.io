@@ -6,8 +6,16 @@ export const LIGHTING_LAYOUT = Object.freeze({
   lensY: 5.96,
   floorY: 0.006,
   apertureRadius: 0.085,
-  poolRadius: 0.90,
-  ringRadius: 0.66,
+  poolRadius: 1.65,
+});
+
+// The emitter is fully exposed on the hall-facing side of the bronze channel.
+// A small separation prevents the housing from cutting jagged slivers out of it.
+export const RIB_LIGHT_CHANNEL = Object.freeze({
+  housingInset: 0.224,
+  housingThickness: 0.023,
+  emitterInset: 0.248,
+  emitterThickness: 0.008,
 });
 
 /** Local Z positions owned by (originZ - length, originZ], without seam duplicates. */

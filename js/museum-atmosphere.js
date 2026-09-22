@@ -1,4 +1,4 @@
-import { LIGHTING_LAYOUT } from './museum-lighting-layout.js?v=lighting-20260912-r3';
+import { LIGHTING_LAYOUT } from './museum-lighting-layout.js?v=lighting-20260922-r5';
 
 /**
  * Two draws add the air illuminated by the actual ceiling projectors and dust.
@@ -21,7 +21,6 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
     uFloorY: { value: layout.floorY },
     uApertureRadius: { value: layout.apertureRadius },
     uPoolRadius: { value: layout.poolRadius },
-    uRingRadius: { value: layout.ringRadius },
   };
   const lightingUniforms = `
     uniform float uStationSpacing;
@@ -31,7 +30,6 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
     uniform float uFloorY;
     uniform float uApertureRadius;
     uniform float uPoolRadius;
-    uniform float uRingRadius;
   `;
 
   // Back faces of a box bound each volume. The fragment shader clips the view
@@ -126,11 +124,8 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
           float along = clamp(-samplePoint.y / (uLensY - uFloorY), 0.0, 1.0);
           float radius = mix(uApertureRadius, uPoolRadius, along);
           float normalizedRadius = length(samplePoint.xz) / radius;
-          float softEdge = 1.0 - smoothstep(0.72, 1.0, normalizedRadius);
-          // A weak annular component corresponds to the projector's floor ring.
-          float annularDistance = (normalizedRadius - uRingRadius / uPoolRadius) / 0.075;
-          float annulus = exp(-annularDistance * annularDistance);
-          float density = softEdge * (0.68 + annulus * 0.32);
+          float density = exp(-3.5 * normalizedRadius * normalizedRadius)
+            * (1.0 - smoothstep(0.8, 1.0, normalizedRadius));
           float sourceFalloff = 0.30 / max(radius, 0.12);
           vec3 worldSample = samplePoint + vec3(uSourceX, uLensY, vSourceZ);
           float fogFade = 1.0 - smoothstep(50.0, 77.0, distance(cameraPosition, worldSample));
@@ -207,7 +202,8 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
         float along = clamp((uLensY - p.y) / (uLensY - uFloorY), 0.0, 1.0);
         float radius = mix(uApertureRadius, uPoolRadius, along);
         float normalizedRadius = length(vec2(p.x - uSourceX, p.z - sourceZ)) / radius;
-        float lit = (1.0 - smoothstep(0.72, 1.0, normalizedRadius))
+        float lit = exp(-3.5 * normalizedRadius * normalizedRadius)
+          * (1.0 - smoothstep(0.8, 1.0, normalizedRadius))
           * step(uFloorY, p.y) * step(p.y, uLensY);
         vec4 viewPosition = viewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * viewPosition;
