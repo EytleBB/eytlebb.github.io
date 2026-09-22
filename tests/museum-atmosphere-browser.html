@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Museum light volume regression</title>
+<style>
+  body { margin: 32px; background: #161c20; color: #eceddf; font: 15px/1.6 monospace; }
+  pre { white-space: pre-wrap; }
+</style>
+<script type="importmap">
+  {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}
+</script>
+<h1>Museum light volume regression</h1>
+<p>Render the production volume over a depth-writing floor while moving 2 mm per frame.
+  This GPU readback check measures continuity, not frame rate. Serve over HTTP.</p>
+<pre id="report">Running…</pre>
+<script type="module">
+  import * as THREE from 'three';
+  import { createMuseumAtmosphere } from '../js/museum-atmosphere.js';
+  import { LIGHTING_LAYOUT } from '../js/museum-lighting-layout.js';
+
+  const report = document.querySelector('#report');
+  const renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer.setSize(128, 128);
+  renderer.setPixelRatio(1);
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  const camera = new THREE.PerspectiveCamera(74, 1, 0.08, 200);
+  const target = new THREE.WebGLRenderTarget(128, 128, { type: THREE.HalfFloatType, samples: 4 });
+  const pixels = new Uint16Array(128 * 128 * 4);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(6, 200), new THREE.MeshBasicMaterial({ color: 0 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = LIGHTING_LAYOUT.floorY;
+  scene.add(floor);
+  const atmosphere = createMuseumAtmosphere({ THREE, scene, renderer, camera });
+  // Isolate the steady volume: moving dust and artwork should not affect the metric.
+  atmosphere.group.children.find(object => object.isPoints).visible = false;
+
+  function renderMean(z, y, lookY, x = 0, lookZ = 0) {
+    camera.position.set(x, y, z);
+    camera.lookAt(0, lookY, lookZ);
+    camera.updateMatrixWorld();
+    atmosphere.update(0);
+    renderer.setRenderTarget(target);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.readRenderTargetPixels(target, 0, 0, 128, 128, pixels);
+    let total = 0;
+    for (let i = 0; i < pixels.length; i += 4) total += THREE.DataUtils.fromHalfFloat(pixels[i]);
+    return total / (128 * 128);
+  }
+
+  const results = [];
+  try {
+    for (const scenario of [
+      { name: 'standing / floor', y: 1.65, lookY: 0.006, z: 2.5 },
+      { name: 'crouched / floor', y: 1.08, lookY: 0.006, z: 1.6 },
+      { name: 'inside beam / floor', y: 1.65, lookY: 0.006, z: 0.3 },
+      { name: 'looking up', y: 1.65, lookY: 5.8, z: 2.5 },
+      { name: 'crossing station boundary', y: 1.65, lookY: 0.006, z: -0.06, x: 0.5 },
+      { name: 'reflection camera', y: 0.012 - 1.65, lookY: 3, z: 2.5, reflection: true },
+    ]) {
+      floor.visible = !scenario.reflection;
+      const values = [];
+      for (let i = 0; i < 61; i++) {
+        values.push(renderMean(scenario.z + i * 0.002, scenario.y, scenario.lookY, scenario.x));
+        if (i % 20 === 0) await new Promise(requestAnimationFrame);
+      }
+      const mean = values.reduce((a, b) => a + b) / values.length;
+      const steps = values.slice(1).map((v, i) => Math.abs(v - values[i]));
+      const maxRelativeStep = Math.max(...steps) / mean;
+      results.push({ scenario: scenario.name, mean, maxRelativeStep,
+        pass: Number.isFinite(maxRelativeStep) && mean > 0.00001 && maxRelativeStep < 0.015 });
+    }
+    report.dataset.result = JSON.stringify(results);
+    report.dataset.done = results.every(result => result.pass) ? 'pass' : 'fail';
+    report.textContent = `${report.dataset.done.toUpperCase()}\n${JSON.stringify(results, null, 2)}`;
+  } catch (error) {
+    report.dataset.done = 'error';
+    report.textContent = error.stack;
+  } finally {
+    atmosphere.dispose();
+    floor.geometry.dispose();
+    floor.material.dispose();
+    target.dispose();
+    renderer.dispose();
+  }
+</script>

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LIGHTING_LAYOUT, projectorStationsInChunk } from './museum-lighting-layout.js?v=lighting-20260912-r3';
+import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './museum-lighting-layout.js?v=lighting-20260922-r6';
 
 /* Nocturne: all surfaces and architectural profiles are generated locally.
    Shared, merged geometry keeps the endless hall's cost independent of distance. */
@@ -29,13 +29,16 @@ float stoneNoise(vec3 p) {
 }`).replace('#include <color_fragment>', `#include <color_fragment>
 float cloud = stoneNoise(vStoneWorld * 2.4);
 float mineral = stoneNoise(vStoneWorld * 27.0);
-float grain = stoneHash(floor(vStoneWorld * 460.0));
+// Fade grains smaller than a pixel to their mean instead of sampling white noise.
+vec3 grainFootprint = fwidth(vStoneWorld * 460.0);
+float grainVisibility = 1.0-smoothstep(0.5,1.5,max(max(grainFootprint.x,grainFootprint.y),grainFootprint.z));
+float grain = mix(0.5,stoneHash(floor(vStoneWorld * 460.0)),grainVisibility);
 diffuseColor.rgb *= 0.88 + cloud * 0.13 + mineral * 0.055 + grain * 0.025;
 float footShade = smoothstep(0.02, 0.72, vStoneWorld.y);
 diffuseColor.rgb *= mix(0.48, 1.0, footShade);
 `);
     };
-    material.customProgramCacheKey = () => 'nocturne-mineral-v1';
+    material.customProgramCacheKey = () => 'nocturne-mineral-v2';
     return material;
   }
   materials.wall = stone(0x142d32, 0.86, 0.018);
@@ -115,13 +118,16 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       }
     }
     for (const z of [0, -7]) {
+      const channel = RIB_LIGHT_CHANNEL;
       add(archGeometry(halfWidth, 0.23, 0.31, springY, z), materials.ivory);
-      add(archGeometry(halfWidth - 0.224, 0.023, 0.068, springY, z), materials.bronze);
-      add(archGeometry(halfWidth - 0.242, 0.008, 0.024, springY, z), materials.light);
+      add(archGeometry(halfWidth - channel.housingInset, channel.housingThickness, 0.068, springY, z), materials.bronze);
+      add(archGeometry(halfWidth - channel.emitterInset, channel.emitterThickness, 0.024, springY, z), materials.light);
       for (const side of [-1, 1]) {
         box(0.23, springY, 0.31, side * (halfWidth - 0.115), springY / 2, z, materials.ivory);
-        box(0.023, springY - 0.25, 0.068, side * (halfWidth - 0.2355), (springY + 0.25) / 2, z, materials.bronze);
-        box(0.008, springY - 0.27, 0.024, side * (halfWidth - 0.246), (springY + 0.27) / 2, z, materials.light);
+        box(channel.housingThickness, springY - 0.25, 0.068,
+          side * (halfWidth - channel.housingInset - channel.housingThickness / 2), (springY + 0.25) / 2, z, materials.bronze);
+        box(channel.emitterThickness, springY - 0.27, 0.024,
+          side * (halfWidth - channel.emitterInset - channel.emitterThickness / 2), (springY + 0.27) / 2, z, materials.light);
         box(0.32, 0.22, 0.45, side * (halfWidth - 0.155), 0.11, z, materials.dark);
         // Fine flutes in the pier catch the grazing light.
         for (const dz of [-0.10, 0.10]) box(0.017, springY - 0.42, 0.013,
@@ -140,8 +146,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         box(0.10, 0.027, 3.65, x, y - 0.017, z - 3.5, materials.coolLight);
       }
     }
-    // A real downward-facing gobo projector is anchored to the ridge above
-    // each floor medallion. World stations are shared with the cone and pool.
+    // Downward-facing ceiling lamps share world stations with their soft floor pools.
     const lighting = LIGHTING_LAYOUT;
     for (const z of projectorStationsInChunk(originZ, chunkLength)) {
       const x = lighting.sourceX;
@@ -186,30 +191,34 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
   const floorShader = {
     name: 'NocturneObsidian',
     uniforms: { color: {value: null}, tDiffuse: {value: null}, textureMatrix: {value: null},
-      resolution: {value: new THREE.Vector2(1024, 768)},
       stationSpacing: {value: LIGHTING_LAYOUT.stationSpacing},
       stationOffset: {value: LIGHTING_LAYOUT.stationOffset},
       sourceX: {value: LIGHTING_LAYOUT.sourceX},
       poolRadius: {value: LIGHTING_LAYOUT.poolRadius},
-      ringRadius: {value: LIGHTING_LAYOUT.ringRadius},
       lightHeight: {value: LIGHTING_LAYOUT.lensY - LIGHTING_LAYOUT.floorY},
     },
     vertexShader: `uniform mat4 textureMatrix; varying vec4 vReflection; varying vec3 vWorld;
       void main() { vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
         vReflection = textureMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 resolution;
-      uniform float stationSpacing, stationOffset, sourceX, poolRadius, ringRadius, lightHeight;
+    fragmentShader: `uniform sampler2D tDiffuse;
+      uniform float stationSpacing, stationOffset, sourceX, poolRadius, lightHeight;
       varying vec4 vReflection; varying vec3 vWorld;
       float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-      float line(float v, float w) { return 1.0-smoothstep(w,w+fwidth(v)*1.2,abs(v)); }
+      // Box-filter thin inlays/seams: subpixel lines lose coverage instead of
+      // becoming a screen-wide pattern of equally dark one-pixel stair steps.
+      float line(float v, float w) {
+        float footprint = max(fwidth(v),0.00001);
+        return (clamp(v+footprint*0.5,-w,w)-clamp(v-footprint*0.5,-w,w))/footprint;
+      }
       void main() {
         vec2 uv = vReflection.xy / vReflection.w;
-        float rough = hash(floor(vWorld.xz*210.0)) - 0.5;
-        vec2 blur = vec2(0.7,1.1) / resolution;
-        vec3 reflected = texture2D(tDiffuse, uv).rgb * 0.50;
-        reflected += texture2D(tDiffuse, uv + blur).rgb * 0.25;
-        reflected += texture2D(tDiffuse, uv - blur).rgb * 0.25;
+        vec2 grainFootprint = fwidth(vWorld.xz*210.0);
+        float grainVisibility = 1.0-smoothstep(0.5,1.5,max(grainFootprint.x,grainFootprint.y));
+        float rough = (hash(floor(vWorld.xz*210.0)) - 0.5) * grainVisibility;
+        // Filter minified reflections isotropically; the old diagonal 3-tap blur
+        // smeared near detail while leaving stair steps on the opposite diagonal.
+        vec3 reflected = texture2D(tDiffuse, uv, 0.35).rgb;
         vec3 view = normalize(cameraPosition - vWorld);
         float fresnel = 0.26 + 0.4 * pow(1.0-max(view.y,0.0),3.0);
         vec3 base = vec3(0.016,0.025,0.028) * (0.95 + rough*0.08);
@@ -220,23 +229,17 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         float edge = line(abs(vWorld.x)-2.61,0.012);
         float inner = line(abs(vWorld.x)-2.54,0.002);
         result = mix(result,vec3(0.28,0.19,0.08),max(edge,inner)*0.48);
-        // The brass inlay stays visible as material. A separate soft optical
-        // footprint adds incident light from the ceiling projector above it.
-        vec2 medallion = vec2(vWorld.x-sourceX,
+        // Diffuse ceiling illumination in world space. No engraved ring, annular
+        // gobo, camera-facing decal, or time-dependent radius: just a soft pool
+        // beneath each real lamp, smoothly disappearing before the next station.
+        vec2 lampOffset = vec2(vWorld.x-sourceX,
           mod(vWorld.z-stationOffset+stationSpacing*0.5,stationSpacing)-stationSpacing*0.5);
-        float radialDistance = length(medallion);
-        float ring = line(radialDistance-ringRadius,0.004) * 0.52;
-        ring += line(radialDistance-(ringRadius+0.04),0.002)*0.3;
-        result = mix(result,vec3(0.25,0.18,0.09),min(ring,0.7));
-        float softPool = 1.0-smoothstep(poolRadius*0.66,poolRadius,radialDistance);
-        float projectedRing = exp(-pow((radialDistance-ringRadius)/0.043,2.0));
+        float radialDistance = length(lampOffset);
+        float normalizedRadius = radialDistance / poolRadius;
+        float softPool = exp(-3.5*normalizedRadius*normalizedRadius)
+          * (1.0-smoothstep(0.8,1.0,normalizedRadius));
         float incidence = lightHeight/sqrt(lightHeight*lightHeight+radialDistance*radialDistance);
-        float irradiance = (0.075*softPool+0.25*projectedRing)*pow(incidence,3.0);
-        vec3 stoneResponse = vec3(0.42,0.39,0.31)*(0.98+rough*0.04);
-        result += vec3(1.0,0.82,0.55)*irradiance*stoneResponse;
-        // Grazing direct illumination softens the mirror locally rather than
-        // painting an opaque decal over the stone and its underlying engraving.
-        result += vec3(0.025,0.019,0.010)*softPool;
+        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0);
         float distanceFade = smoothstep(32.0,95.0,distance(cameraPosition,vWorld));
         result = mix(result,vec3(0.007,0.014,0.019),distanceFade);
         gl_FragColor = vec4(result,1.0);
@@ -246,10 +249,14 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
   function makeFloor(length) {
     const group = new THREE.Group();
     reflection = new Reflector(new THREE.PlaneGeometry(width, length), {
-      clipBias: 0.003, textureWidth: 1024, textureHeight: 768, multisample: 0,
+      clipBias: 0.003, textureWidth: 1, textureHeight: 1,
+      multisample: Math.min(4, renderer.capabilities.maxSamples),
       shader: floorShader, color: 0xffffff,
     });
     reflection.name = 'Obsidian planar reflection';
+    const reflectedTexture = reflection.getRenderTarget().texture;
+    reflectedTexture.generateMipmaps = true;
+    reflectedTexture.minFilter = THREE.LinearMipmapLinearFilter;
     // A mirror camera must never clone the player's spatial-audio listener.
     const mirrorCamera = reflection.getReflectionCamera(camera);
     mirrorCamera.clear();
@@ -272,11 +279,12 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
   }
   function resize() {
     if (!reflection) return;
-    const ratio = Math.min(1, 1024 / Math.max(window.innerWidth, window.innerHeight));
+    // Give enlarged floor details enough samples, while bounding the secondary
+    // view instead of allocating another native 4K/HiDPI scene.
+    const ratio = Math.min(renderer.getPixelRatio(), 1536 / Math.max(window.innerWidth, window.innerHeight));
     const w = Math.max(320, Math.round(window.innerWidth * ratio));
     const h = Math.max(240, Math.round(window.innerHeight * ratio));
     reflection.getRenderTarget().setSize(w, h);
-    reflection.material.uniforms.resolution.value.set(w, h);
   }
   return { materials, attachChunk, makeFloor, makeRearWall, resize };
 }

@@ -1,4 +1,4 @@
-import { LIGHTING_LAYOUT } from './museum-lighting-layout.js?v=lighting-20260912-r3';
+import { LIGHTING_LAYOUT, projectorVolumeBounds } from './museum-lighting-layout.js?v=lighting-20260922-r6';
 
 /**
  * Two draws add the air illuminated by the actual ceiling projectors and dust.
@@ -6,6 +6,7 @@ import { LIGHTING_LAYOUT } from './museum-lighting-layout.js?v=lighting-20260912
  */
 export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width = 6, ceilingY = 6.7 }) {
   const layout = LIGHTING_LAYOUT;
+  const volume = projectorVolumeBounds();
   const root = new THREE.Group();
   root.name = 'Museum atmosphere';
   scene.add(root);
@@ -21,7 +22,8 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
     uFloorY: { value: layout.floorY },
     uApertureRadius: { value: layout.apertureRadius },
     uPoolRadius: { value: layout.poolRadius },
-    uRingRadius: { value: layout.ringRadius },
+    uVolumeBottomY: { value: volume.bottomY },
+    uVolumeTopY: { value: volume.topY },
   };
   const lightingUniforms = `
     uniform float uStationSpacing;
@@ -31,16 +33,18 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
     uniform float uFloorY;
     uniform float uApertureRadius;
     uniform float uPoolRadius;
-    uniform float uRingRadius;
+    uniform float uVolumeBottomY;
+    uniform float uVolumeTopY;
   `;
 
-  // Back faces of a box bound each volume. The fragment shader clips the view
-  // ray to the actual finite cone, so looking up or into the floor reflection
-  // never reveals a flat beam card. All 13 proxies share one draw call.
+  // A circumscribed frustum covers the analytic beam without rectangular caps.
+  // Its bottom is clear of the reflective floor: a coplanar proxy cap made whole
+  // patches of the light fail the depth test as the camera moved. All 13 proxies
+  // still share one draw call, including when viewed from inside a beam.
   const beamCount = 13;
-  const proxy = new THREE.BoxGeometry(layout.poolRadius * 2,
-    layout.lensY - layout.floorY, layout.poolRadius * 2);
-  proxy.translate(layout.sourceX, (layout.lensY + layout.floorY) / 2, 0);
+  const proxy = new THREE.CylinderGeometry(volume.topRadius, volume.bottomRadius,
+    volume.topY - volume.bottomY, volume.radialSegments, 1, false);
+  proxy.translate(layout.sourceX, (volume.topY + volume.bottomY) / 2, 0);
   const shaftPositions = [], shaftSlots = [], shaftIndices = [];
   for (let shaft = 0; shaft < beamCount; shaft++) {
     shaftPositions.push(...proxy.attributes.position.array);
@@ -77,12 +81,14 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
       // has a real radius; the beam cannot taper to a point above its lamp.
       bool intersectBeam(vec3 origin, vec3 direction, inout float entry, inout float exit) {
         float height = uLensY - uFloorY;
+        float top = uVolumeTopY - uLensY;
+        float bottom = uVolumeBottomY - uLensY;
         if (abs(direction.y) > 0.00001) {
-          float y0 = -origin.y / direction.y;
-          float y1 = (-height - origin.y) / direction.y;
+          float y0 = (top - origin.y) / direction.y;
+          float y1 = (bottom - origin.y) / direction.y;
           entry = max(entry, min(y0, y1));
           exit = min(exit, max(y0, y1));
-        } else if (origin.y > 0.0 || origin.y < -height) {
+        } else if (origin.y > top || origin.y < bottom) {
           return false;
         }
         float slope = (uPoolRadius - uApertureRadius) / height;
@@ -119,25 +125,25 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
         vec3 direction = normalize(vWorld - cameraPosition);
         float entry = 0.0, exit = length(vWorld - cameraPosition);
         if (!intersectBeam(origin, direction, entry, exit)) discard;
-        float stride = (exit - entry) * 0.25;
+        float stride = (exit - entry) / 6.0;
         float integrated = 0.0;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 6; i++) {
           vec3 samplePoint = origin + direction * (entry + (float(i) + 0.5) * stride);
           float along = clamp(-samplePoint.y / (uLensY - uFloorY), 0.0, 1.0);
           float radius = mix(uApertureRadius, uPoolRadius, along);
           float normalizedRadius = length(samplePoint.xz) / radius;
-          float softEdge = 1.0 - smoothstep(0.72, 1.0, normalizedRadius);
-          // A weak annular component corresponds to the projector's floor ring.
-          float annularDistance = (normalizedRadius - uRingRadius / uPoolRadius) / 0.075;
-          float annulus = exp(-annularDistance * annularDistance);
-          float density = softEdge * (0.68 + annulus * 0.32);
+          float density = exp(-3.5 * normalizedRadius * normalizedRadius)
+            * (1.0 - smoothstep(0.8, 1.0, normalizedRadius));
           float sourceFalloff = 0.30 / max(radius, 0.12);
           vec3 worldSample = samplePoint + vec3(uSourceX, uLensY, vSourceZ);
+          // Fade to zero before either proxy cap, rather than exposing a clipped
+          // luminous surface. No camera/time-dependent noise in the ray samples.
+          float capFade = smoothstep(uVolumeBottomY, uVolumeBottomY + 0.12, worldSample.y)
+            * (1.0 - smoothstep(uVolumeTopY - 0.06, uVolumeTopY, worldSample.y));
           float fogFade = 1.0 - smoothstep(50.0, 77.0, distance(cameraPosition, worldSample));
-          integrated += density * sourceFalloff * fogFade * stride;
+          integrated += density * sourceFalloff * capFade * fogFade * stride;
         }
         float alpha = 1.0 - exp(-integrated * 0.021);
-        if (alpha < 0.0002) discard;
         gl_FragColor = vec4(1.0, 0.865, 0.665, min(alpha, 0.085));
       }
     `,
@@ -207,7 +213,8 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
         float along = clamp((uLensY - p.y) / (uLensY - uFloorY), 0.0, 1.0);
         float radius = mix(uApertureRadius, uPoolRadius, along);
         float normalizedRadius = length(vec2(p.x - uSourceX, p.z - sourceZ)) / radius;
-        float lit = (1.0 - smoothstep(0.72, 1.0, normalizedRadius))
+        float lit = exp(-3.5 * normalizedRadius * normalizedRadius)
+          * (1.0 - smoothstep(0.8, 1.0, normalizedRadius))
           * step(uFloorY, p.y) * step(p.y, uLensY);
         vec4 viewPosition = viewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * viewPosition;
