@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/museum.css?v=museum-copy-20260916" />
+  <link rel="stylesheet" href="css/museum.css?v=museum-source-20260922" />
   <script type="importmap">
   {
     "imports": {
@@ -61,11 +61,32 @@
         <button class="go" id="enter-go" disabled></button>
         <div class="prog" id="enter-prog" role="status" aria-live="polite"></div>
       </div>
+      <p id="runtime-status" role="status" aria-live="polite"></p>
     </div>
+    <details id="museum-settings">
+      <summary id="settings-title">操作设置</summary>
+      <div class="settings-fields">
+        <div class="setting-row">
+          <label for="look-sensitivity" id="sensitivity-label">鼠标灵敏度</label>
+          <div class="sensitivity-control">
+            <input type="range" id="look-sensitivity" min="0.3" max="3" step="0.1" value="1" />
+            <output id="sensitivity-value" for="look-sensitivity">1.0</output>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label for="frame-limit" id="frame-limit-label">帧率上限</label>
+          <select id="frame-limit">
+            <option value="60" selected>60 FPS</option>
+            <option value="90">90 FPS</option>
+            <option value="120">120 FPS</option>
+          </select>
+        </div>
+      </div>
+    </details>
     <div class="control-guide enter-guide" id="enter-keys" aria-label="操作说明"></div>
     <button class="back" id="enter-back"></button>
   </div>
 
-  <script type="module" src="js/museum.js?v=museum-copy-20260916"></script>
+  <script type="module" src="js/museum.js?v=museum-source-20260922"></script>
 </body>
 </html>

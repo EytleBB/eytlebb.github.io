@@ -6,6 +6,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260912-r3';
+import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922';
+import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
 import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260912-r3';
@@ -17,6 +19,18 @@ const lang = (() => {
 })();
 document.documentElement.lang = lang;
 const T = (zh, en, ko) => (lang === 'en' ? en : lang === 'ko' ? ko : zh);
+
+// Preferences are optional: private browsing or full storage must not block entry.
+let savedSettings = {};
+try { savedSettings = JSON.parse(localStorage.getItem('eytle-museum-settings') || '{}') || {}; } catch {}
+const settings = {
+  sensitivity: Number.isFinite(Number(savedSettings.sensitivity))
+    ? Math.max(0.3, Math.min(3, Number(savedSettings.sensitivity))) : 1,
+  fps: [60, 90, 120].includes(savedSettings.fps) ? savedSettings.fps : 60,
+};
+function saveSettings() {
+  try { localStorage.setItem('eytle-museum-settings', JSON.stringify(settings)); } catch {}
+}
 
 /* ---- overlay / chrome DOM ---- */
 const enterEl = document.getElementById('enter');
@@ -34,12 +48,14 @@ const exitBtn = document.getElementById('exit-btn');
 const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
 document.title = `${exhibitionName} · This is Eytle`;
 exhibitionTitle.textContent = exhibitionName;
-enterSub.textContent = T('WASD 移动，鼠标调整视角。', 'Use WASD to move and the mouse to look around.', 'WASD로 이동하고 마우스로 시점을 조절하세요.');
+enterSub.textContent = T('自由行走，停下来细看。', 'Explore freely. Pause for a closer look.', '자유롭게 걷고, 멈추어 자세히 감상하세요.');
 function controlGuideMarkup() {
   const movement = T('移动', 'Move', '이동');
   const inspect = T('查看', 'View', '보기');
   const zoom = T('缩放', 'Zoom', '확대');
-  const run = T('快走', 'Run', '달리기');
+  const walk = T('慢走', 'Walk', '걷기');
+  const crouch = T('蹲下', 'Crouch', '앉기');
+  const jump = T('跳跃', 'Jump', '점프');
   const pause = T('暂停', 'Pause', '일시정지');
   return `
     <div class="guide-group movement-guide">
@@ -64,14 +80,17 @@ function controlGuideMarkup() {
     <span class="guide-rule" aria-hidden="true"></span>
     <div class="guide-shortcuts">
       <div class="shortcut"><span class="wide-key esc-key">Esc</span><span>${pause}</span></div>
-      <div class="shortcut"><span class="wide-key shift-key">Shift</span><span>${run}</span></div>
+      <div class="shortcut"><span class="wide-key shift-key">Shift</span><span>${walk}</span></div>
+      <div class="shortcut"><span class="wide-key">Ctrl</span><span>${crouch}</span></div>
+      <div class="shortcut"><span class="wide-key">Space</span><span>${jump}</span></div>
+      <div class="shortcut"><span class="wide-key">E</span><span>${inspect}</span></div>
     </div>`;
 }
 const controlGuide = controlGuideMarkup();
 enterKeys.innerHTML = controlGuide;
-enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左键查看，鼠标右键缩放，Shift 快走，Esc 暂停',
-  'Controls: WASD move, left click view, right click zoom, Shift run, Esc pause',
-  '조작 안내: WASD 이동, 왼쪽 클릭 보기, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
+enterKeys.setAttribute('aria-label', T('操作说明：WASD 跑动，Shift 慢走，Ctrl 蹲下，空格跳跃，E 或左键查看和返回，右键放大，Esc 暂停',
+  'Controls: WASD run, Shift walk, Ctrl crouch, Space jump, E or left click inspect and return, hold right click zoom, Esc pause',
+  '조작 안내: WASD 달리기, Shift 걷기, Ctrl 앉기, Space 점프, E 또는 왼쪽 클릭 감상 및 돌아가기, 오른쪽 클릭 확대, Esc 일시정지'));
 enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
 exitBtn.title = T('退出', 'Exit', '나가기');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
@@ -79,6 +98,27 @@ hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
 exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
 enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = 'index.html'; });
+
+const runtimeStatus = document.getElementById('runtime-status');
+const sensitivityInput = document.getElementById('look-sensitivity');
+const sensitivityValue = document.getElementById('sensitivity-value');
+const frameLimitInput = document.getElementById('frame-limit');
+document.getElementById('settings-title').textContent = T('操作设置', 'Controls', '조작 설정');
+document.getElementById('sensitivity-label').textContent = T('鼠标灵敏度', 'Mouse sensitivity', '마우스 감도');
+document.getElementById('frame-limit-label').textContent = T('帧率上限', 'Frame limit', '최대 프레임');
+sensitivityInput.value = settings.sensitivity;
+sensitivityValue.value = `${settings.sensitivity.toFixed(1)}×`;
+frameLimitInput.value = settings.fps;
+sensitivityInput.addEventListener('input', () => {
+  settings.sensitivity = Number(sensitivityInput.value);
+  sensitivityValue.value = `${settings.sensitivity.toFixed(1)}×`;
+  saveSettings();
+});
+frameLimitInput.addEventListener('change', () => {
+  settings.fps = Number(frameLimitInput.value);
+  resetFrameTiming();
+  saveSettings();
+});
 
 let preloaded = false, entered = false;
 function setProgress(loaded, total) {
@@ -121,14 +161,15 @@ const TEXTURE_UPLOAD_MIN_INTERVAL_MS = 54;
 const TEXTURE_UPLOAD_FRAME_BUDGET_MS = 11.5;
 const TEXTURE_UPLOAD_MAX_WAIT_MS = 650;
 const PERF_AUTOWALK = new URLSearchParams(location.search).get('perf') === 'walk';
+const PERF_CAPTURE = new URLSearchParams(location.search).has('perf');
 const PERF_SAMPLE_LIMIT = 600;
 const perfFrameSamples = [];
 let perfFrameNumber = 0;
 let perfTextureUploads = 0;
 let perfChunkRetargets = 0;
 
-function recordPerformanceFrame(frameMs) {
-  if (!PERF_AUTOWALK) return;
+function recordPerformanceFrame(frameMs, renderMs) {
+  if (!PERF_CAPTURE) return;
   perfFrameSamples.push(frameMs);
   if (perfFrameSamples.length > PERF_SAMPLE_LIMIT) perfFrameSamples.shift();
   perfFrameNumber++;
@@ -150,6 +191,17 @@ function recordPerformanceFrame(frameMs) {
     uploads: perfTextureUploads,
     retargets: perfChunkRetargets,
     z: Number(camera.position.z.toFixed(2)),
+    x: Number(camera.position.x.toFixed(3)),
+    y: Number(camera.position.y.toFixed(3)),
+    speed: Number(player.state.speed.toFixed(3)),
+    grounded: player.state.grounded,
+    crouched: player.state.crouched,
+    locked: isLocked(),
+    fov: Number(camera.fov.toFixed(2)),
+    renderMs: Number(renderMs.toFixed(2)),
+    pixelRatio: renderer.getPixelRatio(),
+    frameLimit: settings.fps,
+    presented: presentedFrames,
   });
 }
 
@@ -223,7 +275,7 @@ async function loadImageList() {
 /* ============================================================
    RENDERER · SCENE · CAMERA · LOOP
    ============================================================ */
-const EYE_Y = 1.6;
+const EYE_Y = 1.65;
 const HALL_HALF_WIDTH = 3;
 const CHUNK_LEN = 14;
 const CEIL_Y = 6.7;
@@ -231,7 +283,7 @@ const VAULT_RISE = 3.0;
 const VAULT_SPRING_Y = CEIL_Y - VAULT_RISE;
 const LAMP_BASE_DEPTH = 0.045;
 const BLOOM_LAYER = 1;
-const CAMERA_FOV = 64;
+const CAMERA_FOV = 74;
 const ZOOM_FOV = 28;
 const ZOOM_FOV_SPEED = 78;
 const ART_INTERACT_DISTANCE = 3.5;
@@ -249,10 +301,14 @@ renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 1.04;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+let contextLost = false;
 
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
+  contextLost = true;
+  looping = false;
   renderer.setAnimationLoop(null);
+  while (textureUploadQueue.length) textureUploadQueue.shift().resolve(false);
   audioListener.setMasterVolume(0);
   if (document.pointerLockElement === canvas) document.exitPointerLock();
   document.body.classList.remove('locked', 'focused');
@@ -277,26 +333,52 @@ camera.position.set(0, EYE_Y, SPAWN_Z);
 // One listener follows every camera pose, including artwork focus tweens.
 camera.add(audioListener);
 
-const clock = new THREE.Timer();
 const updaters = [];
-function frame() {
+const frameScheduler = createMuseumFrameScheduler({ fps: settings.fps });
+let lastRenderedAt = null;
+let lastMaintenanceAt = 0;
+let presentedFrames = 0;
+function resetFrameTiming() {
+  lastRenderedAt = null;
+  frameScheduler.setFrameRate(settings.fps);
+  frameScheduler.requestFrame();
+}
+function requestSceneFrame() {
+  frameScheduler.requestFrame();
+}
+function frame(timestamp) {
+  if (contextLost) return;
   const frameStartedAt = performance.now();
-  clock.update();
-  const rawDelta = clock.getDelta();
-  const dt = Math.min(rawDelta, 0.05);
-  for (const fn of updaters) fn(dt);
+  const presentationTime = Number.isFinite(timestamp) ? timestamp : frameStartedAt;
+  const active = PERF_AUTOWALK || isLocked();
+  if (!frameScheduler.shouldRender({ now: presentationTime, active, visible: !document.hidden })) {
+    // Paused streaming can finish, but a settled menu does no draw work.
+    if (!document.hidden && frameStartedAt - lastMaintenanceAt >= 100) {
+      lastMaintenanceAt = frameStartedAt;
+      const retargeted = processChunkRetargetQueue(frameStartedAt);
+      if (!retargeted) processTextureUploadQueue(frameStartedAt);
+    }
+    return;
+  }
+  const rawDelta = lastRenderedAt === null ? 1 / settings.fps : (presentationTime - lastRenderedAt) / 1000;
+  lastRenderedAt = presentationTime;
+  const dt = Math.min(rawDelta, 0.1);
+  if (active) for (const fn of updaters) fn(dt);
   updatePictureSpotPool();
   fixtureBatch?.update();
   renderer.info.reset();
   renderGalleryFrame();
+  presentedFrames++;
+  if (PERF_CAPTURE) canvas.dataset.presented = presentedFrames;
   const retargetedChunkArtwork = processChunkRetargetQueue(frameStartedAt);
   if (!retargetedChunkArtwork) processTextureUploadQueue(frameStartedAt);
-  recordPerformanceFrame(rawDelta * 1000);
+  recordPerformanceFrame(rawDelta * 1000, performance.now() - frameStartedAt);
 }
 let looping = false;
 function startLoop() {
-  if (looping) return;
+  if (looping || contextLost) return;
   looping = true;
+  resetFrameTiming();
   renderer.setAnimationLoop(frame);
 }
 
@@ -377,6 +459,7 @@ window.addEventListener('resize', () => {
   bloomComposer.setSize(window.innerWidth / 2, window.innerHeight / 2);
   finalComposer.setSize(window.innerWidth, window.innerHeight);
   architecture.resize();
+  requestSceneFrame();
 });
 
 /* ============================================================
@@ -855,6 +938,7 @@ function disposeGalleryTexture(texture) {
 }
 
 function scheduleTextureUpload(imageIndex, texture) {
+  if (contextLost) return Promise.resolve(false);
   if (typeof renderer.initTexture !== 'function') return Promise.resolve(true);
   if (!looping) {
     try {
@@ -971,6 +1055,7 @@ function showArtworkTexture(slot, tex, imageIndex) {
   if (!hadMap) slot.pic.material.needsUpdate = true;
   textureLastUsed[imageIndex] = performance.now();
   fitArtwork(slot.pic, slot.frame, tex, imageIndex);
+  requestSceneFrame();
 }
 
 function showArtworkPlaceholder(slot) {
@@ -978,6 +1063,7 @@ function showArtworkPlaceholder(slot) {
   slot.pic.material.map = null;
   slot.pic.material.color.setHex(0x263248);
   if (hadMap) slot.pic.material.needsUpdate = true;
+  requestSceneFrame();
 }
 
 function setArtTexture(slot, imageIndex) {
@@ -1494,6 +1580,7 @@ function getRearWallZ() {
 }
 
 async function prewarmScene() {
+  if (contextLost) return;
   recycleChunks();
   updatePictureSpotPool();
   if (typeof renderer.compileAsync === 'function') {
@@ -1510,6 +1597,7 @@ async function prewarmScene() {
     [0, -0.35],
   ];
   for (const [ry, rx] of rotations) {
+    if (contextLost) return;
     camera.rotation.set(0, 0, 0, 'YXZ');
     camera.rotateY(ry);
     camera.rotateX(rx);
@@ -1522,60 +1610,72 @@ async function prewarmScene() {
 }
 
 /* ============================================================
-   FIRST-PERSON CONTROLS + MOVEMENT (with Shift run)
+   FIRST-PERSON CONTROLS · immediate look, fixed-step movement
    ============================================================ */
-const WALK_SPEED = 3.2, RUN_SPEED = 6.5;   // m/s
-const MOVE_ACCEL = 10.5, MOVE_DECEL = 13.5; // m/s^2
 const LOOK_SENS = 0.0015;
-const MAX_DELTA = 200;                       // safety cap for glitch spikes (raw input rarely hits it)
-let yaw = 0, pitch = 0;                      // start facing -Z (into the hall)
+const MAX_LOOK_SPIKE = 4096; // reject driver/lock glitches, never clip a normal flick
+let yaw = 0, pitch = 0;
 let roamEnabled = true;
 let zoomHeld = false;
+let ignoreNextLook = true;
 const isLocked = () => document.pointerLockElement === canvas;
+const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6 });
+const heldCodes = new Set();
+const keys = { forward: false, back: false, left: false, right: false, walk: false, crouch: false, jump: false, jumpPressed: false };
+const movementCodes = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'Space']);
+let jumpQueued = false;
 
 function syncMuseumAudioState() {
   const audible = entered && isLocked() && !document.hidden;
   audioListener.setMasterVolume(audible ? 1 : 0);
 }
 
-const keys = { f: false, b: false, l: false, r: false, run: false };
+function clearInput() {
+  heldCodes.clear();
+  for (const key of Object.keys(keys)) keys[key] = false;
+  jumpQueued = false;
+  setZoomHeld(false);
+  player.stop();
+}
+
 function onKey(e, down) {
-  switch (e.code) {
-    case 'KeyW': case 'ArrowUp':    keys.f = down; break;
-    case 'KeyS': case 'ArrowDown':  keys.b = down; break;
-    case 'KeyA': case 'ArrowLeft':  keys.l = down; break;
-    case 'KeyD': case 'ArrowRight': keys.r = down; break;
-    case 'ShiftLeft': case 'ShiftRight': keys.run = down; break;
+  if (!isLocked()) return;
+  if (e.code === 'KeyE') {
+    e.preventDefault();
+    if (down && !e.repeat) inspectArtwork();
+    return;
   }
+  if (!movementCodes.has(e.code)) return;
+  e.preventDefault();
+  if (focusState) return;
+  if (down) heldCodes.add(e.code);
+  else heldCodes.delete(e.code);
+  keys.forward = heldCodes.has('KeyW') || heldCodes.has('ArrowUp');
+  keys.back = heldCodes.has('KeyS') || heldCodes.has('ArrowDown');
+  keys.left = heldCodes.has('KeyA') || heldCodes.has('ArrowLeft');
+  keys.right = heldCodes.has('KeyD') || heldCodes.has('ArrowRight');
+  keys.walk = heldCodes.has('ShiftLeft') || heldCodes.has('ShiftRight');
+  keys.crouch = heldCodes.has('ControlLeft') || heldCodes.has('ControlRight');
+  keys.jump = heldCodes.has('Space');
+  if (e.code === 'Space' && down && !e.repeat) jumpQueued = true;
 }
 document.addEventListener('keydown', e => onKey(e, true));
-document.addEventListener('keyup',   e => onKey(e, false));
+document.addEventListener('keyup', e => onKey(e, false));
 
-// hand-rolled mouse-look with PER-EVENT delta clamp: a single huge movementX
-// (driver spike / first event after (re)lock) can no longer throw the view
 document.addEventListener('mousemove', (e) => {
-  if (!isLocked() || focusState) return;     // focus tween owns the camera
-  const dx = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementX || 0));
-  const dy = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, e.movementY || 0));
-  yaw   -= dx * LOOK_SENS;
-  pitch -= dy * LOOK_SENS;
-  pitch = Math.max(-1.2, Math.min(1.2, pitch));
+  if (!isLocked() || focusState) return;
+  if (ignoreNextLook) { ignoreNextLook = false; return; }
+  const dx = e.movementX || 0;
+  const dy = e.movementY || 0;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > MAX_LOOK_SPIKE || Math.abs(dy) > MAX_LOOK_SPIKE) return;
+  // Scale by the visible field of view so zoom stays precise without smoothing latency.
+  const zoomScale = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+  const sensitivity = LOOK_SENS * settings.sensitivity * zoomScale;
+  yaw -= dx * sensitivity;
+  pitch = Math.max(-Math.PI / 2 + 0.015, Math.min(Math.PI / 2 - 0.015, pitch - dy * sensitivity));
+  yaw = THREE.MathUtils.euclideanModulo(yaw + Math.PI, Math.PI * 2) - Math.PI;
 });
-
-function clampToHall(pos) {
-  const m = 0.4; // keep off the walls
-  if (pos.x >  HALL_HALF_WIDTH - m) pos.x =  HALL_HALF_WIDTH - m;
-  if (pos.x < -HALL_HALF_WIDTH + m) pos.x = -HALL_HALF_WIDTH + m;
-  if (pos.z > getRearWallZ() - 0.6) pos.z = getRearWallZ() - 0.6;
-  pos.y = EYE_Y;
-}
-
-const _fwd = new THREE.Vector3();
-const _right = new THREE.Vector3();
-const _moveIntent = new THREE.Vector3();
-const _moveVelocity = new THREE.Vector3();
-const _moveDir = new THREE.Vector3(0, 0, -1);
-let moveSpeed = 0;
 
 function approachScalar(current, target, maxDelta) {
   if (current < target) return Math.min(target, current + maxDelta);
@@ -1595,64 +1695,21 @@ updaters.push((dt) => {
   camera.updateProjectionMatrix();
 });
 
+const autoWalkInput = { forward: true };
 updaters.push((dt) => {
+  if (!focusState) camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  if (PERF_AUTOWALK || (roamEnabled && isLocked())) {
+    const jumpHeld = keys.jump;
+    keys.jump = keys.jump || jumpQueued;
+    keys.jumpPressed = jumpQueued;
+    const state = player.advance(dt, PERF_AUTOWALK ? autoWalkInput : keys, yaw);
+    camera.position.copy(state.position);
+    keys.jump = jumpHeld;
+    keys.jumpPressed = false;
+    jumpQueued = false;
+  }
   recycleChunks();
   updateTextureStreaming();
-
-  // rebuild orientation from yaw/pitch unless a focus tween drives the camera
-  if (!focusState) {
-    camera.rotation.set(0, 0, 0, 'YXZ');
-    camera.rotateY(yaw);
-    camera.rotateX(pitch);
-  }
-
-  if (!roamEnabled || !isLocked()) {
-    if (PERF_AUTOWALK) {
-      camera.position.z -= RUN_SPEED * dt;
-      clampToHall(camera.position);
-      return;
-    }
-    _moveVelocity.set(0, 0, 0);
-    moveSpeed = 0;
-    return;
-  }
-  camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
-  _right.crossVectors(_fwd, camera.up).normalize();
-
-  _moveIntent.set(0, 0, 0);
-  if (keys.f) _moveIntent.add(_fwd);
-  if (keys.b) _moveIntent.addScaledVector(_fwd, -1);
-  if (keys.r) _moveIntent.add(_right);
-  if (keys.l) _moveIntent.addScaledVector(_right, -1);
-
-  const hasIntent = _moveIntent.lengthSq() > 0.0001;
-  let brakingAgainstMotion = false;
-  if (hasIntent) {
-    _moveIntent.normalize();
-    brakingAgainstMotion = moveSpeed > 0.15 && _moveIntent.dot(_moveDir) < -0.35;
-  }
-
-  const targetSpeed = hasIntent && !brakingAgainstMotion ? (keys.run ? RUN_SPEED : WALK_SPEED) : 0;
-  moveSpeed = approachScalar(moveSpeed, targetSpeed, (hasIntent && !brakingAgainstMotion ? MOVE_ACCEL : MOVE_DECEL) * dt);
-  if (hasIntent && !brakingAgainstMotion) {
-    _moveDir.copy(_moveIntent);
-  } else if (hasIntent && moveSpeed <= 0.15) {
-    _moveDir.copy(_moveIntent);
-  }
-  if (moveSpeed > 0.001) {
-    _moveVelocity.copy(_moveDir).multiplyScalar(moveSpeed);
-  } else {
-    moveSpeed = 0;
-    _moveVelocity.set(0, 0, 0);
-  }
-
-  const p = camera.position;
-  const beforeX = p.x;
-  const beforeZ = p.z;
-  p.addScaledVector(_moveVelocity, dt);
-  clampToHall(p);
-  if (p.x !== beforeX + _moveVelocity.x * dt) _moveVelocity.x = 0;
-  if (p.z !== beforeZ + _moveVelocity.z * dt) _moveVelocity.z = 0;
 });
 
 /* ============================================================
@@ -1685,6 +1742,8 @@ function focusOn(mesh) {
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
   const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
 
+  clearInput();
+  camera.position.copy(player.state.position);
   savedYaw = yaw; savedPitch = pitch;
   roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
   setZoomHeld(false);
@@ -1701,6 +1760,7 @@ function focusOn(mesh) {
 
 function unfocus() {
   if (!focusState || focusState.phase === 'returning' || !roamReturn) return;
+  clearInput();
   document.body.classList.remove('focused');
   focusState = {
     phase: 'returning', t: 0,
@@ -1714,6 +1774,7 @@ function cancelFocus() {  // hard reset (used when pausing)
   if (focusState || roamReturn) {        // only when actually focused
     if (roamReturn) camera.position.copy(roamReturn.pos);
     yaw = savedYaw; pitch = savedPitch;
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
   }
   focusState = null;
   roamReturn = null;
@@ -1752,10 +1813,20 @@ updaters.push(() => {
 /* ---- pointer-lock lifecycle: the #enter overlay IS the pause menu ---- */
 document.addEventListener('pointerlockchange', () => {
   const locked = isLocked();
+  clearInput();
+  ignoreNextLook = true;
+  enterEl.inert = locked;
   document.body.classList.toggle('locked', locked);
+  resetFrameTiming();
   syncMuseumAudioState();
+  if (locked) {
+    runtimeStatus.textContent = '';
+    enterGo.blur();
+  }
   if (!locked) {
     cancelFocus();                       // resume cleanly next time
+    camera.fov = CAMERA_FOV;
+    camera.updateProjectionMatrix();
     if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
   }
 });
@@ -1774,37 +1845,72 @@ document.addEventListener('mouseup', (e) => {
   if (e.button === 2) setZoomHeld(false);
 });
 
-window.addEventListener('blur', () => setZoomHeld(false));
-document.addEventListener('visibilitychange', syncMuseumAudioState);
+window.addEventListener('blur', () => {
+  clearInput();
+  if (isLocked()) document.exitPointerLock();
+});
+document.addEventListener('visibilitychange', () => {
+  clearInput();
+  syncMuseumAudioState();
+  if (document.hidden) {
+    renderer.setAnimationLoop(null);
+    if (isLocked()) document.exitPointerLock();
+  } else if (looping) {
+    resetFrameTiming();
+    renderer.setAnimationLoop(frame);
+  }
+});
 
 canvas.addEventListener('click', (e) => {
-  if (e.button !== 0) return;
-  if (!isLocked()) return;               // (clicks on the overlay handle locking)
-  if (focusState) { unfocus(); return; } // click again to leave focus
+  if (e.button === 0) inspectArtwork();
+});
+
+function inspectArtwork() {
+  if (!isLocked()) return;
+  if (focusState) { unfocus(); return; }
   const hit = getAimedArtworkHit();
   if (hit) focusOn(hit.object);
-});
+}
 
 // Lock the pointer requesting RAW mouse input (unadjustedMovement) — this is
 // the real fix for the "fling": it bypasses the Windows mouse-acceleration that
 // balloons movementX on a fast flick. Falls back to a plain lock if unsupported.
-function lockPointer() {
+let lockPending = false;
+function reportPointerLockFailure() {
+  runtimeStatus.textContent = T('无法捕获鼠标。请再次点击进入，或用桌面浏览器打开。',
+    'Mouse capture failed. Try Enter again, or open in a desktop browser.',
+    '마우스를 캡처할 수 없습니다. 다시 입장하거나 데스크톱 브라우저에서 여세요.');
+}
+async function lockPointer() {
+  if (lockPending || isLocked()) return;
+  lockPending = true;
+  runtimeStatus.textContent = '';
   try {
-    const p = canvas.requestPointerLock({ unadjustedMovement: true });
-    if (p && typeof p.catch === 'function') p.catch(() => canvas.requestPointerLock());
-  } catch {
-    canvas.requestPointerLock();
+    try {
+      await canvas.requestPointerLock({ unadjustedMovement: true });
+    } catch (error) {
+      // Retry only unsupported raw input; an Esc/security rejection needs a fresh click.
+      if (error.name !== 'NotSupportedError') throw error;
+      await canvas.requestPointerLock();
+    }
+  } catch (error) {
+    reportPointerLockFailure();
+  } finally {
+    lockPending = false;
   }
 }
+document.addEventListener('pointerlockerror', () => {
+  if (!lockPending) reportPointerLockFailure();
+});
 
-// click the start/pause overlay (or its button) to lock the pointer and play
+// Only the button enters: sliders, disclosure and keyboard settings never capture the pointer.
 function enterPlay() {
   if (!preloaded) return;
   entered = true;
   startMuseumTrack();
   lockPointer();
 }
-enterEl.addEventListener('click', enterPlay);
+enterGo.addEventListener('click', enterPlay);
 
 /* ---- boot ---- */
 async function boot() {
@@ -1822,6 +1928,7 @@ async function boot() {
   setProgress(0, textureCount);
   let done = 0;
   await preloadInitialTextures(() => setProgress(++done, textureCount));
+  if (contextLost) return;
   prewarmMuseumTrack();
   enterProg.textContent = T('正在准备展馆…', 'Preparing exhibition…', '전시 준비 중…');
   buildHall();
@@ -1829,13 +1936,14 @@ async function boot() {
   bloomOcclusion = createMuseumBloomOcclusion(scene);
   try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
   await prewarmScene();
+  if (contextLost) return;
   startLoop();        // render the hall behind the translucent start overlay
   updateTextureStreaming(true); // use the start overlay time to prepare the next visible batches
   readyToEnter();
   if (PERF_AUTOWALK) {
     entered = true;
     enterEl.hidden = true;
-    clock.update();
+    resetFrameTiming();
   }
 }
 boot();
