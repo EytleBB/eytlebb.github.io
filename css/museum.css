@@ -10,12 +10,12 @@
 html, body { height:100%; overflow:hidden; background:#080c12; }
 body { font-family:'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-serif; color:var(--ivory); -webkit-font-smoothing:antialiased; }
 button { -webkit-tap-highlight-color:transparent; }
-button:focus-visible { outline:2px solid var(--ivory); outline-offset:7px; }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--ivory); outline-offset:5px; }
 #scene-canvas { display:block; width:100vw; height:100vh; }
 
 /* ---- start / pause overlay (same element doubles as the pause menu) ---- */
 #enter {
-  position:fixed; inset:0; z-index:10; cursor:pointer; isolation:isolate;
+  position:fixed; inset:0; z-index:10; cursor:default; isolation:isolate;
   background:linear-gradient(90deg,rgba(4,8,14,.62) 0%,rgba(4,8,14,.32) 36%,transparent 73%),
     linear-gradient(0deg,rgba(4,8,14,.82) 0%,rgba(4,8,14,.15) 30%,transparent 67%,rgba(4,8,14,.36));
   transition:opacity .65s ease;
@@ -77,6 +77,30 @@ html[lang="ko"] #enter h1 { font-size:clamp(42px,6.3vw,88px); letter-spacing:-.0
 }
 #enter .back::before { content:'↗'; position:absolute; left:0; top:2px; font-size:17px; font-weight:400; color:var(--champagne); }
 #enter .back:hover { color:var(--ivory); }
+#runtime-status { max-width:540px; margin-top:12px; color:var(--champagne); font-size:12px; line-height:1.7; }
+#runtime-status:empty { display:none; }
+
+/* Native controls remain keyboard accessible in both the entrance and pause menu. */
+#museum-settings {
+  position:absolute; right:var(--edge); bottom:32px; width:300px;
+  border:1px solid var(--line); background:rgba(8,12,18,.88); border-radius:2px;
+  font-size:11px; line-height:1.5; color:#c4c7c7;
+}
+#museum-settings summary {
+  padding:12px 16px; color:var(--ivory); cursor:pointer; letter-spacing:.05em;
+}
+#museum-settings summary::marker { color:var(--champagne); font-size:.85em; }
+#museum-settings[open] summary { border-bottom:1px solid var(--line); }
+.settings-fields { display:grid; gap:14px; padding:16px; }
+.setting-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(125px,1.2fr); align-items:center; gap:14px; }
+.setting-row label { line-height:1.6; }
+.setting-row select {
+  width:100%; min-width:0; min-height:32px; padding:5px 8px; border:1px solid var(--line); border-radius:2px;
+  background:#111923; color:var(--ivory); font:inherit; cursor:pointer; color-scheme:dark;
+}
+.sensitivity-control { display:flex; align-items:center; gap:8px; }
+#look-sensitivity { width:100%; min-width:0; height:28px; accent-color:var(--champagne); cursor:pointer; }
+#sensitivity-value { min-width:2.3em; text-align:right; color:var(--ivory); font-variant-numeric:tabular-nums; }
 
 /* ---- in-game chrome (shown only while pointer is locked) ---- */
 #hud { opacity:0; transition:opacity .4s; }
@@ -168,9 +192,9 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
 .mouse-label-left::after { left:calc(100% + 5px); }
 .mouse-label-right { left:94px; }
 .mouse-label-right::after { right:calc(100% + 5px); }
-.guide-shortcuts { display:flex; flex-direction:column; gap:8px; }
+.guide-shortcuts { display:grid; grid-auto-flow:column; grid-template-rows:repeat(3,auto); gap:8px 16px; }
 .shortcut { display:flex; align-items:center; gap:8px; white-space:nowrap; color:rgba(205,214,230,.56); }
-.wide-key { height:28px; border-radius:2px; font-size:9px; letter-spacing:.04em; }
+.wide-key { min-width:40px; height:28px; padding:0 6px; border-radius:2px; font-size:9px; letter-spacing:.04em; }
 .esc-key { width:28px; min-width:28px; padding:0; font-size:8px; }
 .shift-key { width:46px; padding:0 7px; }
 
@@ -228,6 +252,34 @@ body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exi
   .enter-action { margin-top:10px; }
   #enter .go { min-height:42px; }
   #enter .enter-guide { left:auto; right:var(--edge); bottom:22px; transform-origin:right bottom; }
+}
+/* Let short windows and narrow screens scroll instead of stacking controls over the title. */
+@media (max-width:1000px), (max-height:640px) {
+  #enter { display:flex; flex-direction:column; align-items:flex-start; overflow-y:auto; padding:125px var(--edge) 30px; }
+  .enter-copy { position:static; flex:none; width:100%; margin:clamp(0px,3vh,28px) 0 0; }
+  #enter h1 { max-width:720px; }
+  #museum-settings { position:static; flex:none; width:min(360px,100%); margin-top:24px; }
+  #enter .enter-guide {
+    position:static; flex:none; flex-wrap:wrap; max-width:100%; gap:24px; margin-top:38px;
+    transform:none; font-size:10px;
+  }
+  #enter .guide-rule { display:none; }
+}
+@media (max-width:600px) {
+  #enter { padding-top:112px; }
+  #enter .enter-guide { gap:22px; }
+  #hud .movement-guide, #hud .mouse-guide, #hud .guide-rule { display:none; }
+  #hud { max-width:calc(100vw - 36px); }
+  #hud .guide-shortcuts { gap:6px 12px; }
+}
+@media (max-height:560px) {
+  #hud .movement-guide, #hud .mouse-guide, #hud .guide-rule { display:none; }
+  #hud .guide-shortcuts { grid-template-rows:repeat(2,auto); }
+  #art-hint { bottom:22%; }
+}
+@media (max-height:470px) {
+  #enter { padding-top:91px; }
+  #title { display:none; }
 }
 @media (prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; }
