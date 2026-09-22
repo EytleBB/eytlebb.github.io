@@ -3,7 +3,6 @@ const API = '/api/museum/v1';
 const COPY = {
   zh: {
     close:'关闭', untitled:'NULL', inventory:'编号', namesTab:'取名', commentsTab:'评论',
-    namesRule:'按票数选名，零票也可采用；同票取最早提交的。每幅画可点赞一个名字，再次点击取消。',
     commentsRule:'评论公开显示，请勿填写私人信息。',
     namePlaceholder:'输入名字', commentPlaceholder:'输入评论', nameLabel:'名字', commentLabel:'评论',
     nameSubmit:'提交名字', commentSubmit:'提交评论', moreNames:'更多名字', moreComments:'更多评论', anonymous:'访客',
@@ -20,7 +19,6 @@ const COPY = {
   },
   en: {
     close:'Close', untitled:'NULL', inventory:'ID', namesTab:'Names', commentsTab:'Comments',
-    namesRule:'Most votes wins, including zero. Ties use earliest submission. One vote per artwork; click again to cancel.',
     commentsRule:'Comments are public. Do not include private information.',
     namePlaceholder:'Enter a name', commentPlaceholder:'Enter a comment', nameLabel:'Name', commentLabel:'Comment',
     nameSubmit:'Submit name', commentSubmit:'Submit comment', moreNames:'More names', moreComments:'More comments', anonymous:'Visitor',
@@ -37,7 +35,6 @@ const COPY = {
   },
   ko: {
     close:'닫기', untitled:'NULL', inventory:'번호', namesTab:'이름', commentsTab:'댓글',
-    namesRule:'0표도 이름으로 채택됩니다. 최다 득표순이며 동률이면 먼저 제출한 이름을 사용합니다. 작품당 한 표, 다시 누르면 취소됩니다.',
     commentsRule:'댓글은 공개됩니다. 개인 정보를 입력하지 마세요.',
     namePlaceholder:'이름 입력', commentPlaceholder:'댓글 입력', nameLabel:'이름', commentLabel:'댓글',
     nameSubmit:'이름 제출', commentSubmit:'댓글 제출', moreNames:'이름 더 보기', moreComments:'댓글 더 보기', anonymous:'방문자',
@@ -182,7 +179,7 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
       panel.id = `museum-guestbook-panel-${kind}`;
       panel.setAttribute('role','tabpanel');
       panel.setAttribute('aria-labelledby',`museum-guestbook-tab-${kind}`);
-      const rule = element('p','guestbook-rule',isName?copy.namesRule:copy.commentsRule);
+      if (!isName) panel.append(element('p','guestbook-rule',copy.commentsRule));
       const list = element('ol',`guestbook-entries guestbook-${kind}`);
       list.setAttribute('aria-label',isName?copy.namesTab:copy.commentsTab);
       list.tabIndex = 0;
@@ -220,7 +217,7 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
         write(kind,{text:input.value.trim(),website:trap.value});
       });
       input.addEventListener('input',updateEnabled);
-      panel.append(rule,list,listState,more,form);
+      panel.append(list,listState,more,form);
       panels[kind] = {panel,list,listState,more,form,input,counter,submit};
     }
     const status = element('p','guestbook-status');

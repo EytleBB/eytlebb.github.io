@@ -12,9 +12,9 @@ import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-sou
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
 import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r6';
-import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r2';
+import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r3';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
-import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r2';
+import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {

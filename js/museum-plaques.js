@@ -37,20 +37,49 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
     return { canvas, texture, material };
   }
 
+  function drawPlaqueTitle(ctx, title) {
+    // Keep short titles prominent; fit the full 40-character name in two lines.
+    let lines;
+    let size = 54;
+    for (; size >= 24; size--) {
+      ctx.font = `${size}px ${serif}`;
+      lines = [];
+      let line = '';
+      for (const char of Array.from(title)) {
+        if (line && ctx.measureText(line + char).width > 512) {
+          const space = line.lastIndexOf(' ');
+          if (space > 0) {
+            lines.push(line.slice(0, space));
+            line = line.slice(space + 1);
+          } else {
+            lines.push(line);
+            line = '';
+          }
+        }
+        line += char;
+      }
+      if (line) lines.push(line.trimEnd());
+      if (lines.length <= 2) break;
+    }
+    ctx.textBaseline = 'middle';
+    const lineHeight = size * 1.3;
+    lines.forEach((line, i) => ctx.fillText(line, 48, 176 + (i - (lines.length - 1) / 2) * lineHeight));
+    ctx.textBaseline = 'alphabetic';
+  }
+
   function draw(record) {
     const summary = summaries.get(record.id);
     const title = summary?.title || 'NULL';
     const ctx = record.plaque.canvas.getContext('2d');
     ctx.fillStyle = '#bca47d'; ctx.fillRect(0, 0, 608, 384);
     ctx.fillStyle = '#eee8db'; ctx.fillRect(3, 3, 602, 378);
-    ctx.fillStyle = '#73614b'; ctx.font = `24px ${sans}`;
-    ctx.fillText(record.id.replace(/\.[^.]+$/, '').toUpperCase(), 40, 63);
+    ctx.fillStyle = '#73614b'; ctx.font = `25px ${sans}`;
+    ctx.fillText(record.id.replace(/\.[^.]+$/, '').toUpperCase(), 48, 67);
     ctx.fillStyle = '#262c2b';
-    ctx.font = `44px ${sans}`;
-    ctx.fillText(text('取名 · 评论', 'Names · Comments', '이름 · 댓글'), 40, 164);
-    ctx.fillStyle = '#a78b61'; ctx.fillRect(40, 218, 528, 1);
-    ctx.font = `27px ${sans}`; ctx.fillStyle = '#554736';
-    ctx.fillText(text('左键打开', 'Left-click to open', '왼쪽 클릭으로 열기'), 40, 308);
+    drawPlaqueTitle(ctx, title);
+    ctx.fillStyle = '#c7b89d'; ctx.fillRect(48, 268, 512, 1);
+    ctx.font = `28px ${sans}`; ctx.fillStyle = '#554736';
+    ctx.fillText(`${text('评论', 'Comments', '댓글')} ${summary?.commentsCount ?? 0}`, 48, 325);
     record.plaque.texture.needsUpdate = true;
 
     const label = record.title.canvas.getContext('2d');
@@ -105,10 +134,14 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
   function update(summary) {
     if (!summary?.id) return;
     const old = summaries.get(summary.id);
-    summaries.set(summary.id, summary);
+    const next = {
+      title: summary.title || 'NULL',
+      commentsCount: Number.isSafeInteger(summary.commentsCount) && summary.commentsCount > 0 ? summary.commentsCount : 0,
+    };
+    summaries.set(summary.id, next);
     // Bound metadata cache independently from the number of works in the archive.
     if (summaries.size > 256) summaries.delete(summaries.keys().next().value);
-    if (old?.title === summary.title) return;
+    if (old?.title === next.title && old?.commentsCount === next.commentsCount) return;
     const record = records.get(summary.id);
     if (record) draw(record);
   }

@@ -83,6 +83,8 @@
   padding:22px 0; margin-top:18px; color:var(--ink-soft); border-top:1px solid var(--hairline); font-size:11px;
 }
 .guestbook-list-state[hidden] { display:none; }
+#museum-guestbook-panel-names .guestbook-entry:first-child,
+#museum-guestbook-panel-names .guestbook-list-state { border-top:0; }
 .guestbook-empty-title { color:#66685e; font:400 15px/1.65 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; }
 .guestbook-more {
   align-self:flex-start; padding:10px 0 3px; min-height:34px; border:0; background:none;
