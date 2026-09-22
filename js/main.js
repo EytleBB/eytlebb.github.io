@@ -66,7 +66,7 @@ const DATA = {
     },
     {
       name: 'MC 要塞定位器', nameEn: 'MC Stronghold Finder', nameKo: 'MC 요새 찾기',
-      url: './mc-calc.html', external: false,
+      url: '/mc-calc', external: false,
       icon: 'images/Eye_of_Ender.png'   // Eye of Ender — ONLY here
     }
   ],
@@ -130,6 +130,10 @@ const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const navMap = ['about', 'projects', 'tools', 'patchlog', 'gallery', 'downloads'];
+const sectionPaths = Object.freeze({
+  about: '/', projects: '/projects', tools: '/tools',
+  patchlog: '/patchlog', gallery: '/gallery', downloads: '/downloads'
+});
 
 /* Desktop capability gate for the 3D museum (mobile/unsupported → grid). */
 function isMuseumCapable() {
@@ -1433,14 +1437,29 @@ function revealActiveNav() {
     nav.scrollLeft += item.right - bounds.right + inset;
   }
 }
-function go(section) {
+function sectionFromLocation() {
+  const legacy = location.hash.slice(1);
+  if (navMap.includes(legacy)) return legacy;
+  const path = location.pathname.replace(/\/+$/, '') || '/';
+  return navMap.find(section => sectionPaths[section] === path) || 'about';
+}
+function updateSectionUrl(section, replace = false) {
+  const target = sectionPaths[section] + location.search;
+  if (location.pathname + location.search + location.hash !== target) {
+    history[replace ? 'replaceState' : 'pushState'](null, '', target);
+  }
+}
+function restoreLocationSection() {
+  go(sectionFromLocation(), { replace: true });
+}
+function go(section, { replace = false } = {}) {
   if (!navMap.includes(section)) section = 'about';
   const renderEpoch = ++stageRenderEpoch;
   closeActiveOverlay?.(false);
   if (section !== activeSection) window.scrollTo({ top: 0, behavior: 'instant' });
   activeSection = section;
   document.documentElement.dataset.section = section;
-  if (location.hash.slice(1) !== section) history.replaceState(null, '', '#' + section);
+  updateSectionUrl(section, replace);
   document.querySelectorAll('.nav-i').forEach(b => {
     const selected = b.dataset.section === section;
     b.classList.toggle('on', selected);
@@ -1488,7 +1507,7 @@ function applyLang() {
   document.getElementById('nav').setAttribute('aria-label', t('主导航','Main navigation','주 탐색'));
   document.documentElement.lang = lang === 'zh' ? 'zh' : lang;
   lampLabel();
-  go(activeSection);   // re-render active section in new language
+  go(activeSection, { replace: true });   // language changes do not add history entries
   const translatedBox = document.getElementById('msg-text');
   if (draft && translatedBox) {
     translatedBox.value = draft.value;
@@ -1521,7 +1540,7 @@ function applyTheme() {
    ============================================================ */
 document.querySelectorAll('.nav-i').forEach(b => b.addEventListener('click', () => {
   const section = b.dataset.section;
-  if (section === 'gallery' && isMuseumCapable()) { location.href = 'museum.html'; return; }
+  if (section === 'gallery' && isMuseumCapable()) { location.href = '/museum'; return; }
   if (section !== activeSection) go(section);
   window.scrollTo({ top: 0, behavior: 'instant' });
 }));
@@ -1537,13 +1556,13 @@ function returnHome(event) {
 }
 document.getElementById('home-btn').addEventListener('click', returnHome);
 document.querySelector('.footer-brand').addEventListener('click', returnHome);
-window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s && s !== activeSection) go(s); });
+window.addEventListener('hashchange', restoreLocationSection);
+window.addEventListener('popstate', restoreLocationSection);
 window.addEventListener('resize', revealActiveNav, { passive: true });
 document.fonts?.ready.then(revealActiveNav);
 
 // Boot
-const initial = location.hash.slice(1);
-if (navMap.includes(initial)) activeSection = initial;
+activeSection = sectionFromLocation();
 applyTheme();
 applyLang();   // sets nav labels + renders the active section
 initSurfaceLight();

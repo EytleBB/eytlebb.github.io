@@ -109,8 +109,8 @@ exitBtn.title = T('返回首页', 'Back to home', '홈으로');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
 hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
-exitBtn.addEventListener('click', () => { location.href = 'index.html'; });
-enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = 'index.html'; });
+exitBtn.addEventListener('click', () => { location.href = '/'; });
+enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/'; });
 
 const runtimeStatus = document.getElementById('runtime-status');
 const sensitivityInput = document.getElementById('look-sensitivity');
