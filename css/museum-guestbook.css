@@ -14,7 +14,7 @@
 .museum-guestbook::backdrop { background:rgba(5,10,13,.46); backdrop-filter:blur(6px); }
 .guestbook-sheet {
   position:relative; display:grid; grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);
-  min-height:600px; max-height:min(818px,calc(100dvh - 66px)); overflow:hidden; border-radius:2px;
+  min-height:480px; max-height:min(818px,calc(100dvh - 66px)); overflow:hidden; border-radius:2px;
   background:radial-gradient(ellipse at 0 0,rgba(255,255,255,.5),transparent 70%),var(--paper);
 }
 .guestbook-cover {
@@ -22,7 +22,6 @@
   display:flex; flex-direction:column; align-items:flex-start; min-width:0; overflow-y:auto; overscroll-behavior:contain;
   background:linear-gradient(110deg,rgba(197,183,153,.11),transparent 70%);
 }
-.guestbook-mark { color:var(--bronze); font-size:9px; letter-spacing:.24em; line-height:1.5; }
 .guestbook-inventory { margin-top:8px; color:var(--ink-soft); font-size:10px; letter-spacing:.04em; overflow-wrap:anywhere; }
 .guestbook-art-frame {
   width:100%; height:clamp(120px,20vh,190px); margin:29px 0 26px; padding:11px;
@@ -36,9 +35,7 @@
   letter-spacing:-.025em; overflow-wrap:anywhere; max-width:100%; text-wrap:pretty;
 }
 .museum-guestbook[lang="zh"] .guestbook-art-title { letter-spacing:.045em; font-size:clamp(25px,3vw,37px); }
-.guestbook-provenance { margin-top:13px; color:var(--ink-soft); font-size:10px; line-height:1.75; letter-spacing:.02em; }
 .guestbook-counts { margin-top:18px; padding-top:15px; width:100%; border-top:1px solid var(--hairline); color:var(--bronze); font-size:10px; letter-spacing:.02em; }
-.guestbook-collection { padding-top:35px; margin-top:auto; font-size:9px; color:var(--ink-soft); letter-spacing:.025em; }
 .guestbook-content { padding:37px 35px 22px; min-width:0; display:flex; flex-direction:column; max-height:inherit; overflow-y:auto; overscroll-behavior:contain; }
 .guestbook-close {
   position:absolute; z-index:2; top:10px; right:12px; width:30px; height:30px; padding:0;
@@ -56,8 +53,7 @@
 .guestbook-tab[aria-selected="true"]::after { transform:scaleX(1); }
 .guestbook-panel { display:flex; flex-direction:column; min-height:0; flex:1; }
 .guestbook-panel[hidden] { display:none; }
-.guestbook-intro { margin-top:24px; font:400 19px/1.5 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; letter-spacing:.02em; }
-.guestbook-rule { margin-top:8px; color:var(--ink-soft); font-size:10px; line-height:1.85; max-width:42em; }
+.guestbook-rule { margin-top:20px; color:var(--ink-soft); font-size:10px; line-height:1.85; max-width:42em; }
 .guestbook-entries {
   list-style:none; margin:21px -8px 0; padding:0 8px; min-height:68px; max-height:260px; overflow-y:auto; overscroll-behavior:contain;
   flex:1 1 220px; scrollbar-width:thin; scrollbar-color:#bdb09b transparent;
@@ -88,7 +84,6 @@
 }
 .guestbook-list-state[hidden] { display:none; }
 .guestbook-empty-title { color:#66685e; font:400 15px/1.65 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; }
-.guestbook-empty-sub { margin-top:6px; color:#776c58; font-size:10px; line-height:1.8; }
 .guestbook-more {
   align-self:flex-start; padding:10px 0 3px; min-height:34px; border:0; background:none;
   color:var(--bronze); text-decoration:underline; text-underline-offset:4px; font:inherit; font-size:10px; cursor:pointer;
@@ -122,7 +117,6 @@ textarea.guestbook-input { min-height:78px; max-height:130px; }
 .guestbook-status[data-kind="error"] { color:#9a4933; }
 .guestbook-status[data-kind="success"] { color:#67744f; }
 .guestbook-status[data-kind="pending"] { color:var(--bronze); }
-.guestbook-footer { padding-top:11px; border-top:1px solid var(--hairline); color:#776c58; font-size:8px; line-height:1.8; letter-spacing:.03em; flex-shrink:0; }
 .guestbook-connection {
   padding:12px 13px; margin-top:17px; border-left:2px solid #b89862;
   color:#806b46; background:rgba(170,138,79,.075); font-size:10px; line-height:1.8; flex-shrink:0;
@@ -136,7 +130,6 @@ textarea.guestbook-input { min-height:78px; max-height:130px; }
   .guestbook-cover { padding-top:34px; }
   .guestbook-content { padding-top:27px; }
   .guestbook-art-frame { height:130px; margin:20px 0; }
-  .guestbook-intro { margin-top:16px; }
   .guestbook-form { margin-top:14px; }
   .guestbook-entries { margin-top:14px; flex-basis:140px; }
   .guestbook-list-state { flex-basis:110px; }
@@ -146,18 +139,14 @@ textarea.guestbook-input { min-height:78px; max-height:130px; }
   .guestbook-sheet { display:block; min-height:0; max-height:calc(100dvh - 26px); overflow-y:auto; overscroll-behavior:contain; }
   .guestbook-cover { position:relative; display:block; padding:24px 24px 20px; border-right:0; border-bottom:1px solid var(--hairline); padding-right:125px; min-height:146px; }
   .guestbook-cover { overflow:visible; }
-  .guestbook-mark { font-size:8px; letter-spacing:.18em; }
   .guestbook-inventory { margin-top:6px; font-size:9px; }
   .guestbook-art-frame { position:absolute; right:25px; top:48px; width:78px; height:80px; padding:5px; margin:0; }
   .guestbook-art-title,.museum-guestbook[lang="zh"] .guestbook-art-title { margin-top:13px; font-size:25px; line-height:1.4; }
-  .guestbook-provenance { margin-top:7px; font-size:9px; }
   .guestbook-counts { padding:0; margin-top:9px; border:0; font-size:9px; }
-  .guestbook-collection { display:none; }
   .guestbook-content { padding:11px 24px 18px; max-height:none; overflow:visible; }
   .guestbook-close { top:7px; right:8px; }
   .guestbook-tabs { gap:29px; }
   .guestbook-tab { min-height:42px; padding-bottom:10px; }
-  .guestbook-intro { margin-top:18px; font-size:18px; }
   .guestbook-rule { font-size:10px; }
   .guestbook-entries { max-height:230px; flex-basis:auto; min-height:0; }
   .guestbook-list-state { flex-basis:auto; min-height:90px; margin-top:15px; padding:20px 0; }

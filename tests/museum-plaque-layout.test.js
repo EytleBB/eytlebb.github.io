@@ -6,17 +6,19 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../js/museum-plaque-layout.js'), 'utf8');
 const layout = import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
-test('labels stay to the viewer’s right on both walls, clear of frames and piers', async () => {
-  const { plaquePlacement, PLAQUE_WIDTH } = await layout;
+test('labels stay on the wall to the right of the panel, clear of its frame and the next pier', async () => {
+  const { plaquePlacement, PLAQUE_WIDTH, WALL_PANEL_HALF_WIDTH } = await layout;
   for (const side of [-1, 1]) {
     for (const width of [0.35, 0.76, 1.08, 1.52, 2.16]) {
       for (const z of [-3.5, -10.5]) {
         const p = plaquePlacement(side, width, 0.062, z);
         const rightOffset = (p.z - z) * side;
         assert.ok(rightOffset - PLAQUE_WIDTH / 2 >= width / 2 + 0.062 + 0.159);
-        assert.ok(rightOffset + PLAQUE_WIDTH / 2 < 2.05, 'fits inside the wall panel');
+        assert.ok(rightOffset - PLAQUE_WIDTH / 2 >= WALL_PANEL_HALF_WIDTH + 0.119, 'outside the entire decorative panel');
+        assert.ok(rightOffset + PLAQUE_WIDTH / 2 < 3.5 - 0.225, 'clear of the next pier and plinth');
         assert.equal(p.rotationY, -side * Math.PI / 2);
         assert.ok(Math.abs(p.x) > 2.6 && Math.abs(p.x) < 3, 'inside existing collision margin');
+        assert.ok(Math.abs(p.x) > 2.98, 'mounted against the wall instead of the recessed panel');
         assert.equal(p.y, 1.37);
       }
     }

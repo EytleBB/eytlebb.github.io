@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PLAQUE_WIDTH, PLAQUE_HEIGHT, plaquePlacement } from './museum-plaque-layout.js?v=guestbook-20260922';
+import { PLAQUE_WIDTH, PLAQUE_HEIGHT, plaquePlacement } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 
 // Texture records belong to resident artwork slots, not the infinite hall.
 export function createMuseumPlaques({ lang, halfWidth = 3 }) {
@@ -39,43 +39,33 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
 
   function draw(record) {
     const summary = summaries.get(record.id);
-    const title = summary?.title || text('尚未命名', 'Untitled', '무제');
+    const title = summary?.title || 'NULL';
     const ctx = record.plaque.canvas.getContext('2d');
-    ctx.fillStyle = '#bca47d'; ctx.fillRect(0, 0, 624, 420);
-    ctx.fillStyle = '#eee8db'; ctx.fillRect(3, 3, 618, 414);
-    ctx.fillStyle = '#73614b'; ctx.font = `16px ${sans}`;
-    ctx.fillText(`EYTLE   /   ${record.id.replace(/\.[^.]+$/, '').toUpperCase()}`, 38, 53);
+    ctx.fillStyle = '#bca47d'; ctx.fillRect(0, 0, 608, 384);
+    ctx.fillStyle = '#eee8db'; ctx.fillRect(3, 3, 602, 378);
+    ctx.fillStyle = '#73614b'; ctx.font = `24px ${sans}`;
+    ctx.fillText(record.id.replace(/\.[^.]+$/, '').toUpperCase(), 40, 63);
     ctx.fillStyle = '#262c2b';
-    const heading = fitText(ctx, title, 548, 34, 18);
-    ctx.fillText(heading, 38, 114);
-    ctx.fillStyle = '#a78b61'; ctx.fillRect(38, 142, 548, 1);
-    ctx.font = `22px ${sans}`; ctx.fillStyle = '#4f5652';
-    ctx.fillText(text('一个名字，一种看见。', 'A name. Another way to see.', '이름으로 만나는 또 다른 시선.'), 38, 196);
-    ctx.font = `18px ${sans}`; ctx.fillStyle = '#6f756d';
-    ctx.fillText(text('为画取名 · 点赞 · 留下感想', 'Name · Appreciate · Leave a note', '이름 제안 · 공감 · 감상 나누기'), 38, 238);
-    ctx.fillStyle = '#a78b61'; ctx.fillRect(38, 293, 548, 1);
-    ctx.font = `18px ${sans}`; ctx.fillStyle = '#554736';
-    ctx.fillText(text('点击铭牌，参与这幅画的故事', 'Click to join the conversation', '명패를 눌러 이야기에 참여하세요'), 38, 345);
-    ctx.font = `14px ${sans}`; ctx.fillStyle = '#817c70';
-    ctx.fillText(text('访客共同题名', 'NAMED BY VISITORS', '관람객이 함께 짓는 이름'), 38, 383);
+    ctx.font = `44px ${sans}`;
+    ctx.fillText(text('取名 · 评论', 'Names · Comments', '이름 · 댓글'), 40, 164);
+    ctx.fillStyle = '#a78b61'; ctx.fillRect(40, 218, 528, 1);
+    ctx.font = `27px ${sans}`; ctx.fillStyle = '#554736';
+    ctx.fillText(text('左键打开', 'Left-click to open', '왼쪽 클릭으로 열기'), 40, 308);
     record.plaque.texture.needsUpdate = true;
 
     const label = record.title.canvas.getContext('2d');
     label.fillStyle = '#b9a582'; label.fillRect(0, 0, 864, 138);
     label.fillStyle = '#68573e'; label.fillRect(12, 12, 840, 1); label.fillRect(12, 125, 840, 1);
     label.fillStyle = '#282c29'; label.textAlign = 'center';
-    label.fillText(fitText(label, title, 810, 60, 20), 432, 79);
-    label.font = `14px ${sans}`; label.fillStyle = '#615643';
-    label.fillText(summary?.title
-      ? text('访客共同题名', 'VISITORS’ CHOICE', '관람객의 선택')
-      : text('等待第一个名字', 'AWAITING A NAME', '첫 이름을 기다립니다'), 432, 108);
+    label.textBaseline = 'middle';
+    label.fillText(fitText(label, title, 810, 60, 20), 432, 69);
     record.title.texture.needsUpdate = true;
   }
 
   function acquire(id) {
     let record = records.get(id);
     if (!record) {
-      record = { id, refs: 0, plaque: surface(624, 420), title: surface(864, 138) };
+      record = { id, refs: 0, plaque: surface(608, 384), title: surface(864, 138) };
       records.set(id, record); draw(record);
     }
     record.refs++;

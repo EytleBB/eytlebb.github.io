@@ -143,7 +143,8 @@ class MuseumGuestbookHTTPTests(unittest.TestCase):
         self.assertEqual(other.write("names", "Other", proof=proof)[0], 400)
         status, body, _ = self.client.write("names", "暮光", proof=proof)
         self.assertEqual(status, 200)
-        self.assertIsNone(body["artwork"]["title"])
+        self.assertEqual(body["artwork"]["title"], "暮光")
+        self.assertEqual(body["artwork"]["titleVotes"], 0)
         self.assertEqual(self.client.write("comments", "replay", proof=proof)[0], 400)
         expired = self.client.proof()
         self.now[0] += self.config.challenge_ttl
@@ -196,8 +197,25 @@ class MuseumGuestbookHTTPTests(unittest.TestCase):
         self.assertEqual(self.client.write("votes", name_id=second)[0], 200)
         self.assertEqual(self.client.detail()["artwork"]["title"], "Second")
         self.assertEqual(self.client.write("votes", name_id=second)[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "First")
+        self.assertEqual(self.client.detail(B)["artwork"]["title"], "Elsewhere")
+
+    def test_zero_vote_names_are_used_immediately_and_earliest_visible_name_wins(self):
         self.assertIsNone(self.client.detail()["artwork"]["title"])
-        self.assertIsNone(self.client.detail(B)["artwork"]["title"])
+        status, first, _ = self.client.write("names", "First without a vote")
+        self.assertEqual(status, 200)
+        self.assertEqual(first["artwork"]["title"], "First without a vote")
+        self.assertEqual(first["artwork"]["titleVotes"], 0)
+        self.now[0] += 10
+        second = self.client.write("names", "Second without a vote")[1]
+        detail = self.client.detail()
+        self.assertEqual(detail["artwork"]["title"], "First without a vote")
+        self.assertEqual([name["id"] for name in detail["names"]], [first["id"], second["id"]])
+        self.assertEqual(self.service.moderate("name", first["id"], True)["title"], "Second without a vote")
+        self.assertIsNone(self.service.moderate("name", second["id"], True)["title"])
+        self.assertEqual(self.service.moderate("name", first["id"], False)["title"], "First without a vote")
+        summary = self.client.request("GET", f"/artworks?ids={A}")[1]["artworks"][0]
+        self.assertEqual((summary["title"], summary["titleVotes"]), ("First without a vote", 0))
 
     def test_winner_tie_is_oldest_and_voted_flags_are_private(self):
         first = self.client.write("names", "First")[1]["id"]

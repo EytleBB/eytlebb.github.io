@@ -1,6 +1,6 @@
 # 图画展览会访客铭牌：存储、服务与维护
 
-这项功能在画作右侧提供取名、投票和评论。公开内容保存在服务器 SQLite，所有访客读取同一份数据；浏览器只保存签名匿名身份 Cookie，不把本地浏览器存储伪装成共享留言。没有账户、邮箱或公开昵称要求。赞数最高且至少获得一票的可见候选名成为画下标题；同票时先提交的名称胜出。新提名不会自动获得作者的一票。
+这项功能在画作右侧提供取名、投票和评论。公开内容保存在服务器 SQLite，所有访客读取同一份数据；浏览器只保存签名匿名身份 Cookie，不把本地浏览器存储伪装成共享留言。没有账户、邮箱或公开昵称要求。票数最高的可见候选名成为画下标题，零票也立即参与选择；同票时按提交时间先后，时间相同再按 ID 排序。没有提名时接口返回 null，界面显示 NULL。新提名不会自动获得作者的一票。
 
 代码仅增加待发布的服务及配置示例，**没有安装服务器服务、修改 Nginx 或发布网站**。按照 AGENTS.md，由“Eytle 网站发布会话”审查合入、配置、测试和发布。现有纯静态服务或 GitHub Pages 本身不能持久保存多人留言；正式启用需要腾讯云上以下独立服务和同域反向代理。API 不可用时，界面明确显示连接失败，不会显示虚假成功。
 
@@ -39,8 +39,8 @@ API 前缀 `/api/museum/v1`。所有响应均为 JSON、`Cache-Control: no-store
 | --- | --- |
 | `GET /session` | `{csrf,powBits}`；首次设置 HttpOnly、SameSite=Strict、API 路径作用域的签名匿名 Cookie，最长 180 天 |
 | `POST /challenge`，空对象 `{}` | `{id,prefix,bits,expiresAt}`；`expiresAt` 为 Unix **毫秒** |
-| `GET /artworks?ids=0x0000.jpg,0x0001.jpg` | 最多 80 个 ID，`{artworks:[{id,title,titleVotes,namesCount,commentsCount}]}`；无获赞候选时 `title:null` |
-| `GET /artworks/{encoded-id}` | `{artwork,names,comments,nextNamesOffset,nextCommentsOffset}`；名称按票数降序、ID 升序；评论按 ID 降序 |
+| `GET /artworks?ids=0x0000.jpg,0x0001.jpg` | 最多 80 个 ID，`{artworks:[{id,title,titleVotes,namesCount,commentsCount}]}`；无可见候选时 `title:null` |
+| `GET /artworks/{encoded-id}` | `{artwork,names,comments,nextNamesOffset,nextCommentsOffset}`；名称按票数降序、提交时间升序、ID 升序；评论按 ID 降序 |
 | 同上 `?namesOffset=20&commentsOffset=20` | 各自每页 20 项，下一偏移为整数或 `null`；不会截掉后面的名字或评论 |
 | `POST /artworks/{id}/names` | `{text,website:'',proof:{id,nonce}}`；提名成功后返回 `{ok,id,artwork}` |
 | `POST /artworks/{id}/comments` | 同上；文本为评论 |

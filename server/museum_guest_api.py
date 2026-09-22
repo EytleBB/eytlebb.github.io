@@ -305,7 +305,7 @@ class Guestbook:
             raise APIError(400, "proof_invalid", "Verification was invalid.")
 
     def summary(self, db, artwork):
-        winner = db.execute("SELECT n.text, COUNT(v.visitor) AS total FROM names n JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id HAVING total>0 ORDER BY total DESC,n.id ASC LIMIT 1", (artwork,)).fetchone()
+        winner = db.execute("SELECT n.text, COUNT(v.visitor) AS total FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id ORDER BY total DESC,n.created_at ASC,n.id ASC LIMIT 1", (artwork,)).fetchone()
         names = db.execute("SELECT COUNT(*) FROM names WHERE artwork=? AND hidden=0", (artwork,)).fetchone()[0]
         comments = db.execute("SELECT COUNT(*) FROM comments WHERE artwork=? AND hidden=0", (artwork,)).fetchone()[0]
         return {"id": artwork, "title": winner["text"] if winner else None, "titleVotes": winner["total"] if winner else 0, "namesCount": names, "commentsCount": comments}
@@ -325,7 +325,7 @@ class Guestbook:
         with self.connection() as db:
             db.execute("BEGIN")
             summary = self.summary(db, artwork)
-            names = db.execute("SELECT n.id,n.text,n.created_at,COUNT(v.visitor) AS votes,MAX(CASE WHEN v.visitor=? THEN 1 ELSE 0 END) AS voted FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id ORDER BY votes DESC,n.id ASC LIMIT ? OFFSET ?", (visitor or "", artwork, PAGE_SIZE + 1, names_offset)).fetchall()
+            names = db.execute("SELECT n.id,n.text,n.created_at,COUNT(v.visitor) AS votes,MAX(CASE WHEN v.visitor=? THEN 1 ELSE 0 END) AS voted FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id ORDER BY votes DESC,n.created_at ASC,n.id ASC LIMIT ? OFFSET ?", (visitor or "", artwork, PAGE_SIZE + 1, names_offset)).fetchall()
             comments = db.execute("SELECT id,text,created_at FROM comments WHERE artwork=? AND hidden=0 ORDER BY id DESC LIMIT ? OFFSET ?", (artwork, PAGE_SIZE + 1, comments_offset)).fetchall()
             db.commit()
         return {

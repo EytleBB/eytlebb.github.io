@@ -2,67 +2,55 @@
 const API = '/api/museum/v1';
 const COPY = {
   zh: {
-    eyebrow:'THE VISITORS’ LABEL', collection:'图画展览会 · 共同命名', close:'收起铭牌', untitled:'未定名',
-    chosen:'由来访者共同选出的名字', unchosen:'一个名字，等待与你相遇。', inventory:'馆藏编号', namesTab:'为画取名', commentsTab:'访客留言',
-    namesIntro:'你会如何称呼这幅画？', commentsIntro:'把此刻的感受留在这里。',
-    namesRule:'每位访客每幅画可支持一个名字。再次点击可取消，票数最高的名字将显示在画作下方。',
-    commentsRule:'留言公开展示。请留下与作品有关的感受，勿填写联系方式或其他私人信息。',
-    namePlaceholder:'给这幅画起一个名字…', commentPlaceholder:'这幅画让你想到了什么？', nameLabel:'你为作品取的名字', commentLabel:'你的留言',
-    nameSubmit:'提交名字', commentSubmit:'留下感受', moreNames:'展开更多名字', moreComments:'阅读更多留言', anonymous:'一位来访者',
-    winner:'当前展签', yourVote:'已支持', vote:'支持这个名字', undoVote:'取消支持', loading:'正在读取铭牌…', refreshing:'正在刷新…',
-    emptyNames:'还没有人给这幅画取名。', emptyNamesSub:'第一个名字，也许就来自你的目光。', emptyComments:'这里还没有留言。', emptyCommentsSub:'你可以留下第一段观展感受。',
-    retry:'重新连接', offline:'铭牌暂时无法连接。名字与留言需要连接展馆服务后才能读取和保存。',
-    readOnly:'现在可以阅读铭牌，暂时无法提交。请重新连接后再试。', loadingMore:'正在读取…', loadFailed:'这页暂时无法读取，请重试。',
-    checking:'正在进行防滥用验证…', saving:'正在保存…', savedName:'名字已收录。你也可以支持自己喜欢的名字。', savedComment:'你的感受已留在这幅画旁。',
-    savedRefresh:'已保存，暂时无法刷新铭牌。请重新连接。', uncertain:'尚无法确认是否保存成功。请先重新连接铭牌，查看内容是否已收录。', savedVote:'支持已更新。', invalid:'请填写内容，并保持在字数限制内。',
-    genericError:'暂时无法完成，请稍后重试。输入的内容仍保留在这里。', tooFast:'操作稍频繁，请稍候再试。',
-    challengeFailed:'验证未完成，请重试。', expired:'验证已过期，请重新提交。', sessionExpired:'连接已过期，请重新连接后再试。',
-    duplicate:'这个名字已经有人提出了。可以在列表里支持它。', duplicateComment:'这段感受已收录，无需重复提交。', limit:'这幅作品的提交次数已达上限，请稍后再来。',
-    absent:'暂时找不到这幅作品的铭牌。', nameGone:'这个名字已不可用，请刷新铭牌。',
-    proofUnavailable:'当前浏览器无法完成防滥用验证，仍可阅读铭牌。', footer:'匿名参与 · 名字与留言由所有来访者共享',
-    nameCount:n=>`${n} 个名字`, commentCount:n=>`${n} 则留言`, votes:n=>`${n} 票`, date:()=>'zh-CN', count:(n,max)=>`${n} / ${max}`,
+    close:'关闭', untitled:'NULL', inventory:'编号', namesTab:'取名', commentsTab:'评论',
+    namesRule:'按票数选名，零票也可采用；同票取最早提交的。每幅画可点赞一个名字，再次点击取消。',
+    commentsRule:'评论公开显示，请勿填写私人信息。',
+    namePlaceholder:'输入名字', commentPlaceholder:'输入评论', nameLabel:'名字', commentLabel:'评论',
+    nameSubmit:'提交名字', commentSubmit:'提交评论', moreNames:'更多名字', moreComments:'更多评论', anonymous:'访客',
+    winner:'当前名称', yourVote:'已点赞', vote:'点赞', undoVote:'取消点赞', loading:'加载中…', refreshing:'刷新中…',
+    emptyNames:'暂无名字', emptyComments:'暂无评论',
+    retry:'重试', offline:'连接失败，无法读取或提交。', readOnly:'暂时只能查看，无法提交。', loadingMore:'加载中…', loadFailed:'加载失败，请重试。',
+    checking:'验证中…', saving:'保存中…', savedName:'名字已提交。', savedComment:'评论已提交。',
+    savedRefresh:'已保存，刷新失败，请重试。', uncertain:'无法确认是否保存成功。请先刷新查看，再决定是否重试。', savedVote:'点赞已更新。', invalid:'请输入内容，勿超过字数限制。',
+    genericError:'操作失败，输入已保留。', tooFast:'操作频繁，请稍后重试。',
+    challengeFailed:'验证失败，请重试。', expired:'验证已过期，请重试。', sessionExpired:'连接已过期，请重试。',
+    duplicate:'名字已存在。', duplicateComment:'评论已存在。', limit:'已达提交上限。',
+    absent:'未找到画作。', nameGone:'名字已移除，请刷新。', proofUnavailable:'浏览器不支持验证，暂时只能查看。',
+    nameCount:n=>`${n} 个名字`, commentCount:n=>`${n} 条评论`, votes:n=>`${n} 票`, date:()=>'zh-CN', count:(n,max)=>`${n} / ${max}`,
   },
   en: {
-    eyebrow:'THE VISITORS’ LABEL', collection:'Pictures at an Exhibition · A shared title', close:'Close label', untitled:'Untitled',
-    chosen:'A title chosen by the visitors', unchosen:'A name waiting to be discovered.', inventory:'Collection no.', namesTab:'Name this work', commentsTab:'Visitor notes',
-    namesIntro:'What would you call this work?', commentsIntro:'Leave a thought from your visit.',
-    namesRule:'Support one title per artwork. Select it again to withdraw your vote. The most supported title appears beneath the work.',
-    commentsRule:'Notes are public. Share a thought about the work; leave out contact details and other private information.',
-    namePlaceholder:'A name for this work…', commentPlaceholder:'What does this work bring to mind?', nameLabel:'Your title for this work', commentLabel:'Your note',
-    nameSubmit:'Submit a title', commentSubmit:'Leave a note', moreNames:'See more titles', moreComments:'Read more notes', anonymous:'A visitor',
-    winner:'On the label', yourVote:'Supported', vote:'Support this title', undoVote:'Withdraw your vote', loading:'Reading the label…', refreshing:'Refreshing…',
-    emptyNames:'This work has no proposed titles yet.', emptyNamesSub:'Its first name might begin with your way of seeing.', emptyComments:'No notes have been left here yet.', emptyCommentsSub:'Leave the first thought beside this work.',
-    retry:'Reconnect', offline:'The label is temporarily offline. Titles and notes can only be read and saved when the museum service is connected.',
-    readOnly:'The label can be read, but submissions are currently unavailable. Reconnect to try again.', loadingMore:'Reading…', loadFailed:'This page could not be read. Please try again.',
-    checking:'Completing the abuse-prevention check…', saving:'Saving…', savedName:'Your title is on the list. You can also support a title you like.', savedComment:'Your thought has been left beside this work.',
-    savedRefresh:'Saved, but the label could not be refreshed. Please reconnect.', uncertain:'The save could not be confirmed. Reconnect and check whether your contribution is on the label before submitting again.', savedVote:'Your support has been updated.', invalid:'Please enter some text within the character limit.',
-    genericError:'This could not be completed. Please try again later; your text is still here.', tooFast:'A little too frequent. Please wait before trying again.',
-    challengeFailed:'The check did not finish. Please try again.', expired:'The check has expired. Please submit again.', sessionExpired:'Your connection has expired. Please reconnect and try again.',
-    duplicate:'Someone has already proposed this title. You can support it in the list.', duplicateComment:'This note is already on the label. There is no need to submit it again.', limit:'The submission limit for this work has been reached. Please return later.',
-    absent:'This artwork’s label could not be found.', nameGone:'This title is no longer available. Please refresh the label.',
-    proofUnavailable:'This browser cannot complete the abuse-prevention check. The label is still available to read.', footer:'Anonymous participation · Shared with every visitor',
-    nameCount:n=>`${n} ${n===1?'title':'titles'}`, commentCount:n=>`${n} ${n===1?'note':'notes'}`, votes:n=>`${n} ${n===1?'vote':'votes'}`, date:()=>'en-GB', count:(n,max)=>`${n} / ${max}`,
+    close:'Close', untitled:'NULL', inventory:'ID', namesTab:'Names', commentsTab:'Comments',
+    namesRule:'Most votes wins, including zero. Ties use earliest submission. One vote per artwork; click again to cancel.',
+    commentsRule:'Comments are public. Do not include private information.',
+    namePlaceholder:'Enter a name', commentPlaceholder:'Enter a comment', nameLabel:'Name', commentLabel:'Comment',
+    nameSubmit:'Submit name', commentSubmit:'Submit comment', moreNames:'More names', moreComments:'More comments', anonymous:'Visitor',
+    winner:'Current name', yourVote:'Liked', vote:'Like', undoVote:'Unlike', loading:'Loading…', refreshing:'Refreshing…',
+    emptyNames:'No names yet', emptyComments:'No comments yet',
+    retry:'Retry', offline:'Connection failed. Reading and submissions unavailable.', readOnly:'Read-only. Submissions unavailable.', loadingMore:'Loading…', loadFailed:'Loading failed. Please retry.',
+    checking:'Verifying…', saving:'Saving…', savedName:'Name submitted.', savedComment:'Comment submitted.',
+    savedRefresh:'Saved. Refresh failed; please retry.', uncertain:'Save status unknown. Refresh and check before resubmitting.', savedVote:'Vote updated.', invalid:'Enter text within the character limit.',
+    genericError:'Request failed. Your input was kept.', tooFast:'Too many requests. Try again later.',
+    challengeFailed:'Verification failed. Please retry.', expired:'Verification expired. Please retry.', sessionExpired:'Session expired. Please reconnect.',
+    duplicate:'Name already exists.', duplicateComment:'Comment already exists.', limit:'Submission limit reached.',
+    absent:'Artwork not found.', nameGone:'Name removed. Please refresh.', proofUnavailable:'Verification unsupported. Read-only.',
+    nameCount:n=>`${n} ${n===1?'name':'names'}`, commentCount:n=>`${n} ${n===1?'comment':'comments'}`, votes:n=>`${n} ${n===1?'vote':'votes'}`, date:()=>'en-GB', count:(n,max)=>`${n} / ${max}`,
   },
   ko: {
-    eyebrow:'THE VISITORS’ LABEL', collection:'전람회의 그림 · 함께 짓는 제목', close:'명패 닫기', untitled:'아직 제목 없음',
-    chosen:'관람객이 함께 고른 제목', unchosen:'당신의 시선에서 시작될 이름.', inventory:'소장 번호', namesTab:'제목 붙이기', commentsTab:'관람객의 감상',
-    namesIntro:'이 작품을 어떻게 부르고 싶나요?', commentsIntro:'지금의 감상을 이곳에 남겨 주세요.',
-    namesRule:'작품마다 하나의 제목을 응원할 수 있습니다. 다시 누르면 취소됩니다. 가장 많은 표를 얻은 제목이 작품 아래에 표시됩니다.',
-    commentsRule:'감상은 공개됩니다. 작품에 관한 생각을 나누되 연락처나 개인 정보는 남기지 마세요.',
-    namePlaceholder:'이 작품에 어울리는 제목…', commentPlaceholder:'이 작품을 보며 무엇이 떠올랐나요?', nameLabel:'작품에 붙일 제목', commentLabel:'나의 감상',
-    nameSubmit:'제목 제안하기', commentSubmit:'감상 남기기', moreNames:'다른 제목 더 보기', moreComments:'감상 더 읽기', anonymous:'어느 관람객',
-    winner:'현재 작품 제목', yourVote:'응원함', vote:'이 제목 응원하기', undoVote:'응원 취소하기', loading:'명패를 읽는 중…', refreshing:'새로 읽는 중…',
-    emptyNames:'아직 제안된 제목이 없습니다.', emptyNamesSub:'첫 번째 제목은 당신의 시선에서 시작될지도 몰라요.', emptyComments:'아직 감상이 없습니다.', emptyCommentsSub:'이 작품 곁에 첫 감상을 남겨 주세요.',
-    retry:'다시 연결', offline:'명패에 연결할 수 없습니다. 제목과 감상을 읽고 저장하려면 전시장 서비스에 연결되어야 합니다.',
-    readOnly:'명패는 읽을 수 있지만 지금은 글을 남길 수 없습니다. 다시 연결해 주세요.', loadingMore:'읽는 중…', loadFailed:'이 페이지를 읽지 못했습니다. 다시 시도해 주세요.',
-    checking:'도배 방지 확인 중…', saving:'저장 중…', savedName:'제목이 등록되었습니다. 마음에 드는 제목을 응원해 주세요.', savedComment:'작품 곁에 감상을 남겼습니다.',
-    savedRefresh:'저장되었지만 명패를 새로 읽지 못했습니다. 다시 연결해 주세요.', uncertain:'저장 여부를 확인하지 못했습니다. 다시 연결한 뒤 글이 등록되었는지 확인해 주세요.', savedVote:'응원이 반영되었습니다.', invalid:'글자 수 제한 안에서 내용을 입력해 주세요.',
-    genericError:'처리하지 못했습니다. 잠시 후 다시 시도해 주세요. 입력한 내용은 남아 있습니다.', tooFast:'너무 자주 요청하고 있습니다. 잠시 기다려 주세요.',
-    challengeFailed:'확인을 마치지 못했습니다. 다시 시도해 주세요.', expired:'확인 시간이 만료되었습니다. 다시 제출해 주세요.', sessionExpired:'연결이 만료되었습니다. 다시 연결해 주세요.',
-    duplicate:'이미 제안된 제목입니다. 목록에서 이 제목을 응원할 수 있습니다.', duplicateComment:'이미 등록된 감상입니다. 다시 제출하지 않아도 됩니다.', limit:'이 작품의 제출 한도에 도달했습니다. 나중에 다시 방문해 주세요.',
-    absent:'이 작품의 명패를 찾을 수 없습니다.', nameGone:'이 제목은 더 이상 사용할 수 없습니다. 명패를 새로 읽어 주세요.',
-    proofUnavailable:'이 브라우저에서는 도배 방지 확인을 완료할 수 없습니다. 명패는 계속 읽을 수 있습니다.', footer:'익명 참여 · 모든 관람객과 함께 나누는 명패',
-    nameCount:n=>`제목 ${n}개`, commentCount:n=>`감상 ${n}개`, votes:n=>`${n}표`, date:()=>'ko-KR', count:(n,max)=>`${n} / ${max}`,
+    close:'닫기', untitled:'NULL', inventory:'번호', namesTab:'이름', commentsTab:'댓글',
+    namesRule:'0표도 이름으로 채택됩니다. 최다 득표순이며 동률이면 먼저 제출한 이름을 사용합니다. 작품당 한 표, 다시 누르면 취소됩니다.',
+    commentsRule:'댓글은 공개됩니다. 개인 정보를 입력하지 마세요.',
+    namePlaceholder:'이름 입력', commentPlaceholder:'댓글 입력', nameLabel:'이름', commentLabel:'댓글',
+    nameSubmit:'이름 제출', commentSubmit:'댓글 제출', moreNames:'이름 더 보기', moreComments:'댓글 더 보기', anonymous:'방문자',
+    winner:'현재 이름', yourVote:'좋아요 선택됨', vote:'좋아요', undoVote:'좋아요 취소', loading:'불러오는 중…', refreshing:'새로 고치는 중…',
+    emptyNames:'이름 없음', emptyComments:'댓글 없음',
+    retry:'다시 시도', offline:'연결 실패. 읽기와 제출이 불가능합니다.', readOnly:'읽기만 가능합니다. 제출할 수 없습니다.', loadingMore:'불러오는 중…', loadFailed:'불러오기 실패. 다시 시도하세요.',
+    checking:'확인 중…', saving:'저장 중…', savedName:'이름이 제출되었습니다.', savedComment:'댓글이 제출되었습니다.',
+    savedRefresh:'저장됨. 새로 고침에 실패했습니다.', uncertain:'저장 여부를 확인할 수 없습니다. 새로 고친 뒤 다시 제출하세요.', savedVote:'투표가 반영되었습니다.', invalid:'글자 수 제한 안에서 내용을 입력하세요.',
+    genericError:'처리 실패. 입력은 유지됩니다.', tooFast:'요청이 많습니다. 잠시 후 다시 시도하세요.',
+    challengeFailed:'확인 실패. 다시 시도하세요.', expired:'확인이 만료되었습니다. 다시 시도하세요.', sessionExpired:'연결이 만료되었습니다. 다시 연결하세요.',
+    duplicate:'이미 있는 이름입니다.', duplicateComment:'이미 있는 댓글입니다.', limit:'제출 한도에 도달했습니다.',
+    absent:'작품을 찾을 수 없습니다.', nameGone:'삭제된 이름입니다. 새로 고치세요.', proofUnavailable:'확인을 지원하지 않는 브라우저입니다. 읽기만 가능합니다.',
+    nameCount:n=>`이름 ${n}개`, commentCount:n=>`댓글 ${n}개`, votes:n=>`${n}표`, date:()=>'ko-KR', count:(n,max)=>`${n} / ${max}`,
   },
 };
 
@@ -84,7 +72,6 @@ const nonnegative = value => Number.isFinite(Number(value)) ? Math.max(0,Math.tr
 export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange=()=>{} } = {}) {
   const dialog = element('dialog','museum-guestbook');
   dialog.setAttribute('aria-labelledby','museum-guestbook-heading');
-  dialog.setAttribute('aria-describedby','museum-guestbook-provenance');
   const sheet = element('div','guestbook-sheet');
   dialog.append(sheet);
   document.body.append(dialog);
@@ -150,7 +137,6 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
   function build() {
     sheet.replaceChildren();
     const cover = element('aside','guestbook-cover');
-    const mark = element('div','guestbook-mark',copy.eyebrow);
     const close = button('guestbook-close','×',userClose);
     close.setAttribute('aria-label',copy.close);
     const number = element('p','guestbook-inventory',`${copy.inventory} / ${state.id}`);
@@ -163,11 +149,8 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
     imageFrame.append(image);
     const title = element('h2','guestbook-art-title',copy.untitled);
     title.id = 'museum-guestbook-heading';
-    const provenance = element('p','guestbook-provenance',copy.unchosen);
-    provenance.id = 'museum-guestbook-provenance';
     const counts = element('p','guestbook-counts');
-    const collection = element('p','guestbook-collection',copy.collection);
-    cover.append(mark,number,imageFrame,title,provenance,counts,collection);
+    cover.append(number,imageFrame,title,counts);
     const content = element('section','guestbook-content');
     const tabs = element('div','guestbook-tabs');
     tabs.setAttribute('role','tablist');
@@ -199,7 +182,6 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
       panel.id = `museum-guestbook-panel-${kind}`;
       panel.setAttribute('role','tabpanel');
       panel.setAttribute('aria-labelledby',`museum-guestbook-tab-${kind}`);
-      const intro = element('h3','guestbook-intro',isName?copy.namesIntro:copy.commentsIntro);
       const rule = element('p','guestbook-rule',isName?copy.namesRule:copy.commentsRule);
       const list = element('ol',`guestbook-entries guestbook-${kind}`);
       list.setAttribute('aria-label',isName?copy.namesTab:copy.commentsTab);
@@ -238,17 +220,16 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
         write(kind,{text:input.value.trim(),website:trap.value});
       });
       input.addEventListener('input',updateEnabled);
-      panel.append(intro,rule,list,listState,more,form);
+      panel.append(rule,list,listState,more,form);
       panels[kind] = {panel,list,listState,more,form,input,counter,submit};
     }
     const status = element('p','guestbook-status');
     status.setAttribute('role','status');
     status.setAttribute('aria-live','polite');
     status.setAttribute('aria-atomic','true');
-    const footer = element('p','guestbook-footer',copy.footer);
-    content.append(tabs,connection,panels.names.panel,panels.comments.panel,status,footer);
+    content.append(tabs,connection,panels.names.panel,panels.comments.panel,status);
     sheet.append(cover,content,close);
-    refs = {title,provenance,counts,nameTab,commentTab,connection,connectionText,reconnect,status,close,...panels};
+    refs = {title,counts,nameTab,commentTab,connection,connectionText,reconnect,status,close,...panels};
     selectTab('names');
     updateEnabled();
   }
@@ -270,7 +251,6 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
     state.summary = summary;
     const hasTitle = typeof summary.title==='string' && summary.title.trim().length>0;
     refs.title.textContent = hasTitle?summary.title:copy.untitled;
-    refs.provenance.textContent = hasTitle?`${copy.chosen} · ${copy.votes(nonnegative(summary.titleVotes))}`:copy.unchosen;
     refs.counts.textContent = `${copy.nameCount(nonnegative(summary.namesCount))}  /  ${copy.commentCount(nonnegative(summary.commentsCount))}`;
     try { onTitleChange(summary); } catch (error) { console.error('Museum label callback failed',error); }
   }
@@ -311,7 +291,7 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
         const number = element('span','guestbook-name-number',String(index+1).padStart(2,'0'));
         const text = element('p','guestbook-name-text',entry.text);
         body.append(number,text);
-        if (entry.votes>0 && entry.text===state.summary?.title) body.append(element('span','guestbook-winning',copy.winner));
+        if (entry.text===state.summary?.title) body.append(element('span','guestbook-winning',copy.winner));
         const vote = button('guestbook-vote','',() => write('votes',{nameId:entry.id,website:''}));
         const icon = element('span','guestbook-vote-icon',entry.voted?'♥':'♡');
         icon.setAttribute('aria-hidden','true');
@@ -337,8 +317,7 @@ export function createMuseumGuestbook({ lang='zh', onClose=()=>{}, onTitleChange
     target.listState.replaceChildren();
     if (!entries.length) {
       const empty = kind==='names'?copy.emptyNames:copy.emptyComments;
-      const sub = kind==='names'?copy.emptyNamesSub:copy.emptyCommentsSub;
-      target.listState.append(element('span','guestbook-empty-title',empty),element('span','guestbook-empty-sub',sub));
+      target.listState.append(element('span','guestbook-empty-title',empty));
     }
     target.listState.hidden = entries.length>0;
     target.more.hidden = state[kind==='names'?'nextNamesOffset':'nextCommentsOffset'] === null;
