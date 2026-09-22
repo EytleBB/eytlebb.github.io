@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260912-r3';
-import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922';
+import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';

@@ -89,7 +89,7 @@ test('Shift walking and crouching reach their own speeds with a smooth, stable e
   assert.equal(player.state.crouched, false);
 });
 
-test('jump has bounded height, lands on the floor, and holding Space never auto-hops', async () => {
+test('holding Space repeats bounded jumps and releasing it settles on the floor', async () => {
   const { createMuseumPlayer } = await playerModule;
   const player = createMuseumPlayer();
   let peak = 1.65;
@@ -102,8 +102,9 @@ test('jump has bounded height, lands on the floor, and holding Space never auto-
     peak = Math.max(peak, state.position.y);
     assert.ok(state.position.y >= 1.65);
   }
-  assert.equal(takeoffs, 1);
+  assert.equal(takeoffs, 4);
   assert.ok(peak > 2.3 && peak < 2.4, `unexpected jump peak ${peak}`);
+  simulate(player, 1, {});
   assert.equal(player.state.grounded, true);
   near(player.state.position.y, 1.65);
   player.advance(1 / 120, {});
@@ -196,11 +197,12 @@ test('camera output interpolates between fixed steps at high refresh rates', asy
 test('explicit jump edges survive a release and repress between rendered frames', async () => {
   const { createMuseumPlayer } = await playerModule;
   const player = createMuseumPlayer();
-  simulate(player, 1, { jump: true });
+  player.advance(1 / 120, { jump: true });
+  for (let i = 0; i < 120 && !player.state.grounded; i++) player.advance(1 / 120, { jump: true });
   assert.equal(player.state.grounded, true);
   player.advance(1 / 120, { jump: true, jumpPressed: true });
   assert.equal(player.state.grounded, false);
-  simulate(player, 1, { jump: true });
+  simulate(player, 1, {});
   assert.equal(player.state.grounded, true);
   near(player.state.position.y, 1.65);
 });

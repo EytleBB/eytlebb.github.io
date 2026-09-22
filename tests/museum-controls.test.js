@@ -138,12 +138,39 @@ test('Space press and release between rendered frames still jumps once', async (
 test('a new Space press after landing is recognized even when release and press share one frame', async () => {
   const h = await createControls();
   h.key('Space', true);
-  h.tick(60);
+  h.tick(1, 1 / 120);
+  for (let i = 0; i < 120 && !h.api.player.state.grounded; i++) h.tick(1, 1 / 120);
   assert.equal(h.api.player.state.grounded, true);
   h.key('Space', false);
   h.key('Space', true);
   h.tick();
   assert.equal(h.api.player.state.grounded, false);
+});
+
+test('held Space repeats through the real controls and release or pause cancels repetition', async () => {
+  const h = await createControls();
+  h.key('Space', true);
+  let takeoffs = 0;
+  let previousVerticalSpeed = 0;
+  for (let i = 0; i < 120; i++) {
+    h.tick();
+    const verticalSpeed = h.api.player.state.velocity.y;
+    if (verticalSpeed > 0 && previousVerticalSpeed <= 0) takeoffs++;
+    previousVerticalSpeed = verticalSpeed;
+  }
+  assert.equal(takeoffs, 4);
+  h.key('Space', false);
+  h.tick(120);
+  assert.equal(h.api.player.state.grounded, true);
+  near(h.camera.position.y, 1.65);
+  h.key('Space', true);
+  h.tick(10);
+  h.lock(false);
+  h.lock(true);
+  h.tick(120);
+  assert.equal(h.api.keys.jump, false);
+  assert.equal(h.api.player.state.grounded, true);
+  near(h.camera.position.y, 1.65);
 });
 
 test('blur and visibility changes release movement, zoom, and capture without stale keys', async () => {

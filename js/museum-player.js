@@ -162,7 +162,8 @@ export function createMuseumPlayer(options = {}) {
         velocity.z *= scale;
       }
 
-      if (jumpPending && state.grounded) {
+      // A held Space repeats on landing; queued edges still preserve quick taps.
+      if ((jumpDown || jumpPending) && state.grounded) {
         velocity.y = config.jumpSpeed;
         state.grounded = false;
       }
