@@ -5,12 +5,15 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260912-r3';
+import { createMuseumArchitecture } from './museum-architecture.js?v=guestbook-20260922-r2';
 import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
 import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260912-r3';
+import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r2';
+import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
+import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r2';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -19,6 +22,12 @@ const lang = (() => {
 })();
 document.documentElement.lang = lang;
 const T = (zh, en, ko) => (lang === 'en' ? en : lang === 'ko' ? ko : zh);
+const plaques = createMuseumPlaques({ lang });
+let plaqueSession = null;
+const guestbook = createMuseumGuestbook({ lang, onClose: closeGuestPlaque, onTitleChange: summary => {
+  plaques.update(summary);
+  requestSceneFrame();
+} });
 
 // Preferences are optional: private browsing or full storage must not block entry.
 let savedSettings = {};
@@ -41,6 +50,9 @@ const enterKeys = document.getElementById('enter-keys');
 const enterProg = document.getElementById('enter-prog');
 const enterBack = document.getElementById('enter-back');
 const artHintEl = document.getElementById('art-hint');
+const artHintCaption = document.createElement('span');
+artHintCaption.className = 'hint-caption';
+artHintEl.append(artHintCaption);
 const titleEl = document.getElementById('title');
 const hudEl = document.getElementById('hud');
 const exitBtn = document.getElementById('exit-btn');
@@ -350,7 +362,7 @@ function frame(timestamp) {
   if (contextLost) return;
   const frameStartedAt = performance.now();
   const presentationTime = Number.isFinite(timestamp) ? timestamp : frameStartedAt;
-  const active = PERF_AUTOWALK || isLocked();
+  const active = PERF_AUTOWALK || isLocked() || Boolean(focusState && focusState.phase !== 'readingPlaque');
   if (!frameScheduler.shouldRender({ now: presentationTime, active, visible: !document.hidden })) {
     // Paused streaming can finish, but a settled menu does no draw work.
     if (!document.hidden && frameStartedAt - lastMaintenanceAt >= 100) {
@@ -1045,6 +1057,7 @@ function fitArtwork(pic, frame, tex, imageIndex) {
     slot.frame.position.x = frameX;
     slot.pic.position.x = pictureXForFrame(slot.side, frameX, metrics);
     resizePictureLight(slot, w, h);
+    plaques.layout(slot, w, THREE.MathUtils.clamp(h * 0.035, 0.036, 0.062));
   }
 }
 
@@ -1069,6 +1082,7 @@ function showArtworkPlaceholder(slot) {
 function setArtTexture(slot, imageIndex) {
   const cacheIndex = imageIndex % IMAGES.length;
   slot.imageIndex = cacheIndex;
+  plaques.bind(slot, decodeURIComponent(IMAGES[cacheIndex].split('/').pop()));
   const tex = texCache[cacheIndex];
   if (tex) showArtworkTexture(slot, tex, cacheIndex);
   else {
@@ -1101,6 +1115,9 @@ function makeArtwork(parent, side, localZ, imageIndex) {
 
   const slot = { pic, frame, parent, side, fixtures: [], artScale: 1 };
   pic.userData.slot = slot;
+  plaques.attach(slot);
+  plaques.layout(slot, 2, 0.062);
+  artMeshes.push(slot.plaque);
   slot.artScale = 0.5;
   resizePictureLight(slot, 2, ART_H);
   setArtTexture(slot, imageIndex);
@@ -1463,6 +1480,19 @@ function recycleChunks() {
 }
 
 const artWorldPos = new THREE.Vector3();
+let titlesRefreshing = false;
+async function refreshPlaqueTitles() {
+  if (titlesRefreshing || document.hidden) return;
+  titlesRefreshing = true;
+  try {
+    const summaries = await guestbook.refreshTitles(plaques.residentIds());
+    summaries.forEach(summary => plaques.update(summary));
+    if (summaries.length) requestSceneFrame();
+  } catch { /* The gallery remains usable when its visitor service is offline. */ }
+  finally { titlesRefreshing = false; }
+}
+setInterval(() => { if (entered) void refreshPlaqueTitles(); }, 30000);
+
 function batchIndicesFor(imageIndex) {
   const start = Math.floor(imageIndex / STREAM_BATCH_SIZE) * STREAM_BATCH_SIZE;
   const end = Math.min(start + STREAM_BATCH_SIZE, IMAGES.length);
@@ -1627,7 +1657,7 @@ const movementCodes = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'Arrow
 let jumpQueued = false;
 
 function syncMuseumAudioState() {
-  const audible = entered && isLocked() && !document.hidden;
+  const audible = entered && (isLocked() || guestbook.isOpen()) && !document.hidden;
   audioListener.setMasterVolume(audible ? 1 : 0);
 }
 
@@ -1640,7 +1670,7 @@ function clearInput() {
 }
 
 function onKey(e, down) {
-  if (!isLocked()) return;
+  if (plaqueSession || !isLocked()) return;
   if (e.code === 'KeyE') {
     e.preventDefault();
     if (down && !e.repeat) inspectArtwork();
@@ -1698,7 +1728,7 @@ updaters.push((dt) => {
 const autoWalkInput = { forward: true };
 updaters.push((dt) => {
   if (!focusState) camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  if (PERF_AUTOWALK || (roamEnabled && isLocked())) {
+  if (!focusState && !plaqueSession && (PERF_AUTOWALK || (roamEnabled && isLocked()))) {
     const jumpHeld = keys.jump;
     keys.jump = keys.jump || jumpQueued;
     keys.jumpPressed = jumpQueued;
@@ -1733,10 +1763,16 @@ function setArtHintVisible(visible) {
 }
 
 function focusOn(mesh) {
+  const isPlaque = mesh.userData.kind === 'plaque';
+  if (isPlaque) {
+    const slot = mesh.userData.slot;
+    plaqueSession = { id: mesh.userData.artworkId, imageUrl: TEXTURE_IMAGES[slot.imageIndex] || IMAGES[slot.imageIndex] };
+    document.body.classList.add('plaque-active');
+  }
   const worldPos = new THREE.Vector3();
   mesh.getWorldPosition(worldPos);
   const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-  const toPos = worldPos.clone().addScaledVector(normal, 1.7);
+  const toPos = worldPos.clone().addScaledVector(normal, isPlaque ? PLAQUE_FOCUS_DISTANCE : 1.7);
   toPos.y = worldPos.y;
 
   const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
@@ -1751,11 +1787,20 @@ function focusOn(mesh) {
   document.body.classList.add('focused');
   focusState = {
     phase: 'toArt', t: 0,
+    kind: isPlaque ? 'plaque' : 'art',
     fromPos: camera.position.clone(),
     fromQuat: camera.quaternion.clone(),
     toPos, toQuat,
   };
   roamEnabled = false;
+}
+
+function closeGuestPlaque() {
+  guestbook.close();
+  unfocus();
+  // Request within the close click gesture; a denied lock falls back to Resume.
+  lockPointer();
+  syncMuseumAudioState();
 }
 
 function unfocus() {
@@ -1771,6 +1816,9 @@ function unfocus() {
   };
 }
 function cancelFocus() {  // hard reset (used when pausing)
+  guestbook.close();
+  plaqueSession = null;
+  document.body.classList.remove('plaque-active');
   if (focusState || roamReturn) {        // only when actually focused
     if (roamReturn) camera.position.copy(roamReturn.pos);
     yaw = savedYaw; pitch = savedPitch;
@@ -1792,11 +1840,21 @@ updaters.push((dt) => {
   camera.position.lerpVectors(focusState.fromPos, focusState.toPos, e);
   _q.slerpQuaternions(focusState.fromQuat, focusState.toQuat, e);
   camera.quaternion.copy(_q);
+  if (focusState.t >= 1 && focusState.phase === 'toArt' && focusState.kind === 'plaque') {
+    focusState.phase = 'readingPlaque';
+    guestbook.open(plaqueSession);
+    document.exitPointerLock();
+    syncMuseumAudioState();
+  }
   if (focusState.t >= 1 && focusState.phase === 'returning') {
     yaw = savedYaw; pitch = savedPitch;   // hand control back to mouse-look
     roamEnabled = true;
     focusState = null;
     roamReturn = null;
+    plaqueSession = null;
+    document.body.classList.remove('plaque-active');
+    enterEl.inert = isLocked();
+    if (!isLocked() && entered) enterGo.textContent = T('继续', 'Resume', '계속');
   }
 });
 
@@ -1807,7 +1865,10 @@ updaters.push(() => {
     setArtHintVisible(false);
     return;
   }
-  setArtHintVisible(Boolean(getAimedArtworkHit()));
+  const hit = getAimedArtworkHit();
+  artHintCaption.textContent = hit?.object.userData.kind === 'plaque'
+    ? T('题名与留言', 'Names & notes', '이름과 감상') : '';
+  setArtHintVisible(Boolean(hit));
 });
 
 /* ---- pointer-lock lifecycle: the #enter overlay IS the pause menu ---- */
@@ -1815,7 +1876,7 @@ document.addEventListener('pointerlockchange', () => {
   const locked = isLocked();
   clearInput();
   ignoreNextLook = true;
-  enterEl.inert = locked;
+  enterEl.inert = locked || Boolean(plaqueSession && focusState?.phase === 'readingPlaque');
   document.body.classList.toggle('locked', locked);
   resetFrameTiming();
   syncMuseumAudioState();
@@ -1824,6 +1885,8 @@ document.addEventListener('pointerlockchange', () => {
     enterGo.blur();
   }
   if (!locked) {
+    // A plaque deliberately releases the mouse so its text fields can be used.
+    if (plaqueSession && focusState?.phase === 'readingPlaque') return;
     cancelFocus();                       // resume cleanly next time
     camera.fov = CAMERA_FOV;
     camera.updateProjectionMatrix();
@@ -1932,6 +1995,7 @@ async function boot() {
   prewarmMuseumTrack();
   enterProg.textContent = T('正在准备展馆…', 'Preparing exhibition…', '전시 준비 중…');
   buildHall();
+  void refreshPlaqueTitles();
   fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
   bloomOcclusion = createMuseumBloomOcclusion(scene);
   try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
