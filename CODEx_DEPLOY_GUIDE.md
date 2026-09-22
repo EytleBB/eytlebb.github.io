@@ -2,6 +2,16 @@
 
 > 给本地 Codex / AI 助手使用的项目说明。执行网站维护、修改、部署前，先阅读本文件。
 
+## 2026-09-22：当前发布入口
+
+本机普通 GitHub HTTPS 推送认证已经恢复，使用 `git push origin main`，成功后再执行 `git push tencent main`，两端必须是同一提交。下文 9 月 12 日的 API 推送说明仅为历史记录。完整发布流程见 [发布约定](docs/maintenance/release-workflow.md)。
+
+展馆取名、投票、评论增加了独立 Python/SQLite 服务；静态网站推送不会自动安装或更新后端。实际配置模板及首次安装脚本在 `scripts/production/`。将待发布提交中的 `server/`、`scripts/production/`、`scripts/deploy-excludes.txt` 上传到服务器私有发布目录后，以 sudo 执行该目录的 `scripts/production/install_guestbook.py`。脚本会先备份现有网站和配置，生成仅存于服务器的密钥，验证 Nginx/systemd 配置，再启用服务；安装后必须验收 HTTPS API、数据库持久化及备份，之后才推送静态页面。
+
+服务为 `eytle-museum.service`，代码在 `/opt/eytle-museum`，数据在 `/var/lib/eytle-museum`，环境文件为 `/etc/eytle-museum.env`。`eytle-museum-backup.timer` 每日服务器时间 04:20 起随机延迟最多 5 分钟执行在线备份并检查完整性，保留最近 14 个每日快照和 6 个月度快照；备份在 `/var/backups/eytle-museum`。`www.eytle.cn` 的 HTTPS 访问统一跳转主域名以保持留言来源一致。详情见 [留言服务手册](docs/maintenance/museum-guestbook-service.md)。
+
+后续后端升级前，先运行一次备份服务，再更新 `/opt/eytle-museum` 内的对应文件并重启、验证 API；不要覆盖密钥或数据库。首次安装脚本的站点归档不包含独立数据库，不能代替数据库在线备份。
+
 ## 2026-09-12：重装系统后的本地入口
 
 当前开发环境为 Linux，工作目录是 `/home/yeom/Documents/ChatGPT/thisIsEytle`。下文保留原 Windows 部署记录，其中的 `D:\eyt_web` 和 PowerShell 示例应换用当前目录与 Bash。迁移与版本核对详情见 [恢复记录](docs/maintenance/2026-09-12-recovery.md)。

@@ -312,12 +312,13 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
   const h = await createControls();
   h.key('KeyW', true);
   h.tick(30);
-  const before = new Vector().copy(h.api.player.state.position);
   h.api.focusOn({
     userData: { kind: 'plaque', artworkId: '0x0000.jpg', slot: { imageIndex: 0 } },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.37, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
+  // Stopping settles the interpolated camera at the current fixed physics step.
+  const before = h.camera.position.clone();
   h.tick(40);
   assert.equal(h.api.focusState.phase, 'readingPlaque');
   assert.equal(h.document.pointerLockElement, null);

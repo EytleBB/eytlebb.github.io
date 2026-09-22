@@ -1,0 +1,28 @@
+[Unit]
+Description=Eytle museum visitor guestbook
+After=network.target
+
+[Service]
+Type=simple
+User=museum-guest
+Group=museum-guest
+EnvironmentFile=/etc/eytle-museum.env
+ExecStart=/usr/bin/python3 -B /opt/eytle-museum/museum_guest_api.py serve --db /var/lib/eytle-museum/guestbook.sqlite3 --public-root /var/www/eytle.cn --port 8765 --trust-proxy
+WorkingDirectory=/opt/eytle-museum
+StateDirectory=eytle-museum
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/eytle-museum
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=256M
+TasksMax=48
+LimitNOFILE=256
+
+[Install]
+WantedBy=multi-user.target

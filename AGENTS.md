@@ -6,6 +6,8 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 Static personal website ("This is Eytle") — no build step, no package manager, no framework. Served directly as HTML/CSS/JS. GitHub (`origin`) stores the source; production `eytle.cn` is served by Nginx on Tencent Cloud and deployed through the `tencent` Git remote. See `CODEx_DEPLOY_GUIDE.md` before deployment.
 
+The museum additionally uses a Python/SQLite guestbook API. Its code, database, secret and backups live outside the public web root. Production service templates are in `scripts/production/`; see `docs/maintenance/museum-guestbook-service.md`. A Git push deploys static assets only: backend changes require a separate service update and verification.
+
 ### Restored local workspace (2026-09-12)
 
 The current Linux workspace is `/home/yeom/Documents/ChatGPT/thisIsEytle`, restored from the PSSD backup of `D:\eyt_web`. Read `docs/maintenance/2026-09-12-recovery.md` for the verified baseline, local commands, preserved drafts, and remaining deployment-access checks. The ignored `eyt_web_repo/`, `deploy/`, and `.claude/worktrees/pensive-robinson/` directories contain historical copies or drafts; continue website work at the repository root.
@@ -67,7 +69,7 @@ Trilingual (中文 / English / 한국어). `t(zh, en, ko)` returns the appropria
 
 ### Message form
 
-Home overview has a "给 Eytle 留言" box (140-char limit + live count, fixed height, honeypot anti-spam). Backend is `MSG_CONFIG.web3formsKey` near the top of `main.js`: paste a free Web3Forms public submit key to relay messages to the inbox; leave `''` and the form just acknowledges locally. No secret key ever belongs in this file.
+Home overview has a "给 Eytle 留言" box (140-char limit + live count, fixed height, honeypot anti-spam). Backend is `MSG_CONFIG.web3formsKey` near the top of `main.js`: paste a free Web3Forms public submit key to relay messages to the inbox; leave `''` and the form explains that sending is unavailable and preserves the draft. This is separate from the museum guestbook. No secret key ever belongs in this file.
 
 ## Adding content
 
