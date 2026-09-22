@@ -1,0 +1,26 @@
+diff --git a/js/museum.js b/js/museum.js
+index d7a19f7..11360b0 100644
+--- a/js/museum.js
++++ b/js/museum.js
+@@ -48,7 +48,7 @@ const exitBtn = document.getElementById('exit-btn');
+ const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
+ document.title = `${exhibitionName} · This is Eytle`;
+ exhibitionTitle.textContent = exhibitionName;
+-enterSub.textContent = T('自由行走，停下来细看。', 'Explore freely. Pause for a closer look.', '자유롭게 걷고, 멈추어 자세히 감상하세요.');
++enterSub.textContent = T('WASD 移动，鼠标调整视角。左键查看画作，再次点击返回。按住右键放大。', 'Use WASD to move and the mouse to look around. Left-click an artwork to view it; click again to return. Hold the right mouse button to zoom in.', 'WASD로 이동하고 마우스로 시점을 조절하세요. 작품을 왼쪽 클릭하면 자세히 볼 수 있고, 다시 클릭하면 돌아갑니다. 오른쪽 버튼을 누르고 있으면 확대됩니다.');
+ function controlGuideMarkup() {
+   const movement = T('移动', 'Move', '이동');
+   const inspect = T('查看', 'View', '보기');
+@@ -1877,9 +1877,9 @@ function inspectArtwork() {
+ // balloons movementX on a fast flick. Falls back to a plain lock if unsupported.
+ let lockPending = false;
+ function reportPointerLockFailure() {
+-  runtimeStatus.textContent = T('无法捕获鼠标。请再次点击进入，或用桌面浏览器打开。',
+-    'Mouse capture failed. Try Enter again, or open in a desktop browser.',
+-    '마우스를 캡처할 수 없습니다. 다시 입장하거나 데스크톱 브라우저에서 여세요.');
++  runtimeStatus.textContent = T('无法启用鼠标视角控制。请再次点击进入展馆，或使用桌面浏览器。',
++    'Mouse look is unavailable. Click Enter exhibition again, or use a desktop browser.',
++    '마우스 시점 조절을 사용할 수 없습니다. 전시장 입장을 다시 누르거나 데스크톱 브라우저를 사용하세요.');
+ }
+ async function lockPointer() {
+   if (lockPending || isLocked()) return;

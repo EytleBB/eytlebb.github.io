@@ -34,11 +34,11 @@ const exitBtn = document.getElementById('exit-btn');
 const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
 document.title = `${exhibitionName} · This is Eytle`;
 exhibitionTitle.textContent = exhibitionName;
-enterSub.textContent = T('WASD 移动，鼠标调整视角。', 'Use WASD to move and the mouse to look around.', 'WASD로 이동하고 마우스로 시점을 조절하세요.');
+enterSub.textContent = T('WASD 移动，鼠标调整视角。左键查看画作，再次点击返回。按住右键放大。', 'Use WASD to move and the mouse to look around. Left-click an artwork to view it; click again to return. Hold the right mouse button to zoom in.', 'WASD로 이동하고 마우스로 시점을 조절하세요. 작품을 왼쪽 클릭하면 자세히 볼 수 있고, 다시 클릭하면 돌아갑니다. 오른쪽 버튼을 누르고 있으면 확대됩니다.');
 function controlGuideMarkup() {
   const movement = T('移动', 'Move', '이동');
   const inspect = T('查看', 'View', '보기');
-  const zoom = T('缩放', 'Zoom', '확대');
+  const zoom = T('放大', 'Zoom', '확대');
   const run = T('快走', 'Run', '달리기');
   const pause = T('暂停', 'Pause', '일시정지');
   return `
@@ -69,11 +69,11 @@ function controlGuideMarkup() {
 }
 const controlGuide = controlGuideMarkup();
 enterKeys.innerHTML = controlGuide;
-enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，鼠标左键查看，鼠标右键缩放，Shift 快走，Esc 暂停',
-  'Controls: WASD move, left click view, right click zoom, Shift run, Esc pause',
-  '조작 안내: WASD 이동, 왼쪽 클릭 보기, 오른쪽 클릭 확대, Shift 달리기, Esc 일시정지'));
-enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
-exitBtn.title = T('退出', 'Exit', '나가기');
+enterKeys.setAttribute('aria-label', T('操作说明：WASD 移动，左键查看画作，再次点击返回，按住右键放大，Shift 快走，Esc 暂停',
+  'Controls: WASD move, left-click an artwork to view it and click again to return, hold the right mouse button to zoom in, Shift run, Esc pause',
+  '조작 안내: WASD 이동, 작품을 왼쪽 클릭하면 보기 및 다시 클릭하면 돌아가기, 오른쪽 버튼을 누르는 동안 확대, Shift 달리기, Esc 일시정지'));
+enterBack.textContent = T('返回首页', 'Back to home', '홈으로');
+exitBtn.title = T('返回首页', 'Back to home', '홈으로');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
 hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
@@ -87,7 +87,7 @@ function setProgress(loaded, total) {
 function readyToEnter() {
   preloaded = true;
   enterProg.textContent = '';
-  enterGo.textContent = T('点击进入', 'Enter', '입장');
+  enterGo.textContent = T('进入展馆', 'Enter exhibition', '전시장 입장');
   enterGo.disabled = false;
 }
 function fail(zh, en, ko) {
@@ -1756,7 +1756,7 @@ document.addEventListener('pointerlockchange', () => {
   syncMuseumAudioState();
   if (!locked) {
     cancelFocus();                       // resume cleanly next time
-    if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
+    if (entered) enterGo.textContent = T('继续参观', 'Resume visit', '관람 계속');
   }
 });
 
@@ -1812,9 +1812,9 @@ async function boot() {
     await loadImageList();
   } catch (e) {
     fail(
-      '图画展览会暂无图片或加载失败。',
-      'Pictures At An Exhibition is empty or failed to load.',
-      '전람회의 그림을 불러오지 못했습니다.'
+      '暂无图片，或图片加载失败。请刷新重试。',
+      'No images are available, or the images failed to load. Please reload and try again.',
+      '이미지가 없거나 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'
     );
     return;
   }

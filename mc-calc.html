@@ -94,7 +94,7 @@
     <div class="row"><label>Z:</label><input type="number" id="z2"></div>
     <div class="row"><label>Yaw:</label><input type="number" id="yaw2"></div>
 
-    <button onclick="calculate()">[ 计 算 坐 标 ]</button>
+    <button onclick="calculate()">计算坐标</button>
     
     <div id="result"></div>
     <canvas id="visualizer" width="460" height="300"></canvas>
@@ -114,7 +114,7 @@
         const canvas = document.getElementById('visualizer');
 
         if ([x1, z1, yaw1, x2, z2, yaw2].some(isNaN)) {
-            resBox.innerHTML = "<span style='color:var(--mc-red)'>❌ 请填写所有数值！</span>";
+            resBox.innerHTML = "<span style='color:var(--mc-red)'>请填写所有数值。</span>";
             return;
         }
 
@@ -141,7 +141,7 @@
 
         // 检查平行
         if (Math.abs(det) < 0.0001) {
-            resBox.innerHTML = "<span style='color:var(--mc-red)'>⚠️ 轨迹平行或重合，无法计算交点。<br>请移动至少100格并确保角度变化明显。</span>";
+            resBox.innerHTML = "<span style='color:var(--mc-red)'>轨迹平行或重合，无法计算交点。<br>请移动至少100格并确保角度变化明显。</span>";
             canvas.style.display = 'none';
             return;
         }
@@ -159,13 +159,13 @@
 
         // 4. 显示结果
         resBox.innerHTML = `
-            <span style="color:var(--mc-green)">✅ 主世界目标 (Overworld)</span>
+            <span style="color:var(--mc-green)">估算的主世界坐标 (Overworld)</span>
             X: <b>${Math.round(targetX)}</b>
             Z: <b>${Math.round(targetZ)}</b>
             距离: ${Math.round(dist)} 格
             
             <hr style="border:1px dashed #555">
-            <span style="color:#FF5555">🔥 下界传送门 (Nether)</span>
+            <span style="color:#FF5555">对应的下界坐标 (Nether)</span>
             X: <b>${Math.round(targetX / 8)}</b>
             Z: <b>${Math.round(targetZ / 8)}</b>
         `;

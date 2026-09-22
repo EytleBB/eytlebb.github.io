@@ -20,18 +20,19 @@ test('canonical exhibition names are wired through every visitor-facing surface'
   assert.match(museumHtml, /<h1 id="exhibition-title"><\/h1>/);
   assert.match(museum, /exhibitionTitle\.textContent = exhibitionName/);
   assert.match(museum, /const exhibitionName = T\('图画展览会', 'Pictures At An Exhibition', '전람회의 그림'\)/);
-  assert.match(museum, /fail\(\s*'图画展览会暂无图片或加载失败。',\s*'Pictures At An Exhibition is empty or failed to load\.',\s*'전람회의 그림을 불러오지 못했습니다\.'\s*\)/s);
+  assert.match(museum, /fail\(\s*'暂无图片，或图片加载失败。请刷新重试。',\s*'No images are available, or the images failed to load\. Please reload and try again\.',\s*'이미지가 없거나 불러오지 못했습니다\. 새로고침 후 다시 시도하세요\.'\s*\)/s);
   assert.match(main, /location\.href = 'museum\.html'/);
 });
 
-test('empty and populated web exhibitions retain their localized heading', async () => {
+test('failed, empty and populated web exhibitions retain their localized heading and distinct states', async () => {
   const main = read('js/main.js');
   const sources = [
     main.match(/function sectionHeading\([^\n]+\) \{[\s\S]*?\n\}/)[0],
     main.match(/async function renderGallery\(\) \{[\s\S]*?\n\}/)[0]
   ].join('\n');
   for (const [language, title] of ['图画展览会', 'Pictures At An Exhibition', '전람회의 그림'].entries()) {
-    for (const populated of [false, true]) {
+    for (const state of ['failed', 'empty', 'populated']) {
+      const populated = state === 'populated';
       const stage = { innerHTML: '' };
       const context = vm.createContext({
         stage,
@@ -41,7 +42,7 @@ test('empty and populated web exhibitions retain their localized heading', async
         t: (...labels) => labels[language],
         escapeHtml: text => text,
         placeholder: text => `<p>${text}</p>`,
-        loadGallery: async () => {},
+        loadGallery: async () => state !== 'failed',
         enhanceMotion() {},
         cacheGalleryImages() {},
         document: { getElementById: () => ({ insertAdjacentHTML() {}, querySelectorAll: () => [] }) },
@@ -49,8 +50,12 @@ test('empty and populated web exhibitions retain their localized heading', async
       });
       vm.runInContext(sources, context);
       await context.renderGallery();
-      assert.ok(stage.innerHTML.includes(`<h1>${title}</h1>`), `${title}: populated=${populated}`);
+      assert.ok(stage.innerHTML.includes(`<h1>${title}</h1>`), `${title}: ${state}`);
       assert.equal(stage.innerHTML.includes('id="gallery-grid"'), populated);
+      if (state === 'failed') {
+        assert.match(stage.innerHTML, /role="status"/);
+        assert.doesNotMatch(stage.innerHTML, /暂无图片|No images yet|이미지 없음/);
+      }
     }
   }
 });
@@ -70,7 +75,7 @@ test('entry button stays hidden until the museum is ready', () => {
   const museum = read('js/museum.js');
 
   assert.match(museumStyle, /#enter \.go\[disabled\]\s*\{[^}]*display:\s*none/s);
-  assert.match(museum, /enterGo\.textContent = T\('点击进入', 'Enter', '입장'\);\s*enterGo\.disabled = false;/s);
+  assert.match(museum, /enterGo\.textContent = T\('进入展馆', 'Enter exhibition', '전시장 입장'\);\s*enterGo\.disabled = false;/s);
 });
 
 test('retired visitor-facing labels are absent', () => {

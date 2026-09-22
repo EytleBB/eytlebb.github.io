@@ -74,7 +74,7 @@ test('missing curated images are filled from gallery order without duplicates', 
   assert.equal(gallery([]).context.selectHomeGallery().length, 0);
 });
 
-test('three static previews retain metadata, translated captions and the correct lightbox targets', async () => {
+test('three static previews retain metadata, gallery numbering and the correct lightbox targets', async () => {
   for (const lang of ['zh', 'en', 'ko']) {
     const { context, gal, images, buttons, opened } = gallery(undefined, lang);
     await context.renderHomeGallery(1);
@@ -85,9 +85,12 @@ test('three static previews retain metadata, translated captions and the correct
     for (const index of [3, 2, 1]) {
       assert.ok(gal.innerHTML.includes(images[index].preview));
       assert.ok(gal.innerHTML.includes(`width="${images[index].width}" height="${images[index].height}"`));
+      const number = index + 1;
+      const caption = { zh: `图片 ${number}`, en: `Picture ${number}`, ko: `이미지 ${number}` }[lang];
+      const label = { zh: `查看图片 ${number}`, en: `View picture ${number}`, ko: `이미지 ${number} 보기` }[lang];
+      assert.ok(gal.innerHTML.includes(`<span class="gal-caption">${caption}</span>`));
+      assert.ok(gal.innerHTML.includes(`aria-label="${label}"`));
     }
-    const caption = featuredGallery[0][lang === 'zh' ? 'caption' : lang === 'en' ? 'captionEn' : 'captionKo'];
-    assert.ok(gal.innerHTML.includes(caption));
     buttons.forEach(button => button.click());
     assert.deepEqual(opened, [3, 2, 1]);
   }

@@ -12,9 +12,9 @@ const DATA = {
     email: '3035986089@qq.com',
     github: 'https://github.com/EytleBB',
     featuredGallery: [
-      { file: '0x0025.jpg', caption: '山与水', captionEn: 'Mountains and water', captionKo: '산과 물' },
-      { file: '0x0002.jpg', caption: '枝头的鸟', captionEn: 'A bird on a branch', captionKo: '가지 위의 새' },
-      { file: '0x0045.png', caption: '树的想象', captionEn: 'An imagined tree', captionKo: '상상 속의 나무' }
+      { file: '0x0025.jpg' },
+      { file: '0x0002.jpg' },
+      { file: '0x0045.png' }
     ]
   },
 
@@ -112,7 +112,7 @@ const DATA = {
    key is a PUBLIC submit token bound to one inbox (spam-filtered),
    not a secret — safe to ship in a static page. Create a free key
    at https://web3forms.com and paste it below. Leave '' and the
-   form simply acknowledges locally without sending.
+   form keeps the draft and reports that sending is unavailable.
    ============================================================ */
 const MSG_CONFIG = { web3formsKey: '918bb7ac-52b3-4b34-8e20-7bbf4e897e20' };
 
@@ -216,13 +216,13 @@ function selectHomeGallery() {
     const src = `images/gallery/${encodeURIComponent(featured.file)}`;
     const index = DATA.gallery.findIndex(image => image.src.split('?')[0] === src);
     if (index < 0 || used.has(index)) continue;
-    selected.push({ index, caption: pick(featured, 'caption') });
+    selected.push({ index });
     used.add(index);
     if (selected.length === 3) return selected;
   }
   for (let index = 0; index < DATA.gallery.length && selected.length < 3; index++) {
     if (used.has(index)) continue;
-    selected.push({ index, caption: t('收藏的一帧','A collected moment','간직한 한 장면') });
+    selected.push({ index });
     used.add(index);
   }
   return selected;
@@ -269,16 +269,16 @@ async function renderAbout() {
   const epoch = stageRenderEpoch;
   stage.innerHTML = `
     <header class="hero">
-      <div class="hero-topline"><span class="hero-status"><i></i>${t('一个私人角落','A personal corner','나만의 작은 공간')}</span></div>
+      <div class="hero-topline"><span class="hero-status"><i></i>${t('Eytle 的个人网站','Eytle’s personal website','Eytle의 개인 웹사이트')}</span></div>
       <div class="hero-copy">
         <h1><span>This is</span><em>Eytle<span class="hero-period">.</span></em></h1>
-        <p class="hero-description">${t('写下日常，做点东西，收藏喜欢的画面。','Everyday notes, things I make, and pictures I love.','일상을 기록하고, 무언가를 만들고, 좋아하는 장면을 모읍니다.')}</p>
-        <button class="hero-link" id="home-explore"><span>${t('查看近况','See what’s new','최근 소식 보기')}</span>${siteIcon('chevron-down', '', 'arrow-down')}</button>
+        <p class="hero-description">${t('这里放我的项目、工具、日志和图片。','My projects, tools, logs and pictures.','제 프로젝트, 도구, 일지와 이미지를 모아 둔 곳입니다.')}</p>
+        <button class="hero-link" id="home-explore"><span>${t('查看内容','View content','내용 보기')}</span>${siteIcon('chevron-down', '', 'arrow-down')}</button>
       </div>
-      <div class="hero-bottom"><span class="hero-welcome">${t('很高兴你来到这里。','I’m glad you’re here.','들러 주셔서 반가워요.')}</span><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
+      <div class="hero-bottom"><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
     </header>
     <div class="home-body" id="home-content">
-    <div class="home-section-heading"><div><span class="section-index">01 / ${t('近况','Lately','근황')}</span><h2>${t('最近，在这里。','Lately, around here.','요즘, 이곳에서.')}</h2></div></div>
+    <div class="home-section-heading"><h2>${t('日志与图片','Logs and pictures','일지와 이미지')}</h2></div>
     <section class="grid2">
       <div class="col-left">
         <div class="panel plog-card" id="home-plog">
@@ -286,23 +286,7 @@ async function renderAbout() {
           <div class="r-loading placeholder-text">${t('加载中…','Loading…','로딩 중…')}</div>
         </div>
         <button class="home-archive-link" data-home-section="patchlog">${t('所有日志','All entries','모든 일지')} ${siteIcon('arrow-up-right')}</button>
-      </div>
-      <div class="col-right">
-        <div class="gallery-heading"><div><div class="eyebrow">02 / ${t('图像','Pictures','이미지')}</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
-        <div class="gal" id="home-gal" aria-busy="true">
-          <span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span>
-          <span class="gallery-loading-label" role="status">${t('正在载入图像…','Loading pictures…','이미지를 불러오는 중…')}</span>
-        </div>
-        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} ${siteIcon('arrow-right', '', 'arrow-up-right')}</button></div>
-      </div>
-    </section>
-    <section class="home-directory" aria-label="${t('项目与工具','Projects and tools','프로젝트와 도구')}">
-      <button class="home-directory-link" data-home-section="projects"><span class="home-directory-number">03</span><span><strong>${t('项目','Projects','프로젝트')}</strong><small>${t('做过的一些东西','A few things I’ve made','직접 만든 것들')}</small></span>${siteIcon('arrow-right')}</button>
-      <button class="home-directory-link" data-home-section="tools"><span class="home-directory-number">04</span><span><strong>${t('工具','Tools','도구')}</strong><small>${t('方便一点的小工具','Small tools for everyday tasks','일상을 조금 편하게 하는 도구')}</small></span>${siteIcon('arrow-right')}</button>
-    </section>
-    <section class="home-letter" aria-labelledby="home-letter-title">
-      <div class="letter-intro"><div class="eyebrow">05 / ${t('留言','A note','메시지')}</div><h2 id="home-letter-title">${t('留下一句话。','Leave a little note.','한마디 남겨 주세요.')}</h2><p>${t('想说什么都可以，路过也欢迎。','Say whatever is on your mind, or just say hello.','어떤 이야기든 좋아요. 가벼운 인사도 반가워요.')}</p></div>
-      <div class="panel message-card">
+        <div class="panel message-card">
           <div class="message-heading"><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Message Eytle', 'Eytle에게 메시지')}</label></div>
           <textarea id="msg-text" class="msg-text" maxlength="140"
             aria-describedby="msg-count msg-hint"
@@ -317,6 +301,16 @@ async function renderAbout() {
           </div>
           <div class="msg-hint" id="msg-hint" aria-live="polite"></div>
         </div>
+      </div>
+      <div class="col-right">
+        <div class="gallery-heading"><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div>
+        <p class="gallery-description">${t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.')}</p>
+        <div class="gal" id="home-gal" aria-busy="true">
+          <span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span>
+          <span class="gallery-loading-label" role="status">${t('正在加载图片…','Loading pictures…','이미지를 불러오는 중…')}</span>
+        </div>
+        <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} ${siteIcon('arrow-right', '', 'arrow-up-right')}</button></div>
+      </div>
     </section>
     </div>
   `;
@@ -379,13 +373,13 @@ async function renderHomeGallery(epoch) {
   }
   document.getElementById('home-gallery-count').textContent = t(`共 ${DATA.gallery.length} 张图片`, `${DATA.gallery.length} pictures`, `이미지 ${DATA.gallery.length}장`);
   if (DATA.gallery.length) {
-    gal.innerHTML = selectHomeGallery().map(({ index, caption }, position) => {
+    gal.innerHTML = selectHomeGallery().map(({ index }) => {
       const image = DATA.gallery[index];
-      const number = String(position + 1).padStart(2, '0');
-      const label = t(`查看图像：${caption}`, `View picture: ${caption}`, `이미지 보기: ${caption}`);
+      const caption = t(`图片 ${index + 1}`, `Picture ${index + 1}`, `이미지 ${index + 1}`);
+      const label = t(`查看图片 ${index + 1}`, `View picture ${index + 1}`, `이미지 ${index + 1} 보기`);
       return `<button class="gal-item" type="button" data-idx="${index}" aria-label="${escapeHtml(label)}">
         <span class="gal-image-frame"><img src="${escapeHtml(image.preview || image.src)}" alt="" width="${image.width || 1}" height="${image.height || 1}" loading="lazy" decoding="async" /></span>
-        <span class="gal-caption"><span class="gal-number" aria-hidden="true">${number}</span><span>${escapeHtml(caption)}</span></span>
+        <span class="gal-caption">${escapeHtml(caption)}</span>
       </button>`;
     }).join('');
     wireGalleryImages(gal);
@@ -397,8 +391,8 @@ async function renderHomeGallery(epoch) {
 /* ============================================================
    RENDER — projects (with inline sub-projects)
    ============================================================ */
-function sectionHeading(number, label, title, description) {
-  return `<header class="section-heading"><div class="section-index">${number} / ${escapeHtml(label)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
+function sectionHeading(title, description) {
+  return `<header class="section-heading"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
 }
 
 function renderProjects() {
@@ -418,7 +412,7 @@ function renderProjects() {
   }).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('02', 'PROJECTS', t('项目','Projects','프로젝트'), t('我的项目和源码链接。','My projects and source code.','제 프로젝트와 소스 코드 링크입니다.'))}
+    <div class="collection-page">${sectionHeading(t('项目','Projects','프로젝트'), t('查看项目及 GitHub 源码。','View projects and their source code on GitHub.','프로젝트와 GitHub 소스 코드를 확인할 수 있습니다.'))}
     <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div></div>`;
 
   stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
@@ -474,7 +468,7 @@ function renderTools() {
     </a>`).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('03', 'TOOLS', t('工具','Tools','도구'), t('在线工具，点击即可使用。','Click a tool to open it.','도구를 클릭하면 사용할 수 있습니다.'))}
+    <div class="collection-page">${sectionHeading(t('工具','Tools','도구'), t('在线工具，点击即可使用。','Click a tool to open it.','도구를 클릭하면 사용할 수 있습니다.'))}
     <div class="list">${items || placeholder(t('暂无工具','No tools yet','도구 없음'))}</div></div>`;
 }
 
@@ -492,7 +486,7 @@ function renderDownloads() {
       ${siteIcon('download', 'arrow')}
     </a>`).join('');
 
-  stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'DOWNLOADS', t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
+  stage.innerHTML = `<div class="collection-page">${sectionHeading(t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
 }
 
 /* ============================================================
@@ -663,7 +657,6 @@ function renderPatchlogLevel({ loading = false, focusSelector = null } = {}) {
   stage.innerHTML = `
     <div class="patchlog-shell">
       <header class="patchlog-header">
-        <div class="section-index">04 / PATCH LOG</div>
         <h1 class="patchlog-title" tabindex="-1">${title || t('斑驳日志','Patch Log','패치 로그')}</h1>
         <p class="section-description">${t('按年份、月份和日期查看日志。','Browse logs by year, month and date.','연도, 월, 날짜별로 일지를 볼 수 있습니다.')}</p>
       </header>
@@ -754,9 +747,13 @@ function buildMonth(year, month, todayStr, logDates) {
    ============================================================ */
 async function renderGallery() {
   const epoch = stageRenderEpoch;
-  await loadGallery();
+  const loaded = await loadGallery();
   if (epoch !== stageRenderEpoch) return;
-  const heading = sectionHeading('05', 'GALLERY', t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
+  const heading = sectionHeading(t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
+  if (loaded === false) {
+    stage.innerHTML = `<div>${heading}<p class="placeholder-text" role="status">${t('图片加载失败，请重新打开此栏目重试。','Pictures could not be loaded. Reopen this section to try again.','이미지를 불러오지 못했습니다. 이 메뉴를 다시 열어 주세요.')}</p></div>`;
+    return;
+  }
   if (!DATA.gallery.length) {
     stage.innerHTML = `<div>${heading}
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
@@ -1105,7 +1102,7 @@ function wireMessageForm() {
     btn.dataset.state = state;
     btn.classList.remove('is-launching');
     btn.querySelector('.msg-send-label').textContent = state === 'sent'
-      ? (MSG_CONFIG.web3formsKey ? t('已发送','Sent','전송됨') : t('已记录','Saved','기록됨'))
+      ? t('已发送','Sent','전송됨')
       : state === 'error' ? t('重试','Retry','재시도') : t('发送','Send','보내기');
     EytleIcons.set(btn.querySelector('.msg-plane'), state === 'sent' ? 'check' : state === 'error' ? 'retry' : 'plane');
   };
@@ -1134,16 +1131,16 @@ function wireMessageForm() {
   btn.addEventListener('click', async () => {
     const submittedValue = box.value;
     const text = submittedValue.trim();
-    if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
+    if (!text) { hint.textContent = t('请输入留言','Enter a message','메시지를 입력하세요'); box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
     if (hp.value) return;   // honeypot tripped → silently drop
-    launchPlane();
 
-    if (!MSG_CONFIG.web3formsKey) {        // no backend configured → acknowledge locally
-      hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
-      feedback('sent');
-      box.value = ''; upd(); return;
+    if (!MSG_CONFIG.web3formsKey) {
+      hint.textContent = t('留言暂时无法发送，请通过邮箱联系。','Messages are unavailable. Please use email.','메시지를 보낼 수 없습니다. 이메일로 연락해 주세요.');
+      feedback('error');
+      return;
     }
 
+    launchPlane();
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
     hint.textContent = t('发送中…','Sending…','보내는 중…');
@@ -1161,7 +1158,7 @@ function wireMessageForm() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
+        hint.textContent = t('留言已发送','Message sent','메시지를 보냈습니다');
         // Preserve any new note typed while the previous one was in flight.
         if (box.value === submittedValue) box.value = '';
         upd();
@@ -1494,6 +1491,9 @@ function applyLang() {
   document.querySelectorAll('.nav-i').forEach((b, i) => {
     b.querySelector('span').textContent =
       lang === 'zh' ? b.dataset.zh : lang === 'ko' ? (b.dataset.ko || b.dataset.en) : b.dataset.en;
+  });
+  document.querySelectorAll('[data-copy]').forEach(element => {
+    element.textContent = t(element.dataset.zh, element.dataset.en, element.dataset.ko);
   });
   document.querySelectorAll('.lang-btn').forEach(b => {
     b.classList.toggle('on', b.dataset.lang === lang);

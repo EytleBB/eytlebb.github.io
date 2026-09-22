@@ -34,7 +34,7 @@ function home({ loadLogs = async () => true, loadGallery = async () => true, dat
   };
   const routes = [];
   let exhibitionVisits = 0;
-  const routeButtons = ['patchlog', 'projects', 'tools'].map(section => {
+  const routeButtons = ['patchlog'].map(section => {
     const button = node(`route-${section}`);
     button.dataset.homeSection = section;
     return button;
@@ -59,7 +59,7 @@ function home({ loadLogs = async () => true, loadGallery = async () => true, dat
     normalizeLogBody: text => text.trimEnd(),
     fmtDot: date => date.replace(/-/g, '.'),
     escapeHtml: text => text,
-    selectHomeGallery: () => [{ index: 0, caption: 'A picture' }],
+    selectHomeGallery: () => [{ index: 0 }],
     wireGalleryImages() {},
     cacheGalleryImages() {},
   });
@@ -161,11 +161,11 @@ test('home shortcuts use existing navigation and keep DOM reading order in every
   for (const language of [0, 1, 2]) {
     const h = home({ language });
     await h.render();
-    const sections = ['id="home-plog"', 'id="home-gal"', 'class="home-directory"', 'class="home-letter"'];
+    const sections = ['class="col-left"', 'id="home-plog"', 'class="panel message-card"', 'class="col-right"', 'id="home-gal"'];
     const positions = sections.map(section => h.stage.innerHTML.indexOf(section));
     assert.ok(positions.every((position, index) => position >= 0 && (!index || position > positions[index - 1])));
-    for (const section of ['patchlog', 'projects', 'tools']) h.node(`route-${section}`).listeners.click();
-    assert.deepEqual(h.routes, ['patchlog', 'projects', 'tools']);
+    h.node('route-patchlog').listeners.click();
+    assert.deepEqual(h.routes, ['patchlog']);
     h.node('home-exhibition').listeners.click();
     assert.equal(h.exhibitionVisits, 1, 'exhibition entry delegates to the capability-aware navigation');
     h.node('home-explore').listeners.click();

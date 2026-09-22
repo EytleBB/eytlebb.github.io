@@ -16,7 +16,7 @@ test('message button includes an accessible decorative paper plane', () => {
   assert.match(icons, /plane: 'm22 2-7 20-4-8-8-4Z M22 2 11 14'/);
 });
 
-function messageForm(fetch) {
+function messageForm(fetch, web3formsKey = 'test-only') {
   function element() {
     const listeners = {};
     const attributes = new Map();
@@ -39,7 +39,7 @@ function messageForm(fetch) {
   const context = vm.createContext({
     document: { getElementById: id => nodes[id] },
     window: { setTimeout() {} },
-    MSG_CONFIG: { web3formsKey: 'test-only' },
+    MSG_CONFIG: { web3formsKey },
     t: zh => zh,
     EytleIcons: { set(svg, name) { svg.dataset.icon = name; } },
     fetch,
@@ -60,6 +60,7 @@ test('message result icons follow the response, preserve drafts and reset on inp
   await pending;
   assert.equal(form.icon.dataset.icon, 'check');
   assert.equal(form.label.textContent, '已发送');
+  assert.equal(form.nodes['msg-hint'].textContent, '留言已发送');
   assert.equal(form.nodes['msg-text'].value, '');
   assert.equal(form.nodes['msg-send'].disabled, false);
 
@@ -102,6 +103,20 @@ test('empty messages and the honeypot never submit or report success', async () 
   await form.send();
   assert.equal(requests, 0);
   assert.notEqual(form.icon.dataset.icon, 'check');
+});
+
+test('unconfigured messages preserve the draft and do not claim it was sent or saved', async () => {
+  let requests = 0;
+  const form = messageForm(() => { requests++; }, '');
+  form.nodes['msg-text'].value = 'Keep this draft';
+  await form.send();
+  assert.equal(requests, 0);
+  assert.equal(form.nodes['msg-text'].value, 'Keep this draft');
+  assert.equal(form.nodes['msg-send'].disabled, false);
+  assert.notEqual(form.icon.dataset.icon, 'check');
+  assert.equal(form.nodes['msg-send'].dataset.state, 'error');
+  assert.match(form.nodes['msg-hint'].textContent, /无法发送/);
+  assert.doesNotMatch(form.nodes['msg-hint'].textContent, /已记录|已发送/);
 });
 
 test('paper plane lifts on hover and launches only after validation', () => {
