@@ -106,7 +106,7 @@ async function museumLoopHarness() {
   const canvas = { dataset: {}, addEventListener: (name, callback) => listeners.set(name, callback) };
   const textureUploadQueue = [];
   const sandbox = {
-    contextLost: false, createMuseumFrameScheduler, settings: { fps: 60 }, document, canvas,
+    contextLost: false, focusState: null, createMuseumFrameScheduler, settings: { fps: 60 }, document, canvas,
     performance: { now: () => state.now }, PERF_AUTOWALK: false, PERF_CAPTURE: true,
     isLocked: () => state.locked,
     renderer: {
@@ -127,8 +127,24 @@ async function museumLoopHarness() {
       observe: callback => updaters.push(callback) };`, sandbox);
   sandbox.runtime.observe(dt => state.updates.push(dt));
   const tick = now => { state.now = now; if (state.loop) state.loop(); };
-  return { ...sandbox.runtime, state, document, canvas, listeners, tick, textureUploadQueue };
+  return { ...sandbox.runtime, state, document, canvas, listeners, tick, textureUploadQueue,
+    setFocus: phase => { sandbox.focusState = phase ? { phase } : null; } };
 }
+
+test('plaque return animation renders unlocked and settles again after returning', async () => {
+  const app = await museumLoopHarness();
+  app.startLoop();
+  app.setFocus('readingPlaque');
+  app.tick(0); app.tick(20);
+  assert.equal(app.state.updates.length, 0);
+  app.setFocus('returning');
+  app.tick(40); app.tick(60); app.tick(80);
+  assert.equal(app.state.updates.length, 3);
+  const rendered = app.state.renders;
+  app.setFocus(null);
+  app.tick(100); app.tick(120);
+  assert.equal(app.state.renders, rendered);
+});
 
 test('the real museum loop presents one paused frame, then only explicit scene changes', async () => {
   const app = await museumLoopHarness();

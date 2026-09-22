@@ -1,0 +1,179 @@
+diff --git a/js/museum-guestbook.js b/js/museum-guestbook.js
+index 5be7b65..81dd0e0 100644
+--- a/js/museum-guestbook.js
++++ b/js/museum-guestbook.js
+@@ -2,67 +2,67 @@
+ const API = '/api/museum/v1';
+ const COPY = {
+   zh: {
+-    eyebrow:'THE VISITORS’ LABEL', collection:'图画展览会 · 共同命名', close:'收起铭牌', untitled:'未定名',
+-    chosen:'由来访者共同选出的名字', unchosen:'一个名字，等待与你相遇。', inventory:'馆藏编号', namesTab:'为画取名', commentsTab:'访客留言',
+-    namesIntro:'你会如何称呼这幅画？', commentsIntro:'把此刻的感受留在这里。',
+-    namesRule:'每位访客每幅画可支持一个名字。再次点击可取消，票数最高的名字将显示在画作下方。',
+-    commentsRule:'留言公开展示。请留下与作品有关的感受，勿填写联系方式或其他私人信息。',
+-    namePlaceholder:'给这幅画起一个名字…', commentPlaceholder:'这幅画让你想到了什么？', nameLabel:'你为作品取的名字', commentLabel:'你的留言',
+-    nameSubmit:'提交名字', commentSubmit:'留下感受', moreNames:'展开更多名字', moreComments:'阅读更多留言', anonymous:'一位来访者',
+-    winner:'当前展签', yourVote:'已支持', vote:'支持这个名字', undoVote:'取消支持', loading:'正在读取铭牌…', refreshing:'正在刷新…',
+-    emptyNames:'还没有人给这幅画取名。', emptyNamesSub:'第一个名字，也许就来自你的目光。', emptyComments:'这里还没有留言。', emptyCommentsSub:'你可以留下第一段观展感受。',
+-    retry:'重新连接', offline:'铭牌暂时无法连接。名字与留言需要连接展馆服务后才能读取和保存。',
+-    readOnly:'现在可以阅读铭牌，暂时无法提交。请重新连接后再试。', loadingMore:'正在读取…', loadFailed:'这页暂时无法读取，请重试。',
+-    checking:'正在进行防滥用验证…', saving:'正在保存…', savedName:'名字已收录。你也可以支持自己喜欢的名字。', savedComment:'你的感受已留在这幅画旁。',
+-    savedRefresh:'已保存，暂时无法刷新铭牌。请重新连接。', uncertain:'尚无法确认是否保存成功。请先重新连接铭牌，查看内容是否已收录。', savedVote:'支持已更新。', invalid:'请填写内容，并保持在字数限制内。',
++    eyebrow:'画作名称与留言', collection:'图画展览会 · 画作名称', close:'关闭', untitled:'暂无获选名称',
++    chosen:'当前票数最多的名称', unchosen:'提交名称后可参与投票。', inventory:'图片编号', namesTab:'画作名称', commentsTab:'访客留言',
++    namesIntro:'为这幅画提交名称', commentsIntro:'留下对这幅画的评论',
++    namesRule:'每位访客每幅画可为一个名称投票。再次点击可取消。得票最多的名称显示在画作下方；同票时显示先提交的名称。',
++    commentsRule:'留言公开显示。请评论这幅画，不要填写联系方式或其他私人信息。',
++    namePlaceholder:'输入名称', commentPlaceholder:'输入留言', nameLabel:'画作名称', commentLabel:'留言',
++    nameSubmit:'提交名称', commentSubmit:'提交留言', moreNames:'查看更多名称', moreComments:'查看更多留言', anonymous:'匿名访客',
++    winner:'当前获选名称', yourVote:'已投票', vote:'投票', undoVote:'取消投票', loading:'正在加载名称和留言…', refreshing:'正在刷新…',
++    emptyNames:'暂无名称。', emptyNamesSub:'可在下方提交名称。', emptyComments:'暂无留言。', emptyCommentsSub:'可在下方提交留言。',
++    retry:'重新连接', offline:'暂时无法加载名称和留言，请重新连接。',
++    readOnly:'暂时无法提交，可以继续查看已有内容。请重新连接后再试。', loadingMore:'正在加载…', loadFailed:'加载失败，请重试。',
++    checking:'正在验证…', saving:'正在保存…', savedName:'名称已提交。', savedComment:'留言已提交。',
++    savedRefresh:'已保存，但刷新失败。请重新连接。', uncertain:'暂时无法确认是否保存成功。请重新连接，确认内容是否已提交。', savedVote:'投票已更新。', invalid:'请填写内容，并保持在字数限制内。',
+     genericError:'暂时无法完成，请稍后重试。输入的内容仍保留在这里。', tooFast:'操作稍频繁，请稍候再试。',
+     challengeFailed:'验证未完成，请重试。', expired:'验证已过期，请重新提交。', sessionExpired:'连接已过期，请重新连接后再试。',
+-    duplicate:'这个名字已经有人提出了。可以在列表里支持它。', duplicateComment:'这段感受已收录，无需重复提交。', limit:'这幅作品的提交次数已达上限，请稍后再来。',
+-    absent:'暂时找不到这幅作品的铭牌。', nameGone:'这个名字已不可用，请刷新铭牌。',
+-    proofUnavailable:'当前浏览器无法完成防滥用验证，仍可阅读铭牌。', footer:'匿名参与 · 名字与留言由所有来访者共享',
+-    nameCount:n=>`${n} 个名字`, commentCount:n=>`${n} 则留言`, votes:n=>`${n} 票`, date:()=>'zh-CN', count:(n,max)=>`${n} / ${max}`,
++    duplicate:'这个名称已存在，可在列表中为它投票。', duplicateComment:'这条留言已提交，请勿重复提交。', limit:'这幅画的提交次数已达上限，请稍后再试。',
++    absent:'找不到这幅画的名称和留言。', nameGone:'这个名称已不可用，请刷新。',
++    proofUnavailable:'当前浏览器无法完成验证。仍可查看名称和留言。', footer:'名称、投票结果和留言公开显示。',
++    nameCount:n=>`${n} 个名称`, commentCount:n=>`${n} 则留言`, votes:n=>`${n} 票`, date:()=>'zh-CN', count:(n,max)=>`${n} / ${max}`,
+   },
+   en: {
+-    eyebrow:'THE VISITORS’ LABEL', collection:'Pictures at an Exhibition · A shared title', close:'Close label', untitled:'Untitled',
+-    chosen:'A title chosen by the visitors', unchosen:'A name waiting to be discovered.', inventory:'Collection no.', namesTab:'Name this work', commentsTab:'Visitor notes',
+-    namesIntro:'What would you call this work?', commentsIntro:'Leave a thought from your visit.',
+-    namesRule:'Support one title per artwork. Select it again to withdraw your vote. The most supported title appears beneath the work.',
+-    commentsRule:'Notes are public. Share a thought about the work; leave out contact details and other private information.',
+-    namePlaceholder:'A name for this work…', commentPlaceholder:'What does this work bring to mind?', nameLabel:'Your title for this work', commentLabel:'Your note',
+-    nameSubmit:'Submit a title', commentSubmit:'Leave a note', moreNames:'See more titles', moreComments:'Read more notes', anonymous:'A visitor',
+-    winner:'On the label', yourVote:'Supported', vote:'Support this title', undoVote:'Withdraw your vote', loading:'Reading the label…', refreshing:'Refreshing…',
+-    emptyNames:'This work has no proposed titles yet.', emptyNamesSub:'Its first name might begin with your way of seeing.', emptyComments:'No notes have been left here yet.', emptyCommentsSub:'Leave the first thought beside this work.',
+-    retry:'Reconnect', offline:'The label is temporarily offline. Titles and notes can only be read and saved when the museum service is connected.',
+-    readOnly:'The label can be read, but submissions are currently unavailable. Reconnect to try again.', loadingMore:'Reading…', loadFailed:'This page could not be read. Please try again.',
+-    checking:'Completing the abuse-prevention check…', saving:'Saving…', savedName:'Your title is on the list. You can also support a title you like.', savedComment:'Your thought has been left beside this work.',
+-    savedRefresh:'Saved, but the label could not be refreshed. Please reconnect.', uncertain:'The save could not be confirmed. Reconnect and check whether your contribution is on the label before submitting again.', savedVote:'Your support has been updated.', invalid:'Please enter some text within the character limit.',
++    eyebrow:'Artwork titles and comments', collection:'Pictures at an Exhibition · Artwork titles', close:'Close', untitled:'No selected title',
++    chosen:'Current top-voted title', unchosen:'Submit a title and vote for one of the options.', inventory:'Image ID', namesTab:'Artwork titles', commentsTab:'Visitor comments',
++    namesIntro:'Submit a title for this artwork', commentsIntro:'Comment on this artwork',
++    namesRule:'Vote for one title per artwork. Click again to cancel. The title with the most votes appears below the artwork; ties go to the earlier submission.',
++    commentsRule:'Comments are public. Comment on this artwork without including contact details or other private information.',
++    namePlaceholder:'Enter a title', commentPlaceholder:'Enter a comment', nameLabel:'Artwork title', commentLabel:'Comment',
++    nameSubmit:'Submit title', commentSubmit:'Submit comment', moreNames:'View more titles', moreComments:'View more comments', anonymous:'Anonymous visitor',
++    winner:'Selected title', yourVote:'Voted', vote:'Vote', undoVote:'Cancel vote', loading:'Loading titles and comments…', refreshing:'Refreshing…',
++    emptyNames:'No titles yet.', emptyNamesSub:'Submit a title below.', emptyComments:'No comments yet.', emptyCommentsSub:'Submit a comment below.',
++    retry:'Reconnect', offline:'Titles and comments could not be loaded. Please reconnect.',
++    readOnly:'Submissions are unavailable. You can still read existing content. Reconnect to try again.', loadingMore:'Loading…', loadFailed:'Loading failed. Please try again.',
++    checking:'Verifying…', saving:'Saving…', savedName:'Title submitted.', savedComment:'Comment submitted.',
++    savedRefresh:'Saved, but the page could not be refreshed. Please reconnect.', uncertain:'The save could not be confirmed. Reconnect and check whether your content was submitted.', savedVote:'Vote updated.', invalid:'Please enter some text within the character limit.',
+     genericError:'This could not be completed. Please try again later; your text is still here.', tooFast:'A little too frequent. Please wait before trying again.',
+     challengeFailed:'The check did not finish. Please try again.', expired:'The check has expired. Please submit again.', sessionExpired:'Your connection has expired. Please reconnect and try again.',
+-    duplicate:'Someone has already proposed this title. You can support it in the list.', duplicateComment:'This note is already on the label. There is no need to submit it again.', limit:'The submission limit for this work has been reached. Please return later.',
+-    absent:'This artwork’s label could not be found.', nameGone:'This title is no longer available. Please refresh the label.',
+-    proofUnavailable:'This browser cannot complete the abuse-prevention check. The label is still available to read.', footer:'Anonymous participation · Shared with every visitor',
+-    nameCount:n=>`${n} ${n===1?'title':'titles'}`, commentCount:n=>`${n} ${n===1?'note':'notes'}`, votes:n=>`${n} ${n===1?'vote':'votes'}`, date:()=>'en-GB', count:(n,max)=>`${n} / ${max}`,
++    duplicate:'This title already exists. You can vote for it in the list.', duplicateComment:'This comment has already been submitted. Please do not submit it again.', limit:'The submission limit for this artwork has been reached. Please try again later.',
++    absent:'Titles and comments for this artwork could not be found.', nameGone:'This title is no longer available. Please refresh.',
++    proofUnavailable:'This browser cannot complete verification. Titles and comments are still available to read.', footer:'Titles, vote counts, and comments are public.',
++    nameCount:n=>`${n} ${n===1?'title':'titles'}`, commentCount:n=>`${n} ${n===1?'comment':'comments'}`, votes:n=>`${n} ${n===1?'vote':'votes'}`, date:()=>'en-GB', count:(n,max)=>`${n} / ${max}`,
+   },
+   ko: {
+-    eyebrow:'THE VISITORS’ LABEL', collection:'전람회의 그림 · 함께 짓는 제목', close:'명패 닫기', untitled:'아직 제목 없음',
+-    chosen:'관람객이 함께 고른 제목', unchosen:'당신의 시선에서 시작될 이름.', inventory:'소장 번호', namesTab:'제목 붙이기', commentsTab:'관람객의 감상',
+-    namesIntro:'이 작품을 어떻게 부르고 싶나요?', commentsIntro:'지금의 감상을 이곳에 남겨 주세요.',
+-    namesRule:'작품마다 하나의 제목을 응원할 수 있습니다. 다시 누르면 취소됩니다. 가장 많은 표를 얻은 제목이 작품 아래에 표시됩니다.',
+-    commentsRule:'감상은 공개됩니다. 작품에 관한 생각을 나누되 연락처나 개인 정보는 남기지 마세요.',
+-    namePlaceholder:'이 작품에 어울리는 제목…', commentPlaceholder:'이 작품을 보며 무엇이 떠올랐나요?', nameLabel:'작품에 붙일 제목', commentLabel:'나의 감상',
+-    nameSubmit:'제목 제안하기', commentSubmit:'감상 남기기', moreNames:'다른 제목 더 보기', moreComments:'감상 더 읽기', anonymous:'어느 관람객',
+-    winner:'현재 작품 제목', yourVote:'응원함', vote:'이 제목 응원하기', undoVote:'응원 취소하기', loading:'명패를 읽는 중…', refreshing:'새로 읽는 중…',
+-    emptyNames:'아직 제안된 제목이 없습니다.', emptyNamesSub:'첫 번째 제목은 당신의 시선에서 시작될지도 몰라요.', emptyComments:'아직 감상이 없습니다.', emptyCommentsSub:'이 작품 곁에 첫 감상을 남겨 주세요.',
+-    retry:'다시 연결', offline:'명패에 연결할 수 없습니다. 제목과 감상을 읽고 저장하려면 전시장 서비스에 연결되어야 합니다.',
+-    readOnly:'명패는 읽을 수 있지만 지금은 글을 남길 수 없습니다. 다시 연결해 주세요.', loadingMore:'읽는 중…', loadFailed:'이 페이지를 읽지 못했습니다. 다시 시도해 주세요.',
+-    checking:'도배 방지 확인 중…', saving:'저장 중…', savedName:'제목이 등록되었습니다. 마음에 드는 제목을 응원해 주세요.', savedComment:'작품 곁에 감상을 남겼습니다.',
+-    savedRefresh:'저장되었지만 명패를 새로 읽지 못했습니다. 다시 연결해 주세요.', uncertain:'저장 여부를 확인하지 못했습니다. 다시 연결한 뒤 글이 등록되었는지 확인해 주세요.', savedVote:'응원이 반영되었습니다.', invalid:'글자 수 제한 안에서 내용을 입력해 주세요.',
++    eyebrow:'작품 제목과 댓글', collection:'전람회의 그림 · 작품 제목', close:'닫기', untitled:'선정된 제목 없음',
++    chosen:'현재 최다 득표 제목', unchosen:'제목을 제안하고 원하는 제목에 투표하세요.', inventory:'이미지 번호', namesTab:'작품 제목', commentsTab:'관람객 댓글',
++    namesIntro:'이 작품의 제목을 제안하세요', commentsIntro:'이 작품에 댓글을 남기세요',
++    namesRule:'작품마다 하나의 제목에 투표할 수 있습니다. 다시 누르면 취소됩니다. 최다 득표 제목이 작품 아래에 표시되며, 동점이면 먼저 제출된 제목이 표시됩니다.',
++    commentsRule:'댓글은 공개됩니다. 작품에 대한 댓글을 남기되 연락처나 기타 개인 정보는 입력하지 마세요.',
++    namePlaceholder:'제목 입력', commentPlaceholder:'댓글 입력', nameLabel:'작품 제목', commentLabel:'댓글',
++    nameSubmit:'제목 제출', commentSubmit:'댓글 제출', moreNames:'제목 더 보기', moreComments:'댓글 더 보기', anonymous:'익명 관람객',
++    winner:'선정된 제목', yourVote:'투표함', vote:'투표', undoVote:'투표 취소', loading:'제목과 댓글을 불러오는 중…', refreshing:'새로고침 중…',
++    emptyNames:'아직 제목이 없습니다.', emptyNamesSub:'아래에서 제목을 제출할 수 있습니다.', emptyComments:'아직 댓글이 없습니다.', emptyCommentsSub:'아래에서 댓글을 제출할 수 있습니다.',
++    retry:'다시 연결', offline:'제목과 댓글을 불러오지 못했습니다. 다시 연결해 주세요.',
++    readOnly:'지금은 제출할 수 없습니다. 기존 내용은 볼 수 있습니다. 다시 연결한 뒤 시도해 주세요.', loadingMore:'불러오는 중…', loadFailed:'불러오지 못했습니다. 다시 시도해 주세요.',
++    checking:'확인 중…', saving:'저장 중…', savedName:'제목이 제출되었습니다.', savedComment:'댓글이 제출되었습니다.',
++    savedRefresh:'저장되었지만 새로고침하지 못했습니다. 다시 연결해 주세요.', uncertain:'저장 여부를 확인하지 못했습니다. 다시 연결한 뒤 내용이 제출되었는지 확인해 주세요.', savedVote:'투표가 반영되었습니다.', invalid:'글자 수 제한 안에서 내용을 입력해 주세요.',
+     genericError:'처리하지 못했습니다. 잠시 후 다시 시도해 주세요. 입력한 내용은 남아 있습니다.', tooFast:'너무 자주 요청하고 있습니다. 잠시 기다려 주세요.',
+     challengeFailed:'확인을 마치지 못했습니다. 다시 시도해 주세요.', expired:'확인 시간이 만료되었습니다. 다시 제출해 주세요.', sessionExpired:'연결이 만료되었습니다. 다시 연결해 주세요.',
+-    duplicate:'이미 제안된 제목입니다. 목록에서 이 제목을 응원할 수 있습니다.', duplicateComment:'이미 등록된 감상입니다. 다시 제출하지 않아도 됩니다.', limit:'이 작품의 제출 한도에 도달했습니다. 나중에 다시 방문해 주세요.',
+-    absent:'이 작품의 명패를 찾을 수 없습니다.', nameGone:'이 제목은 더 이상 사용할 수 없습니다. 명패를 새로 읽어 주세요.',
+-    proofUnavailable:'이 브라우저에서는 도배 방지 확인을 완료할 수 없습니다. 명패는 계속 읽을 수 있습니다.', footer:'익명 참여 · 모든 관람객과 함께 나누는 명패',
+-    nameCount:n=>`제목 ${n}개`, commentCount:n=>`감상 ${n}개`, votes:n=>`${n}표`, date:()=>'ko-KR', count:(n,max)=>`${n} / ${max}`,
++    duplicate:'이미 있는 제목입니다. 목록에서 이 제목에 투표할 수 있습니다.', duplicateComment:'이미 제출된 댓글입니다. 다시 제출하지 마세요.', limit:'이 작품의 제출 한도에 도달했습니다. 나중에 다시 시도해 주세요.',
++    absent:'이 작품의 제목과 댓글을 찾을 수 없습니다.', nameGone:'이 제목은 더 이상 사용할 수 없습니다. 새로고침해 주세요.',
++    proofUnavailable:'이 브라우저에서는 확인을 완료할 수 없습니다. 제목과 댓글은 계속 볼 수 있습니다.', footer:'제목, 투표 결과, 댓글은 공개됩니다.',
++    nameCount:n=>`제목 ${n}개`, commentCount:n=>`댓글 ${n}개`, votes:n=>`${n}표`, date:()=>'ko-KR', count:(n,max)=>`${n} / ${max}`,
+   },
+ };
+ 
+diff --git a/js/museum-plaques.js b/js/museum-plaques.js
+index 1f2cb34..1ca8629 100644
+--- a/js/museum-plaques.js
++++ b/js/museum-plaques.js
+@@ -39,7 +39,7 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
+ 
+   function draw(record) {
+     const summary = summaries.get(record.id);
+-    const title = summary?.title || text('尚未命名', 'Untitled', '무제');
++    const title = summary?.title || text('暂无获选名称', 'No selected title', '선정된 제목 없음');
+     const ctx = record.plaque.canvas.getContext('2d');
+     ctx.fillStyle = '#bca47d'; ctx.fillRect(0, 0, 624, 420);
+     ctx.fillStyle = '#eee8db'; ctx.fillRect(3, 3, 618, 414);
+@@ -50,14 +50,14 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
+     ctx.fillText(heading, 38, 114);
+     ctx.fillStyle = '#a78b61'; ctx.fillRect(38, 142, 548, 1);
+     ctx.font = `22px ${sans}`; ctx.fillStyle = '#4f5652';
+-    ctx.fillText(text('一个名字，一种看见。', 'A name. Another way to see.', '이름으로 만나는 또 다른 시선.'), 38, 196);
++    ctx.fillText(text('提交名称，并为喜欢的名称投票。', 'Submit a title and vote for one.', '제목을 제안하고 원하는 제목에 투표하세요.'), 38, 196);
+     ctx.font = `18px ${sans}`; ctx.fillStyle = '#6f756d';
+-    ctx.fillText(text('为画取名 · 点赞 · 留下感想', 'Name · Appreciate · Leave a note', '이름 제안 · 공감 · 감상 나누기'), 38, 238);
++    ctx.fillText(text('提交名称 · 投票 · 留言', 'Submit a title · Vote · Comment', '제목 제출 · 투표 · 댓글'), 38, 238);
+     ctx.fillStyle = '#a78b61'; ctx.fillRect(38, 293, 548, 1);
+     ctx.font = `18px ${sans}`; ctx.fillStyle = '#554736';
+-    ctx.fillText(text('点击铭牌，参与这幅画的故事', 'Click to join the conversation', '명패를 눌러 이야기에 참여하세요'), 38, 345);
++    ctx.fillText(text('点击查看名称和留言', 'Click to view titles and comments', '클릭하여 제목과 댓글 보기'), 38, 345);
+     ctx.font = `14px ${sans}`; ctx.fillStyle = '#817c70';
+-    ctx.fillText(text('访客共同题名', 'NAMED BY VISITORS', '관람객이 함께 짓는 이름'), 38, 383);
++    ctx.fillText(text('名称由访客投票选出', 'TITLES SELECTED BY VISITOR VOTES', '관람객 투표로 제목 선정'), 38, 383);
+     record.plaque.texture.needsUpdate = true;
+ 
+     const label = record.title.canvas.getContext('2d');
+@@ -67,8 +67,8 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
+     label.fillText(fitText(label, title, 810, 60, 20), 432, 79);
+     label.font = `14px ${sans}`; label.fillStyle = '#615643';
+     label.fillText(summary?.title
+-      ? text('访客共同题名', 'VISITORS’ CHOICE', '관람객의 선택')
+-      : text('等待第一个名字', 'AWAITING A NAME', '첫 이름을 기다립니다'), 432, 108);
++      ? text('访客投票选出的名称', 'SELECTED BY VISITOR VOTES', '관람객 투표로 선정된 제목')
++      : text('暂无获选名称', 'NO SELECTED TITLE', '선정된 제목 없음'), 432, 108);
+     record.title.texture.needsUpdate = true;
+   }
+ 
+diff --git a/js/museum.js b/js/museum.js
+index 59051da..205e524 100644
+--- a/js/museum.js
++++ b/js/museum.js
+@@ -1802,7 +1802,7 @@ updaters.push(() => {
+   }
+   const hit = getAimedArtworkHit();
+   artHintCaption.textContent = hit?.object.userData.kind === 'plaque'
+-    ? T('题名与留言', 'Names & notes', '이름과 감상') : '';
++    ? T('查看名称和留言', 'View titles and comments', '제목과 댓글 보기') : '';
+   setArtHintVisible(Boolean(hit));
+ });
+ 

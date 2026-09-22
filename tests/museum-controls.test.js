@@ -66,13 +66,16 @@ async function createControls() {
     createMuseumPlayer, document, window, canvas, camera,
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
+    plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48,
+    IMAGES: ['images/gallery/0x0000.jpg'], TEXTURE_IMAGES: ['images/gallery-preview/0x0000.webp'],
+    guestbook: { opened: false, open() { this.opened = true; }, close() { this.opened = false; }, isOpen() { return this.opened; } },
     settings: { sensitivity: 1 }, updaters: [], artMeshes: [],
     getRearWallZ: () => 72, recycleChunks() {}, updateTextureStreaming() {},
     updateSpeakerPool() {}, resetFrameTiming() {}, startMuseumTrack() {},
     entered: true, preloaded: true, looping: true, frame() {},
     runtimeStatus: { textContent: '' }, enterEl: { inert: false },
     enterGo: { ...eventTarget(), blur() {}, textContent: '' },
-    artHintEl: { classList: classList() },
+    artHintEl: { classList: classList() }, artHintCaption: { textContent: '' },
     audioListener: { setMasterVolume() {} }, renderer: { setAnimationLoop: value => loops.push(value) },
     T: (zh, en) => en,
     THREE: {
@@ -83,7 +86,7 @@ async function createControls() {
     },
   });
   vm.runInContext(controls, context);
-  const api = vm.runInContext(`({ player, keys, clearInput, focusOn, unfocus, lockPointer, enterPlay,
+  const api = vm.runInContext(`({ player, keys, clearInput, focusOn, unfocus, closeGuestPlaque, lockPointer, enterPlay,
     get focusState() { return focusState; }, get zoomHeld() { return zoomHeld; },
     get yaw() { return yaw; }, get pitch() { return pitch; } })`, context);
   function key(code, down, repeat = false) {
@@ -202,6 +205,7 @@ test('artwork focus preserves a crouched position and returns control without st
   near(h.camera.position.y, 1.08);
   const before = h.camera.position.clone();
   const mesh = {
+    userData: {},
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   };
@@ -255,7 +259,7 @@ test('raw mouse capture falls back only for unsupported input and reports a reje
   };
   await h.api.lockPointer();
   assert.equal(requests.length, 1);
-  assert.match(h.context.runtimeStatus.textContent, /Mouse capture failed/);
+  assert.match(h.context.runtimeStatus.textContent, /Mouse look is unavailable/);
   assert.equal(h.context.enterEl.inert, false);
 });
 
@@ -267,6 +271,7 @@ test('pausing while focused restores both the saved position and look orientatio
   h.tick();
   const before = h.camera.position.clone();
   h.api.focusOn({
+    userData: {},
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
@@ -301,4 +306,36 @@ test('duplicate enter requests cannot overlap an in-flight pointer lock', async 
   await h.api.lockPointer();
   assert.equal(requests, 1);
   assert.equal(h.context.enterEl.inert, true);
+});
+
+test('reading a plaque releases the mouse, blocks movement and returns even when relocking fails', async () => {
+  const h = await createControls();
+  h.key('KeyW', true);
+  h.tick(30);
+  const before = new Vector().copy(h.api.player.state.position);
+  h.api.focusOn({
+    userData: { kind: 'plaque', artworkId: '0x0000.jpg', slot: { imageIndex: 0 } },
+    getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.37, z: -3 }); },
+    getWorldQuaternion(out) { return out; },
+  });
+  h.tick(40);
+  assert.equal(h.api.focusState.phase, 'readingPlaque');
+  assert.equal(h.document.pointerLockElement, null);
+  assert.equal(h.context.guestbook.isOpen(), true);
+  assert.equal(h.context.enterEl.inert, true);
+  assert.equal(h.key('KeyW', true).prevented, false, 'typing must reach the text field');
+  const reading = h.camera.position.clone();
+  h.tick(60);
+  assert.deepEqual(h.camera.position, reading);
+  h.canvas.requestPointerLock = async () => { throw Object.assign(new Error('denied'), { name: 'NotAllowedError' }); };
+  h.api.closeGuestPlaque();
+  await new Promise(resolve => setImmediate(resolve));
+  h.tick(37);
+  assert.equal(h.api.focusState, null);
+  assert.equal(h.context.plaqueSession, null);
+  assert.equal(h.context.guestbook.isOpen(), false);
+  assert.equal(h.context.enterEl.inert, false);
+  assert.equal(h.document.body.classList.contains('plaque-active'), false);
+  assert.deepEqual(h.camera.position, before);
+  assert.match(h.context.runtimeStatus.textContent, /Mouse look is unavailable/);
 });

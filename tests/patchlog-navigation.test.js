@@ -62,7 +62,7 @@ test('pending page loads cannot overwrite a newer navigation or language render'
   for (const name of ['renderAbout', 'renderPatchlog', 'renderGallery']) {
     let finishLoad;
     const pending = new Promise(resolve => { finishLoad = resolve; });
-    const stage = { innerHTML: '' };
+    const stage = { innerHTML: '', querySelectorAll: () => [] };
     let staleDomReads = 0;
     const context = vm.createContext({
       stage,
@@ -78,6 +78,11 @@ test('pending page loads cannot overwrite a newer navigation or language render'
     });
     const source = main.match(new RegExp(`async function ${name}\\(\\) \\{[\\s\\S]*?\\n\\}`));
     assert.ok(source, `${name} exists`);
+    if (name === 'renderAbout') {
+      for (const helper of ['renderHomeLog', 'renderHomeGallery']) {
+        vm.runInContext(main.match(new RegExp(`async function ${helper}\\(epoch\\) \\{[\\s\\S]*?\\n\\}`))[0], context);
+      }
+    }
     vm.runInContext(source[0], context);
     const render = context[name]();
     context.stageRenderEpoch++;

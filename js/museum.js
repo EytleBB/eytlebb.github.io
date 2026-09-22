@@ -60,11 +60,11 @@ const exitBtn = document.getElementById('exit-btn');
 const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
 document.title = `${exhibitionName} · This is Eytle`;
 exhibitionTitle.textContent = exhibitionName;
-enterSub.textContent = T('自由行走，停下来细看。', 'Explore freely. Pause for a closer look.', '자유롭게 걷고, 멈추어 자세히 감상하세요.');
+enterSub.textContent = T('WASD 移动，鼠标调整视角。E 或左键查看画作、打开铭牌。按住右键放大。', 'Use WASD to move and the mouse to look around. Press E or left-click to inspect artworks or open labels. Hold the right mouse button to zoom in.', 'WASD로 이동하고 마우스로 시점을 조절하세요. E 또는 왼쪽 클릭으로 작품을 보거나 안내판을 엽니다. 오른쪽 버튼을 누르고 있으면 확대됩니다.');
 function controlGuideMarkup() {
   const movement = T('移动', 'Move', '이동');
   const inspect = T('查看', 'View', '보기');
-  const zoom = T('缩放', 'Zoom', '확대');
+  const zoom = T('放大', 'Zoom', '확대');
   const walk = T('慢走', 'Walk', '걷기');
   const crouch = T('蹲下', 'Crouch', '앉기');
   const jump = T('跳跃', 'Jump', '점프');
@@ -103,8 +103,8 @@ enterKeys.innerHTML = controlGuide;
 enterKeys.setAttribute('aria-label', T('操作说明：WASD 跑动，Shift 慢走，Ctrl 蹲下，空格跳跃，E 或左键查看和返回，右键放大，Esc 暂停',
   'Controls: WASD run, Shift walk, Ctrl crouch, Space jump, E or left click inspect and return, hold right click zoom, Esc pause',
   '조작 안내: WASD 달리기, Shift 걷기, Ctrl 앉기, Space 점프, E 또는 왼쪽 클릭 감상 및 돌아가기, 오른쪽 클릭 확대, Esc 일시정지'));
-enterBack.textContent = T('返回主站', 'Back to site', '메인으로');
-exitBtn.title = T('退出', 'Exit', '나가기');
+enterBack.textContent = T('返回首页', 'Back to home', '홈으로');
+exitBtn.title = T('返回首页', 'Back to home', '홈으로');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
 hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
@@ -139,7 +139,7 @@ function setProgress(loaded, total) {
 function readyToEnter() {
   preloaded = true;
   enterProg.textContent = '';
-  enterGo.textContent = T('点击进入', 'Enter', '입장');
+  enterGo.textContent = T('进入展馆', 'Enter exhibition', '전시장 입장');
   enterGo.disabled = false;
 }
 function fail(zh, en, ko) {
@@ -1854,7 +1854,7 @@ updaters.push((dt) => {
     plaqueSession = null;
     document.body.classList.remove('plaque-active');
     enterEl.inert = isLocked();
-    if (!isLocked() && entered) enterGo.textContent = T('继续', 'Resume', '계속');
+    if (!isLocked() && entered) enterGo.textContent = T('继续参观', 'Resume visit', '관람 계속');
   }
 });
 
@@ -1867,7 +1867,7 @@ updaters.push(() => {
   }
   const hit = getAimedArtworkHit();
   artHintCaption.textContent = hit?.object.userData.kind === 'plaque'
-    ? T('题名与留言', 'Names & notes', '이름과 감상') : '';
+    ? T('取名 · 评论', 'Names · Comments', '이름 · 댓글') : '';
   setArtHintVisible(Boolean(hit));
 });
 
@@ -1890,7 +1890,7 @@ document.addEventListener('pointerlockchange', () => {
     cancelFocus();                       // resume cleanly next time
     camera.fov = CAMERA_FOV;
     camera.updateProjectionMatrix();
-    if (entered) enterGo.textContent = T('继续', 'Resume', '계속');
+    if (entered) enterGo.textContent = T('继续参观', 'Resume visit', '관람 계속');
   }
 });
 
@@ -1940,9 +1940,9 @@ function inspectArtwork() {
 // balloons movementX on a fast flick. Falls back to a plain lock if unsupported.
 let lockPending = false;
 function reportPointerLockFailure() {
-  runtimeStatus.textContent = T('无法捕获鼠标。请再次点击进入，或用桌面浏览器打开。',
-    'Mouse capture failed. Try Enter again, or open in a desktop browser.',
-    '마우스를 캡처할 수 없습니다. 다시 입장하거나 데스크톱 브라우저에서 여세요.');
+  runtimeStatus.textContent = T('无法启用鼠标视角控制。请再次点击进入展馆，或使用桌面浏览器。',
+    'Mouse look is unavailable. Click Enter exhibition again, or use a desktop browser.',
+    '마우스 시점 조절을 사용할 수 없습니다. 전시장 입장을 다시 누르거나 데스크톱 브라우저를 사용하세요.');
 }
 async function lockPointer() {
   if (lockPending || isLocked()) return;
@@ -1981,9 +1981,9 @@ async function boot() {
     await loadImageList();
   } catch (e) {
     fail(
-      '图画展览会暂无图片或加载失败。',
-      'Pictures At An Exhibition is empty or failed to load.',
-      '전람회의 그림을 불러오지 못했습니다.'
+      '暂无图片，或图片加载失败。请刷新重试。',
+      'No images are available, or the images failed to load. Please reload and try again.',
+      '이미지가 없거나 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'
     );
     return;
   }

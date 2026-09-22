@@ -10,7 +10,12 @@
 const DATA = {
   about: {
     email: '3035986089@qq.com',
-    github: 'https://github.com/EytleBB'
+    github: 'https://github.com/EytleBB',
+    featuredGallery: [
+      { file: '0x0025.jpg' },
+      { file: '0x0002.jpg' },
+      { file: '0x0045.png' }
+    ]
   },
 
   projects: [
@@ -107,7 +112,7 @@ const DATA = {
    key is a PUBLIC submit token bound to one inbox (spam-filtered),
    not a secret — safe to ship in a static page. Create a free key
    at https://web3forms.com and paste it below. Leave '' and the
-   form simply acknowledges locally without sending.
+   form keeps the draft and reports that sending is unavailable.
    ============================================================ */
 const MSG_CONFIG = { web3formsKey: '918bb7ac-52b3-4b34-8e20-7bbf4e897e20' };
 
@@ -125,9 +130,7 @@ let patchlogLoadError = false;
 let logLoadRequest = 0;
 let lastReadLog = null;
 const GALLERY_BATCH_SIZE = 18;
-const GALLERY_HOME_COUNT = 24;
 const GALLERY_CACHE = 'eytle-gallery-v1';
-const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -170,7 +173,7 @@ function normalizeLogBody(text) { return text.trimEnd(); }       // preserve int
    DATA LOADERS (auto-maintained indexes)
    ============================================================ */
 async function loadGallery() {
-  if (galleryLoaded) return;
+  if (galleryLoaded) return true;
   try {
     const [galleryResponse, previewResponse] = await Promise.all([
       fetch('./images/gallery/index.json', { cache: 'no-cache' }),
@@ -183,47 +186,46 @@ async function loadGallery() {
       const manifest = await previewResponse.json();
       if (manifest && typeof manifest.items === 'object') previewItems = manifest.items;
     }
-    if (Array.isArray(files)) {
-      DATA.gallery = files.map((f) => {
-        const baseSrc = `images/gallery/${encodeURIComponent(f)}`;
-        const previewMeta = previewItems[f];
-        if (!previewMeta || typeof previewMeta.preview !== 'string') {
-          return { src: baseSrc, preview: baseSrc, width: 1, height: 1, bytes: 0 };
-        }
-        const version = typeof previewMeta.sourceHash === 'string'
-          ? `?v=${encodeURIComponent(previewMeta.sourceHash.slice(0, 12))}`
-          : '';
-        return {
-          src: `${baseSrc}${version}`,
-          preview: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
-          width: Number(previewMeta.width) || 1,
-          height: Number(previewMeta.height) || 1,
-          bytes: Number(previewMeta.sourceBytes) || 0,
-        };
-      });
-    }
-  } catch {}
-  galleryLoaded = true;
+    if (!Array.isArray(files)) throw new Error('Invalid gallery index');
+    DATA.gallery = files.map((f) => {
+      const baseSrc = `images/gallery/${encodeURIComponent(f)}`;
+      const previewMeta = previewItems[f];
+      if (!previewMeta || typeof previewMeta.preview !== 'string') {
+        return { src: baseSrc, preview: baseSrc, width: 1, height: 1, bytes: 0 };
+      }
+      const version = typeof previewMeta.sourceHash === 'string'
+        ? `?v=${encodeURIComponent(previewMeta.sourceHash.slice(0, 12))}`
+        : '';
+      return {
+        src: `${baseSrc}${version}`,
+        preview: `images/gallery-preview/${encodeURIComponent(previewMeta.preview)}${version}`,
+        width: Number(previewMeta.width) || 1,
+        height: Number(previewMeta.height) || 1,
+        bytes: Number(previewMeta.sourceBytes) || 0,
+      };
+    });
+    galleryLoaded = true;
+    return true;
+  } catch { return false; }
 }
 
-function randomGalleryPreview() {
-  const order = DATA.gallery.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
+function selectHomeGallery() {
+  const selected = [];
+  const used = new Set();
+  for (const featured of DATA.about.featuredGallery) {
+    const src = `images/gallery/${encodeURIComponent(featured.file)}`;
+    const index = DATA.gallery.findIndex(image => image.src.split('?')[0] === src);
+    if (index < 0 || used.has(index)) continue;
+    selected.push({ index });
+    used.add(index);
+    if (selected.length === 3) return selected;
   }
-
-  // Avoid showing the identical layout again after returning home or refreshing.
-  const preview = order.slice(0, GALLERY_HOME_COUNT);
-  let previous = '';
-  try { previous = sessionStorage.getItem(GALLERY_PREVIEW_KEY) || ''; } catch {}
-  let signature = JSON.stringify(preview.map(i => DATA.gallery[i].src));
-  if (preview.length > 1 && previous === signature) {
-    [preview[0], preview[1]] = [preview[1], preview[0]];
-    signature = JSON.stringify(preview.map(i => DATA.gallery[i].src));
+  for (let index = 0; index < DATA.gallery.length && selected.length < 3; index++) {
+    if (used.has(index)) continue;
+    selected.push({ index });
+    used.add(index);
   }
-  try { sessionStorage.setItem(GALLERY_PREVIEW_KEY, signature); } catch {}
-  return preview;
+  return selected;
 }
 
 async function cacheGalleryImages(images) {
@@ -276,15 +278,16 @@ async function renderAbout() {
       <div class="hero-bottom"><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
     </header>
     <div class="home-body" id="home-content">
-    <div class="home-section-heading"><div><span class="section-index">01 / HOME</span><h2>${t('日志与图片','Logs and pictures','일지와 이미지')}</h2></div></div>
+    <div class="home-section-heading"><h2>${t('日志与图片','Logs and pictures','일지와 이미지')}</h2></div>
     <section class="grid2">
       <div class="col-left">
         <div class="panel plog-card" id="home-plog">
           <div class="eyebrow">${t('最新日志', 'Latest entry', '최신 일지')}</div>
           <div class="r-loading placeholder-text">${t('加载中…','Loading…','로딩 중…')}</div>
         </div>
+        <button class="home-archive-link" data-home-section="patchlog">${t('所有日志','All entries','모든 일지')} ${siteIcon('arrow-up-right')}</button>
         <div class="panel message-card">
-          <div class="message-heading"><div><div class="eyebrow">MESSAGE</div><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Message Eytle', 'Eytle에게 메시지')}</label></div><span class="postmark" aria-hidden="true">E<span>↗</span></span></div>
+          <div class="message-heading"><label for="msg-text" class="message-title">${t('给 Eytle 留言', 'Message Eytle', 'Eytle에게 메시지')}</label></div>
           <textarea id="msg-text" class="msg-text" maxlength="140"
             aria-describedby="msg-count msg-hint"
             placeholder="${t('输入留言…','Enter your message…','메시지를 입력하세요…')}"></textarea>
@@ -300,8 +303,12 @@ async function renderAbout() {
         </div>
       </div>
       <div class="col-right">
-        <div class="gallery-heading"><div><div class="eyebrow">GALLERY</div><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div><span class="gallery-mark" aria-hidden="true">↗</span></div>
-        <div class="gal" id="home-gal"></div>
+        <div class="gallery-heading"><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div>
+        <p class="gallery-description">${t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.')}</p>
+        <div class="gal" id="home-gal" aria-busy="true">
+          <span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span>
+          <span class="gallery-loading-label" role="status">${t('正在加载图片…','Loading pictures…','이미지를 불러오는 중…')}</span>
+        </div>
         <div class="gallery-foot"><span id="home-gallery-count"></span><button id="home-exhibition">${t('查看展览','View exhibition','전시 보기')} ${siteIcon('arrow-right', '', 'arrow-up-right')}</button></div>
       </div>
     </section>
@@ -317,14 +324,25 @@ async function renderAbout() {
   document.getElementById('home-exhibition').addEventListener('click', () => {
     document.querySelector('.nav-i[data-section="gallery"]').click();
   });
+  stage.querySelectorAll('[data-home-section]').forEach(button => {
+    button.addEventListener('click', () => go(button.dataset.homeSection));
+  });
 
-  // latest patch log (real content, no fabrication)
-  await loadLogs();
+  await Promise.all([renderHomeLog(epoch), renderHomeGallery(epoch)]);
+}
+
+async function renderHomeLog(epoch) {
+  // Latest patch log (real content, no fabrication), independent of the gallery.
+  const loaded = await loadLogs();
   if (epoch !== stageRenderEpoch) return;
   const card = document.getElementById('home-plog');
+  if (!loaded) {
+    card.querySelector('.r-loading').textContent = t('日志暂时无法加载，请稍后再试。','Entries could not be loaded. Please try again later.','일지를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
   if (DATA.patchlog.length) {
     const latest = DATA.patchlog[0];               // index.json is newest-first
-    let body = '';
+    let body = null;
     try {
       const r = await fetch(`./logs/${latest}.txt`, { cache: 'no-store' });
       if (r.ok) body = normalizeLogBody(await r.text());
@@ -333,34 +351,38 @@ async function renderAbout() {
     card.innerHTML = `
       <div class="eyebrow">${t('最新日志', 'Latest entry', '최신 일지')}</div>
       <div class="date">${fmtDot(latest)}</div>
-      <p class="txt">${escapeHtml(body)}</p>
+      ${body === null
+        ? `<p class="placeholder-text">${t('暂时无法读取摘要，可打开全文重试。','The preview is unavailable. Open the entry to try again.','미리보기를 불러오지 못했습니다. 전문을 열어 다시 시도해 주세요.')}</p>`
+        : `<p class="txt">${escapeHtml(body)}</p>`}
       <button class="more" id="home-plog-more">${t('读全文','Read more','전문 읽기')}${siteIcon('chevron-right', '', 'arrow-right')}</button>
     `;
     document.getElementById('home-plog-more').addEventListener('click', () => openReader(latest));
   } else {
     card.querySelector('.r-loading').textContent = t('暂无日志','No entries yet','아직 일지가 없습니다');
   }
+}
 
-  // Gallery preview — a seamless vertical loop that pauses for interaction.
-  await loadGallery();
+async function renderHomeGallery(epoch) {
+  const loaded = await loadGallery();
   if (epoch !== stageRenderEpoch) return;
   const gal = document.getElementById('home-gal');
+  gal.setAttribute('aria-busy', 'false');
+  if (loaded === false) {
+    gal.innerHTML = `<p class="placeholder-text" role="status">${t('图像暂时无法加载，请稍后再试。','Pictures could not be loaded. Please try again later.','이미지를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.')}</p>`;
+    return;
+  }
   document.getElementById('home-gallery-count').textContent = t(`共 ${DATA.gallery.length} 张图片`, `${DATA.gallery.length} pictures`, `이미지 ${DATA.gallery.length}장`);
   if (DATA.gallery.length) {
-    const idx = randomGalleryPreview();
-    const label = t('查看展览图片','View exhibition picture','전시 이미지 보기');
-    const tiles = (duplicate = false) => idx.map(i => `
-      <button class="gal-item" type="button" data-idx="${i}" aria-label="${label}"${duplicate ? ' tabindex="-1"' : ''}>
-        <img src="${DATA.gallery[i].preview || DATA.gallery[i].src}" alt="" loading="lazy" />
-      </button>`).join('');
-    gal.style.setProperty('--gal-scroll-duration', `${Math.max(36, Math.ceil(idx.length / 3) * 5.5)}s`);
-    gal.innerHTML = `
-      <div class="gal-track">
-        <div class="gal-set">${tiles()}</div>
-        <div class="gal-set" aria-hidden="true">${tiles(true)}</div>
-      </div>`;
+    gal.innerHTML = selectHomeGallery().map(({ index }) => {
+      const image = DATA.gallery[index];
+      const caption = t(`图片 ${index + 1}`, `Picture ${index + 1}`, `이미지 ${index + 1}`);
+      const label = t(`查看图片 ${index + 1}`, `View picture ${index + 1}`, `이미지 ${index + 1} 보기`);
+      return `<button class="gal-item" type="button" data-idx="${index}" aria-label="${escapeHtml(label)}">
+        <span class="gal-image-frame"><img src="${escapeHtml(image.preview || image.src)}" alt="" width="${image.width || 1}" height="${image.height || 1}" loading="lazy" decoding="async" /></span>
+        <span class="gal-caption">${escapeHtml(caption)}</span>
+      </button>`;
+    }).join('');
     wireGalleryImages(gal);
-    cacheGalleryImages(idx.map(i => DATA.gallery[i]));
   } else {
     gal.innerHTML = `<p class="placeholder-text">${t('暂无图片','No images yet','이미지 없음')}</p>`;
   }
@@ -369,8 +391,8 @@ async function renderAbout() {
 /* ============================================================
    RENDER — projects (with inline sub-projects)
    ============================================================ */
-function sectionHeading(number, label, title, description) {
-  return `<header class="section-heading"><div class="section-index">${number} / ${escapeHtml(label)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
+function sectionHeading(title, description) {
+  return `<header class="section-heading"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
 }
 
 function renderProjects() {
@@ -390,7 +412,7 @@ function renderProjects() {
   }).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('02', 'PROJECTS', t('项目','Projects','프로젝트'), t('我的项目和源码链接。','My projects and source code.','제 프로젝트와 소스 코드 링크입니다.'))}
+    <div class="collection-page">${sectionHeading(t('项目','Projects','프로젝트'), t('查看项目及 GitHub 源码。','View projects and their source code on GitHub.','프로젝트와 GitHub 소스 코드를 확인할 수 있습니다.'))}
     <div class="list">${items || placeholder(t('暂无项目','No projects yet','프로젝트 없음'))}</div></div>`;
 
   stage.querySelectorAll('.list-item[data-proj]').forEach(btn =>
@@ -446,7 +468,7 @@ function renderTools() {
     </a>`).join('');
 
   stage.innerHTML = `
-    <div class="collection-page">${sectionHeading('03', 'TOOLS', t('工具','Tools','도구'), t('在线工具，点击即可使用。','Click a tool to open it.','도구를 클릭하면 사용할 수 있습니다.'))}
+    <div class="collection-page">${sectionHeading(t('工具','Tools','도구'), t('在线工具，点击即可使用。','Click a tool to open it.','도구를 클릭하면 사용할 수 있습니다.'))}
     <div class="list">${items || placeholder(t('暂无工具','No tools yet','도구 없음'))}</div></div>`;
 }
 
@@ -464,7 +486,7 @@ function renderDownloads() {
       ${siteIcon('download', 'arrow')}
     </a>`).join('');
 
-  stage.innerHTML = `<div class="collection-page">${sectionHeading('06', 'DOWNLOADS', t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
+  stage.innerHTML = `<div class="collection-page">${sectionHeading(t('下载','Downloads','다운로드'), t('软件安装包和其他文件。','Software downloads and other files.','프로그램 설치 파일과 기타 파일입니다.'))}${items}</div>`;
 }
 
 /* ============================================================
@@ -635,7 +657,6 @@ function renderPatchlogLevel({ loading = false, focusSelector = null } = {}) {
   stage.innerHTML = `
     <div class="patchlog-shell">
       <header class="patchlog-header">
-        <div class="section-index">04 / PATCH LOG</div>
         <h1 class="patchlog-title" tabindex="-1">${title || t('斑驳日志','Patch Log','패치 로그')}</h1>
         <p class="section-description">${t('按年份、月份和日期查看日志。','Browse logs by year, month and date.','연도, 월, 날짜별로 일지를 볼 수 있습니다.')}</p>
       </header>
@@ -726,9 +747,13 @@ function buildMonth(year, month, todayStr, logDates) {
    ============================================================ */
 async function renderGallery() {
   const epoch = stageRenderEpoch;
-  await loadGallery();
+  const loaded = await loadGallery();
   if (epoch !== stageRenderEpoch) return;
-  const heading = sectionHeading('05', 'GALLERY', t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
+  const heading = sectionHeading(t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
+  if (loaded === false) {
+    stage.innerHTML = `<div>${heading}<p class="placeholder-text" role="status">${t('图片加载失败，请重新打开此栏目重试。','Pictures could not be loaded. Reopen this section to try again.','이미지를 불러오지 못했습니다. 이 메뉴를 다시 열어 주세요.')}</p></div>`;
+    return;
+  }
   if (!DATA.gallery.length) {
     stage.innerHTML = `<div>${heading}
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
@@ -1077,7 +1102,7 @@ function wireMessageForm() {
     btn.dataset.state = state;
     btn.classList.remove('is-launching');
     btn.querySelector('.msg-send-label').textContent = state === 'sent'
-      ? (MSG_CONFIG.web3formsKey ? t('已发送','Sent','전송됨') : t('已记录','Saved','기록됨'))
+      ? t('已发送','Sent','전송됨')
       : state === 'error' ? t('重试','Retry','재시도') : t('发送','Send','보내기');
     EytleIcons.set(btn.querySelector('.msg-plane'), state === 'sent' ? 'check' : state === 'error' ? 'retry' : 'plane');
   };
@@ -1106,16 +1131,16 @@ function wireMessageForm() {
   btn.addEventListener('click', async () => {
     const submittedValue = box.value;
     const text = submittedValue.trim();
-    if (!text) { hint.textContent = t('请先写点内容','Write something first','먼저 내용을 입력하세요'); box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
+    if (!text) { hint.textContent = t('请输入留言','Enter a message','메시지를 입력하세요'); box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
     if (hp.value) return;   // honeypot tripped → silently drop
-    launchPlane();
 
-    if (!MSG_CONFIG.web3formsKey) {        // no backend configured → acknowledge locally
-      hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
-      feedback('sent');
-      box.value = ''; upd(); return;
+    if (!MSG_CONFIG.web3formsKey) {
+      hint.textContent = t('留言暂时无法发送，请通过邮箱联系。','Messages are unavailable. Please use email.','메시지를 보낼 수 없습니다. 이메일로 연락해 주세요.');
+      feedback('error');
+      return;
     }
 
+    launchPlane();
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
     hint.textContent = t('发送中…','Sending…','보내는 중…');
@@ -1133,7 +1158,7 @@ function wireMessageForm() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        hint.textContent = t('留言已记录','Message recorded','메시지가 기록됨');
+        hint.textContent = t('留言已发送','Message sent','메시지를 보냈습니다');
         // Preserve any new note typed while the previous one was in flight.
         if (box.value === submittedValue) box.value = '';
         upd();
@@ -1466,6 +1491,9 @@ function applyLang() {
   document.querySelectorAll('.nav-i').forEach((b, i) => {
     b.querySelector('span').textContent =
       lang === 'zh' ? b.dataset.zh : lang === 'ko' ? (b.dataset.ko || b.dataset.en) : b.dataset.en;
+  });
+  document.querySelectorAll('[data-copy]').forEach(element => {
+    element.textContent = t(element.dataset.zh, element.dataset.en, element.dataset.ko);
   });
   document.querySelectorAll('.lang-btn').forEach(b => {
     b.classList.toggle('on', b.dataset.lang === lang);
