@@ -1,0 +1,172 @@
+/* A paper exhibition label, set against the close-up of the actual wall plaque. */
+.museum-guestbook {
+  --paper:#ede7db; --paper-light:#f6f1e7; --ink:#292c28; --ink-soft:#706959;
+  --bronze:#8a704b; --hairline:rgba(75,67,50,.18);
+  position:fixed; inset:0; margin:auto; padding:0; width:min(960px,calc(100vw - 72px));
+  max-width:none; max-height:min(820px,calc(100dvh - 64px)); overflow:visible;
+  border:1px solid rgba(224,209,176,.68); border-radius:3px;
+  color:var(--ink); background:var(--paper);
+  box-shadow:0 28px 100px rgba(0,0,0,.47),0 0 0 5px rgba(215,196,161,.07),inset 0 0 0 1px rgba(255,255,255,.55);
+  font:400 13px/1.6 'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.museum-guestbook[open] { animation:guestbook-arrive .32s cubic-bezier(.2,.8,.2,1) both; }
+.museum-guestbook::backdrop { background:rgba(5,10,13,.46); backdrop-filter:blur(6px); }
+.guestbook-sheet {
+  position:relative; display:grid; grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);
+  min-height:600px; max-height:min(818px,calc(100dvh - 66px)); overflow:hidden; border-radius:2px;
+  background:radial-gradient(ellipse at 0 0,rgba(255,255,255,.5),transparent 70%),var(--paper);
+}
+.guestbook-cover {
+  padding:46px 35px 29px; border-right:1px solid var(--hairline);
+  display:flex; flex-direction:column; align-items:flex-start; min-width:0; overflow-y:auto; overscroll-behavior:contain;
+  background:linear-gradient(110deg,rgba(197,183,153,.11),transparent 70%);
+}
+.guestbook-mark { color:var(--bronze); font-size:9px; letter-spacing:.24em; line-height:1.5; }
+.guestbook-inventory { margin-top:8px; color:var(--ink-soft); font-size:10px; letter-spacing:.04em; overflow-wrap:anywhere; }
+.guestbook-art-frame {
+  width:100%; height:clamp(120px,20vh,190px); margin:29px 0 26px; padding:11px;
+  display:grid; place-items:center; border:1px solid rgba(119,101,70,.2);
+  background:rgba(240,233,218,.66); box-shadow:inset 0 0 0 4px rgba(255,255,255,.3);
+}
+.guestbook-art-frame[hidden] { display:none; }
+.guestbook-art { display:block; width:100%; height:100%; min-height:0; object-fit:contain; filter:drop-shadow(0 4px 5px rgba(62,54,40,.1)); }
+.guestbook-art-title {
+  margin:0; font:400 clamp(26px,3.4vw,42px)/1.38 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif;
+  letter-spacing:-.025em; overflow-wrap:anywhere; max-width:100%; text-wrap:pretty;
+}
+.museum-guestbook[lang="zh"] .guestbook-art-title { letter-spacing:.045em; font-size:clamp(25px,3vw,37px); }
+.guestbook-provenance { margin-top:13px; color:var(--ink-soft); font-size:10px; line-height:1.75; letter-spacing:.02em; }
+.guestbook-counts { margin-top:18px; padding-top:15px; width:100%; border-top:1px solid var(--hairline); color:var(--bronze); font-size:10px; letter-spacing:.02em; }
+.guestbook-collection { padding-top:35px; margin-top:auto; font-size:9px; color:var(--ink-soft); letter-spacing:.025em; }
+.guestbook-content { padding:37px 35px 22px; min-width:0; display:flex; flex-direction:column; max-height:inherit; overflow-y:auto; overscroll-behavior:contain; }
+.guestbook-close {
+  position:absolute; z-index:2; top:10px; right:12px; width:30px; height:30px; padding:0;
+  border:0; border-radius:50%; color:var(--ink-soft); background:transparent;
+  font:300 24px/1 Georgia,serif; cursor:pointer; transition:background .2s,color .2s;
+}
+.guestbook-close:hover { color:var(--ink); background:rgba(107,87,52,.09); }
+.guestbook-tabs { display:flex; gap:27px; border-bottom:1px solid var(--hairline); flex-shrink:0; }
+.guestbook-tab {
+  position:relative; min-height:45px; padding:0 0 13px; border:0; background:none;
+  color:var(--ink-soft); font:inherit; font-size:12px; letter-spacing:.055em; cursor:pointer;
+}
+.guestbook-tab::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:var(--bronze); transform:scaleX(0); transform-origin:left; transition:transform .22s; }
+.guestbook-tab[aria-selected="true"] { color:var(--ink); }
+.guestbook-tab[aria-selected="true"]::after { transform:scaleX(1); }
+.guestbook-panel { display:flex; flex-direction:column; min-height:0; flex:1; }
+.guestbook-panel[hidden] { display:none; }
+.guestbook-intro { margin-top:24px; font:400 19px/1.5 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; letter-spacing:.02em; }
+.guestbook-rule { margin-top:8px; color:var(--ink-soft); font-size:10px; line-height:1.85; max-width:42em; }
+.guestbook-entries {
+  list-style:none; margin:21px -8px 0; padding:0 8px; min-height:68px; max-height:260px; overflow-y:auto; overscroll-behavior:contain;
+  flex:1 1 220px; scrollbar-width:thin; scrollbar-color:#bdb09b transparent;
+}
+.guestbook-entries:empty { display:none; }
+.guestbook-entry { padding:13px 0; border-bottom:1px solid var(--hairline); }
+.guestbook-entry:first-child { border-top:1px solid var(--hairline); }
+.guestbook-names .guestbook-entry { display:flex; align-items:center; gap:15px; }
+.guestbook-name-copy { flex:1; min-width:0; display:grid; grid-template-columns:23px minmax(0,1fr); column-gap:7px; align-items:baseline; }
+.guestbook-name-number { color:#776c58; font-size:9px; font-variant-numeric:tabular-nums; }
+.guestbook-name-text { font:400 15px/1.6 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; overflow-wrap:anywhere; }
+.guestbook-winning { grid-column:2; justify-self:start; margin-top:3px; color:var(--bronze); font-size:8px; letter-spacing:.1em; }
+.guestbook-vote {
+  display:flex; align-items:center; justify-content:center; gap:6px; min-width:51px; min-height:36px;
+  padding:3px 7px; border:1px solid rgba(129,110,77,.22); border-radius:2px;
+  background:transparent; color:var(--ink-soft); cursor:pointer; transition:background .2s,border-color .2s,color .2s;
+}
+.guestbook-vote:not(:disabled):hover { color:var(--bronze); border-color:var(--bronze); background:rgba(140,114,73,.055); }
+.guestbook-vote[aria-pressed="true"] { color:#755a35; border-color:rgba(138,112,75,.5); background:rgba(138,112,75,.085); }
+.guestbook-vote-icon { font:400 17px/1 Arial,sans-serif; }
+.guestbook-vote-count { font:400 10px/1.2 'Hanken Grotesk',system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+.guestbook-note-byline { display:flex; justify-content:space-between; gap:15px; color:var(--ink-soft); font-size:9px; }
+.guestbook-note-byline time { font-size:8px; color:#776c58; white-space:nowrap; }
+.guestbook-note-text { margin-top:7px; font-size:12px; line-height:1.9; white-space:pre-wrap; overflow-wrap:anywhere; }
+.guestbook-list-state {
+  flex:1 1 160px; min-height:80px; display:flex; flex-direction:column; justify-content:center; align-items:flex-start;
+  padding:22px 0; margin-top:18px; color:var(--ink-soft); border-top:1px solid var(--hairline); font-size:11px;
+}
+.guestbook-list-state[hidden] { display:none; }
+.guestbook-empty-title { color:#66685e; font:400 15px/1.65 'Fraunces','Songti SC','Noto Serif CJK SC','Batang',Georgia,serif; }
+.guestbook-empty-sub { margin-top:6px; color:#776c58; font-size:10px; line-height:1.8; }
+.guestbook-more {
+  align-self:flex-start; padding:10px 0 3px; min-height:34px; border:0; background:none;
+  color:var(--bronze); text-decoration:underline; text-underline-offset:4px; font:inherit; font-size:10px; cursor:pointer;
+}
+.guestbook-more[hidden] { display:none; }
+.guestbook-form { margin-top:22px; flex-shrink:0; }
+.guestbook-input {
+  display:block; width:100%; min-height:43px; padding:12px 13px; resize:vertical;
+  border:1px solid rgba(111,95,68,.24); border-radius:2px; color:var(--ink); background:rgba(255,252,244,.38);
+  font:400 12px/1.65 'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-serif;
+  box-shadow:inset 0 1px 2px rgba(87,71,41,.025); transition:border-color .2s,background .2s;
+}
+textarea.guestbook-input { min-height:78px; max-height:130px; }
+.guestbook-input::placeholder { color:#817560; opacity:1; }
+.guestbook-input:focus { outline:none; border-color:var(--bronze); background:rgba(255,252,244,.67); }
+.guestbook-form-foot { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-top:9px; }
+.guestbook-counter { color:#776c58; font-size:9px; font-variant-numeric:tabular-nums; }
+.guestbook-counter[data-over="true"] { color:#ab4e35; }
+.guestbook-submit {
+  display:inline-flex; justify-content:center; align-items:center; min-width:109px; min-height:38px; padding:8px 16px;
+  border:1px solid #8a7553; border-radius:2px; color:#f6f0e4; background:#75654b;
+  font:400 11px/1.4 'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-serif; letter-spacing:.045em;
+  cursor:pointer; transition:background .2s,border-color .2s;
+}
+.guestbook-submit:not(:disabled):hover { background:#5c503e; border-color:#5c503e; }
+.museum-guestbook button:disabled { opacity:.42; cursor:default; }
+.guestbook-input:disabled { opacity:.68; }
+.museum-guestbook :focus-visible { outline:2px solid #917746; outline-offset:4px; }
+.museum-guestbook .guestbook-input:focus-visible { outline:1px solid #917746; outline-offset:1px; }
+.guestbook-status { min-height:35px; padding-top:10px; color:var(--ink-soft); font-size:10px; line-height:1.8; flex-shrink:0; overflow-wrap:anywhere; }
+.guestbook-status[data-kind="error"] { color:#9a4933; }
+.guestbook-status[data-kind="success"] { color:#67744f; }
+.guestbook-status[data-kind="pending"] { color:var(--bronze); }
+.guestbook-footer { padding-top:11px; border-top:1px solid var(--hairline); color:#776c58; font-size:8px; line-height:1.8; letter-spacing:.03em; flex-shrink:0; }
+.guestbook-connection {
+  padding:12px 13px; margin-top:17px; border-left:2px solid #b89862;
+  color:#806b46; background:rgba(170,138,79,.075); font-size:10px; line-height:1.8; flex-shrink:0;
+}
+.guestbook-connection[hidden] { display:none; }
+.guestbook-retry { display:block; margin-top:4px; min-height:28px; padding:2px 0; border:0; background:none; color:#806440; font:inherit; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.guestbook-sr,.guestbook-honeypot { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+@keyframes guestbook-arrive { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media (max-height:740px) and (min-width:701px) {
+  .guestbook-sheet { min-height:0; }
+  .guestbook-cover { padding-top:34px; }
+  .guestbook-content { padding-top:27px; }
+  .guestbook-art-frame { height:130px; margin:20px 0; }
+  .guestbook-intro { margin-top:16px; }
+  .guestbook-form { margin-top:14px; }
+  .guestbook-entries { margin-top:14px; flex-basis:140px; }
+  .guestbook-list-state { flex-basis:110px; }
+}
+@media (max-width:700px) {
+  .museum-guestbook { width:calc(100vw - 24px); max-height:calc(100dvh - 24px); }
+  .guestbook-sheet { display:block; min-height:0; max-height:calc(100dvh - 26px); overflow-y:auto; overscroll-behavior:contain; }
+  .guestbook-cover { position:relative; display:block; padding:24px 24px 20px; border-right:0; border-bottom:1px solid var(--hairline); padding-right:125px; min-height:146px; }
+  .guestbook-cover { overflow:visible; }
+  .guestbook-mark { font-size:8px; letter-spacing:.18em; }
+  .guestbook-inventory { margin-top:6px; font-size:9px; }
+  .guestbook-art-frame { position:absolute; right:25px; top:48px; width:78px; height:80px; padding:5px; margin:0; }
+  .guestbook-art-title,.museum-guestbook[lang="zh"] .guestbook-art-title { margin-top:13px; font-size:25px; line-height:1.4; }
+  .guestbook-provenance { margin-top:7px; font-size:9px; }
+  .guestbook-counts { padding:0; margin-top:9px; border:0; font-size:9px; }
+  .guestbook-collection { display:none; }
+  .guestbook-content { padding:11px 24px 18px; max-height:none; overflow:visible; }
+  .guestbook-close { top:7px; right:8px; }
+  .guestbook-tabs { gap:29px; }
+  .guestbook-tab { min-height:42px; padding-bottom:10px; }
+  .guestbook-intro { margin-top:18px; font-size:18px; }
+  .guestbook-rule { font-size:10px; }
+  .guestbook-entries { max-height:230px; flex-basis:auto; min-height:0; }
+  .guestbook-list-state { flex-basis:auto; min-height:90px; margin-top:15px; padding:20px 0; }
+  .guestbook-form { margin-top:18px; }
+  .guestbook-input { font-size:16px; } /* Avoid mobile browser zoom on input. */
+  .guestbook-input::placeholder { font-size:12px; }
+  .guestbook-submit { min-height:42px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .museum-guestbook[open] { animation:none; }
+  .museum-guestbook *, .museum-guestbook *::after { transition:none!important; }
+}

@@ -117,6 +117,8 @@ body.locked #hud, body.locked #title, body.locked .reticle { opacity:1; }
 body.locked #art-hint.show { opacity:1; transform:translate(-50%,0); }
 body.locked #exit-btn { opacity:1; pointer-events:auto; }
 body.locked #enter { opacity:0; pointer-events:none; }
+body.plaque-active #enter { opacity:0; pointer-events:none; }
+.hint-caption { position:absolute; top:calc(100% + 10px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:11px; letter-spacing:.1em; color:var(--ivory); }
 body.focused #hud, body.focused #title, body.focused .reticle, body.focused #exit-btn, body.focused #art-hint { opacity:0; pointer-events:none; }
 
 /* ---- shared control guide: start screen and in-game HUD ---- */
