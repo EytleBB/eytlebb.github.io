@@ -10,12 +10,7 @@
 const DATA = {
   about: {
     email: '3035986089@qq.com',
-    github: 'https://github.com/EytleBB',
-    featuredGallery: [
-      { file: '0x0025.jpg' },
-      { file: '0x0002.jpg' },
-      { file: '0x0045.png' }
-    ]
+    github: 'https://github.com/EytleBB'
   },
 
   projects: [
@@ -210,20 +205,11 @@ async function loadGallery() {
 }
 
 function selectHomeGallery() {
+  const available = Array.from(DATA.gallery.keys());
   const selected = [];
-  const used = new Set();
-  for (const featured of DATA.about.featuredGallery) {
-    const src = `images/gallery/${encodeURIComponent(featured.file)}`;
-    const index = DATA.gallery.findIndex(image => image.src.split('?')[0] === src);
-    if (index < 0 || used.has(index)) continue;
-    selected.push({ index });
-    used.add(index);
-    if (selected.length === 3) return selected;
-  }
-  for (let index = 0; index < DATA.gallery.length && selected.length < 3; index++) {
-    if (used.has(index)) continue;
-    selected.push({ index });
-    used.add(index);
+  while (available.length && selected.length < 3) {
+    const choice = Math.floor(Math.random() * available.length);
+    selected.push({ index: available.splice(choice, 1)[0] });
   }
   return selected;
 }

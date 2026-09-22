@@ -12,12 +12,9 @@ const source = name => {
   assert.ok(match, `${name} exists`);
   return match[0];
 };
-const dataContext = vm.createContext({});
-vm.runInContext(`${main.match(/const DATA = \{[^]*?\n\};/)[0]}\nglobalThis.about = DATA.about;`, dataContext);
-const featuredGallery = JSON.parse(JSON.stringify(dataContext.about.featuredGallery));
-const preferred = featuredGallery.map(item => item.file);
+const sampleFiles = ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'];
 
-function gallery(files = ['fallback.jpg', preferred[2], preferred[1], preferred[0]], lang = 'zh', loaded = true) {
+function gallery(files = sampleFiles, lang = 'zh', loaded = true, random = () => 0.999) {
   const buttons = [];
   const opened = [];
   const gal = {
@@ -43,7 +40,8 @@ function gallery(files = ['fallback.jpg', preferred[2], preferred[1], preferred[
   }));
   const context = vm.createContext({
     lang,
-    DATA: { about: { featuredGallery }, gallery: images },
+    DATA: { gallery: images },
+    Math: Object.assign(Object.create(Math), { random }),
     stageRenderEpoch: 1,
     loadGallery: async () => loaded,
     document: { getElementById: id => id === 'home-gal' ? gal : count },
@@ -57,21 +55,30 @@ function gallery(files = ['fallback.jpg', preferred[2], preferred[1], preferred[
   return { context, gal, count, images, buttons, opened };
 }
 
-test('curated home images exist and preserve their configured order across visits', () => {
-  const index = JSON.parse(read('images/gallery/index.json'));
-  assert.deepEqual(preferred, ['0x0025.jpg', '0x0002.jpg', '0x0045.png']);
-  assert.ok(preferred.every(file => index.includes(file)));
-  const { context } = gallery();
-  for (let visit = 0; visit < 3; visit++) {
-    assert.deepEqual(Array.from(context.selectHomeGallery(), item => item.index), [3, 2, 1]);
+test('home samples three distinct images afresh without changing gallery order', () => {
+  const { context, images } = gallery();
+  const original = [...images];
+  const first = Array.from(context.selectHomeGallery(), item => item.index);
+  context.Math.random = () => 0;
+  const next = Array.from(context.selectHomeGallery(), item => item.index);
+  assert.notDeepEqual(first, next);
+  for (const selection of [first, next]) {
+    assert.equal(selection.length, 3);
+    assert.equal(new Set(selection).size, 3);
+    assert.ok(selection.every(index => index >= 0 && index < images.length));
   }
+  assert.deepEqual(images, original);
 });
 
-test('missing curated images are filled from gallery order without duplicates', () => {
-  const { context } = gallery(['fallback-a.jpg', preferred[1], 'fallback-b.jpg', 'fallback-c.jpg']);
-  assert.deepEqual(Array.from(context.selectHomeGallery(), item => item.index), [1, 0, 2]);
-  assert.equal(gallery(['only.jpg']).context.selectHomeGallery().length, 1);
-  assert.equal(gallery([]).context.selectHomeGallery().length, 0);
+test('small and empty galleries return every available image without duplicates', () => {
+  for (let size = 0; size <= 3; size++) {
+    for (const random of [() => 0, () => 1 - Number.EPSILON]) {
+      const { context } = gallery(sampleFiles.slice(0, size), 'zh', true, random);
+      const selected = Array.from(context.selectHomeGallery(), item => item.index);
+      assert.equal(selected.length, size);
+      assert.deepEqual(selected.sort(), Array.from({ length: size }, (_, index) => index));
+    }
+  }
 });
 
 test('three static previews retain metadata, gallery numbering and the correct lightbox targets', async () => {
@@ -115,14 +122,14 @@ test('a failed gallery index can retry on the next visit and successful data rem
     DATA: { gallery: [] },
     GALLERY_PREVIEW_INDEX: './images/gallery-preview/index.json',
     fetch: async url => url === './images/gallery/index.json'
-      ? { ok: ++indexRequests > 1, status: 503, json: async () => preferred }
+      ? { ok: ++indexRequests > 1, status: 503, json: async () => sampleFiles }
       : { ok: true, json: async () => ({ items: {} }) },
   });
   vm.runInContext(source('loadGallery'), context);
   assert.equal(await context.loadGallery(), false);
   assert.equal(context.galleryLoaded, false);
   assert.equal(await context.loadGallery(), true);
-  assert.equal(context.DATA.gallery.length, 3);
+  assert.equal(context.DATA.gallery.length, sampleFiles.length);
   assert.equal(await context.loadGallery(), true);
   assert.equal(indexRequests, 2);
 });
