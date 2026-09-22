@@ -4,6 +4,10 @@
 
 ## 2026-09-22：当前发布入口
 
+简洁网址使用 `/`、`/projects`、`/tools`、`/patchlog`、`/gallery`、`/downloads`、`/museum` 和 `/mc-calc`。前六个由同一个首页脚本解析，后两个为独立 HTML 页面。`index.html`、`museum.html`、`mc-calc.html` 及路径末尾斜杠会重定向；旧 `#分区` 链接由前端转换，并保留查询参数。
+
+首次启用简洁网址时，将当前提交的 `scripts/production/` 放入服务器私有目录，以 sudo 执行其中的 `install_routes.py`。它备份并更新本站 Nginx 配置、检查语法后 reload，不操作留言数据库。必须先启用服务器路由，再发布前端。规则只映射明确列出的页面，未知 URL 和缺失资源仍返回 404。后续普通页面修改无需重装路由；静态本地预览使用 `python3 scripts/preview.py --port 8000`，留言 API 开发仍使用独立服务。
+
 本机普通 GitHub HTTPS 推送认证已经恢复，使用 `git push origin main`，成功后再执行 `git push tencent main`，两端必须是同一提交。下文 9 月 12 日的 API 推送说明仅为历史记录。完整发布流程见 [发布约定](docs/maintenance/release-workflow.md)。
 
 展馆取名、投票、评论增加了独立 Python/SQLite 服务；静态网站推送不会自动安装或更新后端。实际配置模板及首次安装脚本在 `scripts/production/`。将待发布提交中的 `server/`、`scripts/production/`、`scripts/deploy-excludes.txt` 上传到服务器私有发布目录后，以 sudo 执行该目录的 `scripts/production/install_guestbook.py`。脚本会先备份现有网站和配置，生成仅存于服务器的密钥，验证 Nginx/systemd 配置，再启用服务；安装后必须验收 HTTPS API、数据库持久化及备份，之后才推送静态页面。
@@ -20,7 +24,7 @@
 cd /home/yeom/Documents/ChatGPT/thisIsEytle
 git status
 node --test tests/*.test.js
-python3 -m http.server 8000 --bind 127.0.0.1
+python3 scripts/preview.py --port 8000
 ```
 
 浏览器访问 `http://127.0.0.1:8000/`；按 `Ctrl+C` 停止预览。生成画廊预览使用 `python3 scripts/gallery-previews.py`，图片重命名仍使用 `node scripts/gallery-renamer.js`。

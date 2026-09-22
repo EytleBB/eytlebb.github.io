@@ -21,7 +21,7 @@ test('canonical exhibition names are wired through every visitor-facing surface'
   assert.match(museum, /exhibitionTitle\.textContent = exhibitionName/);
   assert.match(museum, /const exhibitionName = T\('图画展览会', 'Pictures At An Exhibition', '전람회의 그림'\)/);
   assert.match(museum, /fail\(\s*'暂无图片，或图片加载失败。请刷新重试。',\s*'No images are available, or the images failed to load\. Please reload and try again\.',\s*'이미지가 없거나 불러오지 못했습니다\. 새로고침 후 다시 시도하세요\.'\s*\)/s);
-  assert.match(main, /location\.href = 'museum\.html'/);
+  assert.match(main, /location\.href = '\/museum'/);
 });
 
 test('failed, empty and populated web exhibitions retain their localized heading and distinct states', async () => {

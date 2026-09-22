@@ -38,7 +38,7 @@ The site uses **sticky top navigation + a rendered stage** (`index.html` + `css/
 | `.stage` (`#stage`) | Main panel — `go(section)` re-renders it on every nav click |
 | `#overlay-root` | Patch-log reader + gallery lightbox mount here (`mountOverlay`), close on ✕ / backdrop / Esc |
 
-The home section (`about`) is a custom overview: hero + a two-column grid (latest real patch-log entry + message form | gallery preview). Other sections render generic lists/grids into the stage. Section is reflected in `location.hash` (`#patchlog` etc.) for shareable links.
+The home section (`about`) is a custom overview: hero + a two-column grid (latest real patch-log entry + message form | gallery preview). Other sections render generic lists/grids into the stage. Shareable routes use `/`, `/projects`, `/tools`, `/patchlog`, `/gallery` and `/downloads`, with History API back/forward support. Legacy hashes are normalized on arrival. Nginx routes only these known paths to `index.html`; keep missing assets and unknown pages as 404. Use `python3 scripts/preview.py` for local static preview with clean URLs.
 
 Main-site UI state lives in `main.js`; `forest-scene.js` independently manages the optional background animation. There is no framework or build step. Forest and particle rendering stop off the hero, on other sections, in hidden tabs, or under reduced motion; retain the static CSS fallback.
 
@@ -91,7 +91,7 @@ to `0.186.0`). Reads `images/gallery/index.json` for order and the generated
 gallery nav click, `main.js` routes capable desktops here via `isMuseumCapable()`;
 mobile / touch / unsupported devices keep the existing grid + lightbox. The museum
 is a fixed dark dramatic hall — it does NOT follow the night/day theme. Exit
-returns to `index.html` (never `#gallery`, to avoid a relaunch loop). No shared JS
+returns to `/` (never `/gallery`, to avoid a relaunch loop). The public URL is `/museum`; `/museum.html` redirects there. No shared JS
 with `main.js`. Interaction and streaming live in `js/museum.js`; procedural architecture, materials and planar reflections in `js/museum-architecture.js`; projector light volumes and dust in `js/museum-atmosphere.js`; instanced lamp rendering in `js/museum-fixture-batch.js`; styling in `css/museum.css`.
 
 The Nocturne art direction uses a 6.7 m vaulted hall, champagne metal and dark stone. Keep the half-width at 3 m and structural projections within the existing 0.4 m collision margin. Fog ends at 82 m before the 88 m hidden-retarget boundary. Reflection cameras must have their cloned AudioListener children cleared. Ceiling projectors, their light volumes and floor pools share `js/museum-lighting-layout.js`; opaque bloom occlusion lives in `js/museum-bloom-occlusion.js`. Keep pier/intrados light channels centered on each rib and stop longitudinal rails before the 0.45 m plinths. Use `museum.html?perf=walk` for automatic visual/performance verification; the entrance is hidden in this diagnostic mode.
