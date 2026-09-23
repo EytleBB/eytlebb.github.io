@@ -4,7 +4,7 @@
 
 ## 2026-09-22：当前发布入口
 
-简洁网址使用 `/`、`/projects`、`/tools`、`/patchlog`、`/gallery`、`/downloads`、`/museum` 和 `/mc-calc`。前六个由同一个首页脚本解析，后两个为独立 HTML 页面。`index.html`、`museum.html`、`mc-calc.html` 及路径末尾斜杠会重定向；旧 `#分区` 链接由前端转换，并保留查询参数。
+简洁网址使用 `/`、`/projects`、`/tools`、`/patchlog`、`/gallery`、`/downloads`、`/museum`、`/mc-calc` 和 `/museum-admin`。前六个由同一个首页脚本解析，后三个为独立 HTML 页面。`index.html`、`museum.html`、`mc-calc.html`、`museum-admin.html` 及路径末尾斜杠会重定向；旧 `#分区` 链接由前端转换，并保留查询参数。管理员页面的登录、数据库升级与发布步骤见 [管理后台说明](docs/maintenance/museum-admin-platform.md)。
 
 首次启用简洁网址时，将当前提交的 `scripts/production/` 放入服务器私有目录，以 sudo 执行其中的 `install_routes.py`。它备份并更新本站 Nginx 配置、检查语法后 reload，不操作留言数据库。必须先启用服务器路由，再发布前端。规则只映射明确列出的页面，未知 URL 和缺失资源仍返回 404。后续普通页面修改无需重装路由；静态本地预览使用 `python3 scripts/preview.py --port 8000`，留言 API 开发仍使用独立服务。
 

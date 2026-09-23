@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>图画展览会 · 管理后台</title>
+  <link rel="stylesheet" href="css/museum-admin.css?v=1">
+  <script src="js/museum-admin.js?v=1" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="mark">EY</span><span class="kicker">图画展览会</span><h1>内容管理</h1></div>
+    <div class="account"><span id="identity"></span><button id="logout" type="button" hidden>退出登录</button></div>
+  </header>
+  <main>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section id="login-view" class="login-card" hidden>
+      <p class="eyebrow">管理员入口</p><h2>登录展览会后台</h2>
+      <form id="login-form">
+        <label>账号<input name="username" autocomplete="username" required maxlength="32"></label>
+        <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">登录</button>
+      </form>
+    </section>
+    <section id="app-view" hidden>
+      <nav class="tabs" aria-label="管理区域">
+        <button type="button" data-tab="artworks" class="active">画作与内容</button>
+        <button type="button" data-tab="audit">操作记录</button>
+        <button type="button" data-tab="users" id="users-tab" hidden>管理员账号</button>
+      </nav>
+      <section id="artworks-view" class="workspace">
+        <aside class="artworks-panel">
+          <label class="search">查找画作<input id="artwork-search" type="search" placeholder="输入画作编号或名字"></label>
+          <div id="artwork-list" class="artwork-list"></div>
+        </aside>
+        <div id="detail-panel" class="detail-panel"><p class="empty">选择一幅画查看名字和评论。</p></div>
+      </section>
+      <section id="audit-view" class="subview" hidden><div class="section-head"><h2>操作记录</h2><button id="audit-refresh" type="button">刷新</button></div><div id="audit-list"></div><button id="audit-more" type="button" hidden>加载更多</button></section>
+      <section id="users-view" class="subview" hidden><div class="section-head"><h2>管理员账号</h2></div>
+        <form id="create-user" class="user-form"><label>新账号<input name="username" required pattern="[a-z][a-z0-9_-]{2,31}" autocomplete="off"></label><label>初始密码（至少 12 位）<input name="password" type="password" minlength="12" required autocomplete="new-password"></label><button type="submit">创建管理员</button></form>
+        <div id="user-list"></div>
+      </section>
+    </section>
+  </main>
+  <dialog id="edit-dialog"><form id="edit-form" method="dialog"><h2 id="edit-heading"></h2><label id="edit-label"></label><div class="dialog-actions"><button type="button" id="edit-cancel" class="secondary">取消</button><button type="submit">保存</button></div></form></dialog>
+</body>
+</html>
