@@ -78,6 +78,34 @@ class Client:
         return body
 
 
+class AdminClient:
+    def __init__(self, test):
+        self.test, self.cookie, self.csrf = test, None, None
+
+    def request(self, method, endpoint, body=None, extra=None):
+        headers = {"Host": self.test.host, "X-Real-IP": "192.0.2.55"}
+        if self.cookie:
+            headers["Cookie"] = self.cookie
+        if method == "POST":
+            headers.update({"Origin": self.test.origin, "Content-Type": "application/json", "X-CSRF-Token": self.csrf or ""})
+        headers.update(extra or {})
+        connection = http.client.HTTPConnection("127.0.0.1", self.test.port, timeout=5)
+        connection.request(method, api.API + "/admin" + endpoint, json.dumps(body).encode() if body is not None else None, headers)
+        response = connection.getresponse()
+        status, header_map = response.status, dict(response.getheaders())
+        data = json.loads(response.read())
+        connection.close()
+        if "Set-Cookie" in header_map:
+            self.cookie = header_map["Set-Cookie"].split(";", 1)[0]
+        return status, data, header_map
+
+    def login(self, username="owner", password="strong-owner-password"):
+        status, data, headers = self.request("POST", "/login", {"username": username, "password": password})
+        if status == 200:
+            self.csrf = data["csrf"]
+        return status, data, headers
+
+
 class MuseumGuestbookHTTPTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -423,6 +451,115 @@ class MuseumGuestbookHTTPTests(unittest.TestCase):
             api.Guestbook(replace(self.config, dev_static=False))
         with self.assertRaises(ValueError):
             api.GuestbookServer(("0.0.0.0", 0), self.service)
+
+    def test_admin_login_cookies_csrf_roles_and_session_revocation(self):
+        self.service.create_admin(None, "owner", "strong-owner-password")
+        owner = AdminClient(self)
+        self.assertEqual(owner.request("GET", "/artworks")[0], 401)
+        self.assertEqual(owner.login(password="wrong-password")[0], 401)
+        status, body, headers = owner.login()
+        self.assertEqual(status, 200)
+        self.assertEqual(body["role"], "owner")
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+        self.assertIn("SameSite=Strict", headers["Set-Cookie"])
+        self.assertIn("Path=/api/museum/v1/admin", headers["Set-Cookie"])
+        self.assertEqual(owner.request("POST", "/users", {"username": "helper", "password": "strong-helper-password"}, extra={"X-CSRF-Token": ""})[0], 403)
+        self.assertEqual(owner.request("POST", "/users", {"username": "helper", "password": "strong-helper-password"}, extra={"Origin": "https://evil.example"})[0], 403)
+        status, helper, _ = owner.request("POST", "/users", {"username": "helper", "password": "strong-helper-password"})
+        self.assertEqual(status, 200)
+        member = AdminClient(self)
+        self.assertEqual(member.login("helper", "strong-helper-password")[0], 200)
+        self.assertEqual(member.request("GET", "/users")[0], 403)
+        self.assertEqual(member.request("POST", "/users", {"username": "third", "password": "strong-third-password"})[0], 403)
+        self.assertEqual(owner.request("POST", f"/users/{helper['id']}", {"action": "disable"})[0], 200)
+        self.assertEqual(member.request("GET", "/session")[0], 401)
+        self.assertEqual(member.login("helper", "strong-helper-password")[0], 401)
+        self.assertEqual(owner.request("POST", f"/users/{helper['id']}", {"action": "enable"})[0], 200)
+        self.assertEqual(owner.request("POST", f"/users/{helper['id']}", {"action": "password", "password": "another-strong-password"})[0], 200)
+        self.assertEqual(member.login("helper", "another-strong-password")[0], 200)
+        self.now[0] += api.ADMIN_IDLE_TTL + 1
+        self.assertEqual(member.request("GET", "/session")[0], 401)
+
+    def test_admin_content_edit_hide_delete_title_votes_and_audit(self):
+        self.service.create_admin(None, "owner", "strong-owner-password")
+        admin = AdminClient(self)
+        self.assertEqual(admin.login()[0], 200)
+        first = self.client.write("names", "First name")[1]["id"]
+        second = self.client.write("names", "Second name")[1]["id"]
+        comment = self.client.write("comments", "A comment")[1]["id"]
+        self.assertEqual(admin.request("POST", f"/entries/name/{second}", {"action": "votes", "votes": 5})[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "Second name")
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "votes", "votes": 10})[0], 200)
+        self.assertEqual(admin.request("POST", f"/entries/name/{second}", {"action": "title"})[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "Second name")
+        self.assertEqual(self.client.write("votes", name_id=first)[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "First name")
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "edit", "text": "Second name"})[0], 409)
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "edit", "text": "Edited name"})[0], 200)
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "hide"})[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "Second name")
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "restore"})[0], 200)
+        self.assertEqual(admin.request("POST", f"/entries/comment/{comment}", {"action": "edit", "text": "Edited comment"})[0], 200)
+        self.assertEqual(admin.request("POST", f"/entries/comment/{comment}", {"action": "delete"})[0], 200)
+        self.assertEqual(self.client.detail()["comments"], [])
+        status, history, _ = admin.request("GET", "/audit")
+        self.assertEqual(status, 200)
+        self.assertTrue(any(x["action"] == "delete" and x["targetId"] == comment for x in history["entries"]))
+        self.assertNotIn("Edited comment", json.dumps(history))
+        with self.service.connection() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM comments WHERE id=?", (comment,)).fetchone()[0], 0)
+
+    def test_admin_owner_bootstrap_is_single_use_and_password_rules(self):
+        with self.assertRaises(api.APIError):
+            self.service.create_admin(None, "owner", "short")
+        self.service.create_admin(None, "owner", "strong-owner-password")
+        with self.assertRaises(api.APIError):
+            self.service.create_admin(None, "other", "strong-other-password")
+        admin = AdminClient(self)
+        self.assertEqual(admin.login()[0], 200)
+        self.assertEqual(admin.request("POST", "/users", {"username": "Owner", "password": "strong-other-password"})[0], 400)
+        self.assertEqual(admin.request("POST", "/users", {"username": "owner", "password": "strong-other-password"})[0], 409)
+
+    def test_admin_display_votes_follow_later_public_votes_and_hidden_title(self):
+        self.service.create_admin(None, "owner", "strong-owner-password")
+        admin = AdminClient(self)
+        self.assertEqual(admin.login()[0], 200)
+        first = self.client.write("names", "First name")[1]["id"]
+        second = self.client.write("names", "Second name")[1]["id"]
+        self.assertEqual(admin.request("POST", f"/entries/name/{first}", {"action": "votes", "votes": 2})[0], 200)
+        self.assertEqual(self.client.detail()["names"][0]["votes"], 2)
+        other = Client(self, ip="192.0.2.2")
+        self.assertEqual(other.write("votes", name_id=first)[0], 200)
+        self.assertEqual(self.client.detail()["names"][0]["votes"], 3)
+        self.assertEqual(admin.request("POST", f"/entries/name/{second}", {"action": "title"})[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "Second name")
+        self.assertEqual(admin.request("POST", f"/entries/name/{second}", {"action": "hide"})[0], 200)
+        self.assertEqual(self.client.detail()["artwork"]["title"], "First name")
+        self.assertIsNone(admin.request("GET", f"/artworks/{A}")[1]["selectedNameId"])
+
+    def test_admin_cookie_is_secure_for_production_origin(self):
+        self.service.create_admin(None, "owner", "strong-owner-password")
+        self.service.config = replace(self.service.config, dev_static=False, origin="https://eytle.cn")
+        self.host, self.origin = "eytle.cn", "https://eytle.cn"
+        admin = AdminClient(self)
+        status, _, headers = admin.login()
+        self.assertEqual(status, 200)
+        self.assertIn("; Secure", headers["Set-Cookie"])
+        self.assertEqual(admin.request("GET", "/session")[0], 200)
+
+    def test_schema_v1_migrates_without_losing_content(self):
+        old = Path(self.temp.name) / "private/old.sqlite3"
+        with closing(sqlite3.connect(old)) as db:
+            db.execute("CREATE TABLE names(id INTEGER PRIMARY KEY AUTOINCREMENT, artwork TEXT NOT NULL, text TEXT NOT NULL CHECK(length(text) BETWEEN 1 AND 40), normalized TEXT NOT NULL, author TEXT NOT NULL, created_at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, UNIQUE(artwork, normalized), UNIQUE(artwork, id))")
+            db.execute("INSERT INTO names(artwork,text,normalized,author,created_at) VALUES(?,?,?,?,?)", (A, "Old title", "old title", "visitor", 1800000000))
+            db.execute("PRAGMA user_version=1")
+            db.commit()
+        migrated = api.Guestbook(replace(self.config, db=old))
+        self.assertEqual(migrated.summaries([A])["artworks"][0]["title"], "Old title")
+        with migrated.connection() as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertIn("display_votes", {row[1] for row in db.execute("PRAGMA table_info(names)")})
+        api.Guestbook(replace(self.config, db=old))  # Reopening is idempotent.
 
 
 if __name__ == "__main__":

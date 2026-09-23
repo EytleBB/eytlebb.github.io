@@ -7,6 +7,7 @@ No third-party dependencies; Python 3.10+. Never put the database in a web root.
 from __future__ import annotations
 
 import argparse
+import getpass
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -31,13 +32,17 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 API = "/api/museum/v1"
 COOKIE = "museum_visitor"
-SCHEMA_VERSION = 1
+ADMIN_COOKIE = "museum_admin"
+SCHEMA_VERSION = 2
 PAGE_SIZE = 20
 MAX_BODY = 4096
 COOKIE_TTL = 180 * 86400
 SAFE_NAME = re.compile(r"[A-Za-z0-9_-]+\.(?:jpe?g|png|webp|avif)", re.I)
 URL_TEXT = re.compile(r"(?:https?://|www\.|javascript:|data:|mailto:)", re.I)
 NONCE = re.compile(r"(?:0|[1-9][0-9]{0,19})")
+ADMIN_NAME = re.compile(r"[a-z][a-z0-9_-]{2,31}")
+ADMIN_SESSION_TTL = 12 * 3600
+ADMIN_IDLE_TTL = 30 * 60
 # These have letter/symbol categories but intentionally render as empty cells.
 BLANK_BASES = frozenset("\u115f\u1160\u3164\uffa0\u2800")
 
@@ -95,6 +100,8 @@ CREATE TABLE IF NOT EXISTS names (
     author TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0, 1)),
+    display_votes INTEGER CHECK(display_votes IS NULL OR display_votes >= 0),
+    vote_base INTEGER NOT NULL DEFAULT 0,
     UNIQUE(artwork, normalized), UNIQUE(artwork, id)
 );
 CREATE TABLE IF NOT EXISTS comments (
@@ -137,6 +144,38 @@ CREATE TABLE IF NOT EXISTS moderation (
     kind TEXT NOT NULL, target_id INTEGER NOT NULL,
     hidden INTEGER NOT NULL, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('owner','admin')),
+    active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_sessions_expiry ON admin_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS title_selections (
+    artwork TEXT PRIMARY KEY,
+    name_id INTEGER NOT NULL REFERENCES names(id) ON DELETE CASCADE,
+    selected_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+    actor_name TEXT NOT NULL,
+    action TEXT NOT NULL,
+    artwork TEXT,
+    kind TEXT,
+    target_id INTEGER,
+    details TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_audit_recent ON admin_audit(id DESC);
 """
 
 
@@ -157,21 +196,46 @@ def normalize_text(value, limit):
     return text, text.casefold()
 
 
+def password_hash(password):
+    if not isinstance(password, str) or not 12 <= len(password) <= 128 or len(password.encode("utf-8")) > 512:
+        raise APIError(400, "invalid_password", "Use a password of 12–128 characters.")
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
+    return "scrypt$16384$" + salt.hex() + "$" + digest.hex()
+
+
+def verify_password(password, stored):
+    try:
+        algorithm, cost, salt, expected = stored.split("$")
+        if algorithm != "scrypt" or cost != "16384" or len(password.encode("utf-8")) > 512:
+            return False
+        actual = hashlib.scrypt(password.encode("utf-8"), salt=bytes.fromhex(salt), n=16384, r=8, p=1)
+        return hmac.compare_digest(actual, bytes.fromhex(expected))
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 class Guestbook:
     def __init__(self, config):
         config.validate()
         self.config = config
         self.clock = time.time
         self._gallery_lock = threading.Lock()
+        self._login_slots = threading.BoundedSemaphore(2)
         self._gallery_stamp = None
         self._gallery = frozenset()
         self.gallery_ids()  # Fail startup if the trusted index cannot be loaded.
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, SCHEMA_VERSION):
+            if version not in (0, 1, SCHEMA_VERSION):
                 raise ValueError("Unsupported guestbook database schema version")
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(names)")}
+            if "display_votes" not in columns:
+                db.execute("ALTER TABLE names ADD COLUMN display_votes INTEGER CHECK(display_votes IS NULL OR display_votes >= 0)")
+            if "vote_base" not in columns:
+                db.execute("ALTER TABLE names ADD COLUMN vote_base INTEGER NOT NULL DEFAULT 0")
             db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         os.chmod(config.db, 0o600)
 
@@ -305,7 +369,16 @@ class Guestbook:
             raise APIError(400, "proof_invalid", "Verification was invalid.")
 
     def summary(self, db, artwork):
-        winner = db.execute("SELECT n.text, COUNT(v.visitor) AS total FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id ORDER BY total DESC,n.created_at ASC,n.id ASC LIMIT 1", (artwork,)).fetchone()
+        winner = db.execute("""SELECT n.id,n.text,
+            MAX(0,COALESCE(n.display_votes + COUNT(v.visitor) - n.vote_base,COUNT(v.visitor))) AS total
+            FROM names n LEFT JOIN votes v ON v.name_id=n.id
+            WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id
+            ORDER BY total DESC,n.created_at ASC,n.id ASC LIMIT 1""", (artwork,)).fetchone()
+        selected = db.execute("SELECT n.id,n.text FROM title_selections s JOIN names n ON n.id=s.name_id WHERE s.artwork=? AND n.hidden=0", (artwork,)).fetchone()
+        if selected:
+            winner = db.execute("""SELECT n.id,n.text,
+                MAX(0,COALESCE(n.display_votes + COUNT(v.visitor) - n.vote_base,COUNT(v.visitor))) AS total
+                FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.id=? GROUP BY n.id""", (selected["id"],)).fetchone()
         names = db.execute("SELECT COUNT(*) FROM names WHERE artwork=? AND hidden=0", (artwork,)).fetchone()[0]
         comments = db.execute("SELECT COUNT(*) FROM comments WHERE artwork=? AND hidden=0", (artwork,)).fetchone()[0]
         return {"id": artwork, "title": winner["text"] if winner else None, "titleVotes": winner["total"] if winner else 0, "namesCount": names, "commentsCount": comments}
@@ -325,7 +398,11 @@ class Guestbook:
         with self.connection() as db:
             db.execute("BEGIN")
             summary = self.summary(db, artwork)
-            names = db.execute("SELECT n.id,n.text,n.created_at,COUNT(v.visitor) AS votes,MAX(CASE WHEN v.visitor=? THEN 1 ELSE 0 END) AS voted FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0 GROUP BY n.id ORDER BY votes DESC,n.created_at ASC,n.id ASC LIMIT ? OFFSET ?", (visitor or "", artwork, PAGE_SIZE + 1, names_offset)).fetchall()
+            names = db.execute("""SELECT n.id,n.text,n.created_at,
+                MAX(0,COALESCE(n.display_votes + COUNT(v.visitor) - n.vote_base,COUNT(v.visitor))) AS votes,
+                MAX(CASE WHEN v.visitor=? THEN 1 ELSE 0 END) AS voted
+                FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? AND n.hidden=0
+                GROUP BY n.id ORDER BY votes DESC,n.created_at ASC,n.id ASC LIMIT ? OFFSET ?""", (visitor or "", artwork, PAGE_SIZE + 1, names_offset)).fetchall()
             comments = db.execute("SELECT id,text,created_at FROM comments WHERE artwork=? AND hidden=0 ORDER BY id DESC LIMIT ? OFFSET ?", (artwork, PAGE_SIZE + 1, comments_offset)).fetchall()
             db.commit()
         return {
@@ -368,6 +445,9 @@ class Guestbook:
                 else:
                     db.execute("INSERT INTO votes(artwork,visitor,name_id,created_at) VALUES(?,?,?,?) ON CONFLICT(artwork,visitor) DO UPDATE SET name_id=excluded.name_id,created_at=excluded.created_at", (artwork, visitor, name_id, now))
                     voted = True
+                # A manual selection is temporary: the next public vote returns
+                # the artwork to its normal vote-driven ranking.
+                db.execute("DELETE FROM title_selections WHERE artwork=?", (artwork,))
                 return {"ok": True, "voted": voted, "artwork": self.summary(db, artwork)}
             self.rate(db, "text-ip-day", ip, 40, 86400, now)
             self.rate(db, kind + "-visitor-art-day", visitor + ":" + artwork, 3 if kind == "names" else 10, 86400, now)
@@ -389,8 +469,200 @@ class Guestbook:
             if not row:
                 raise ValueError("Contribution not found")
             db.execute(f"UPDATE {table} SET hidden=? WHERE id=?", (int(hidden), identity))
+            if kind == "name" and hidden:
+                db.execute("DELETE FROM title_selections WHERE artwork=? AND name_id=?", (row["artwork"], identity))
             db.execute("INSERT INTO moderation(kind,target_id,hidden,created_at) VALUES(?,?,?,?)", (kind, identity, int(hidden), int(self.clock())))
+            self.audit(db, None, "hide" if hidden else "restore", row["artwork"], kind, identity)
             return self.summary(db, row["artwork"])
+
+    def audit(self, db, actor, action, artwork=None, kind=None, target_id=None, details=None):
+        db.execute("INSERT INTO admin_audit(actor_id,actor_name,action,artwork,kind,target_id,details,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                   (actor["id"] if actor else None, actor["username"] if actor else "server-cli", action, artwork, kind, target_id, json.dumps(details or {}, ensure_ascii=False), int(self.clock())))
+
+    def create_admin(self, actor, username, password):
+        if not isinstance(username, str) or not ADMIN_NAME.fullmatch(username):
+            raise APIError(400, "invalid_username", "Use 3–32 lowercase letters, numbers, underscores or hyphens, starting with a letter.")
+        hashed = password_hash(password)
+        with self.transaction() as db:
+            if actor is None:
+                if db.execute("SELECT 1 FROM admin_users LIMIT 1").fetchone():
+                    raise APIError(409, "already_initialized", "An owner already exists.")
+                role = "owner"
+            elif actor["role"] == "owner":
+                role = "admin"
+            else:
+                raise APIError(403, "forbidden", "Owner access is required.")
+            try:
+                row = db.execute("INSERT INTO admin_users(username,password_hash,role,created_at) VALUES(?,?,?,?)", (username, hashed, role, int(self.clock())))
+            except sqlite3.IntegrityError as exc:
+                raise APIError(409, "duplicate", "This username is in use.") from exc
+            self.audit(db, actor, "user_create", kind="user", target_id=row.lastrowid, details={"username": username, "role": role})
+        return {"id": row.lastrowid, "username": username, "role": role, "active": True}
+
+    def admin_login(self, username, password, ip):
+        if not isinstance(username, str) or not isinstance(password, str) or len(username) > 100 or len(password) > 512:
+            raise APIError(401, "login_failed", "Username or password is incorrect.")
+        now = int(self.clock())
+        with self.transaction() as db:
+            self.rate(db, "admin-login-global", "all", 200, 60, now)
+            self.rate(db, "admin-login-ip", ip, 20, 900, now)
+            self.rate(db, "admin-login-user", self.digest("login", username.lower()), 10, 900, now)
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM admin_users WHERE username=? AND active=1", (username,)).fetchone()
+        # Keep the expensive check on unknown accounts to reduce enumeration.
+        fallback = "scrypt$16384$" + "00" * 16 + "$" + "00" * 64
+        if not self._login_slots.acquire(timeout=2):
+            raise APIError(503, "service_busy", "Please try signing in again shortly.")
+        try:
+            matches = verify_password(password, row["password_hash"] if row else fallback)
+        finally:
+            self._login_slots.release()
+        if not matches or not row:
+            raise APIError(401, "login_failed", "Username or password is incorrect.")
+        token = secrets.token_hex(32)
+        with self.transaction() as db:
+            current = db.execute("SELECT id,username,role FROM admin_users WHERE id=? AND active=1", (row["id"],)).fetchone()
+            if not current:
+                raise APIError(401, "login_failed", "Username or password is incorrect.")
+            db.execute("DELETE FROM admin_sessions WHERE expires_at<=? OR last_seen<?", (now, now - ADMIN_IDLE_TTL))
+            db.execute("INSERT INTO admin_sessions VALUES(?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), row["id"], now + ADMIN_SESSION_TTL, now))
+            self.audit(db, current, "login")
+        return token, {"username": row["username"], "role": row["role"], "csrf": self.digest("admin-csrf", token)}
+
+    def admin_identity(self, cookie_header):
+        try:
+            jar = SimpleCookie()
+            jar.load(cookie_header or "")
+            token = jar[ADMIN_COOKIE].value
+        except (CookieError, KeyError, ValueError):
+            token = ""
+        if not re.fullmatch(r"[0-9a-f]{64}", token):
+            raise APIError(401, "admin_session_required", "Please sign in.")
+        now = int(self.clock())
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        with self.transaction() as db:
+            row = db.execute("""SELECT u.id,u.username,u.role,s.expires_at,s.last_seen FROM admin_sessions s
+                JOIN admin_users u ON u.id=s.user_id WHERE s.token_hash=? AND u.active=1""", (token_hash,)).fetchone()
+            if not row or row["expires_at"] <= now or row["last_seen"] <= now - ADMIN_IDLE_TTL:
+                db.execute("DELETE FROM admin_sessions WHERE token_hash=?", (token_hash,))
+                raise APIError(401, "admin_session_required", "Please sign in again.")
+            if now - row["last_seen"] >= 30:
+                db.execute("UPDATE admin_sessions SET last_seen=? WHERE token_hash=?", (now, token_hash))
+        return dict(row), token_hash, self.digest("admin-csrf", token)
+
+    def admin_logout(self, actor, token_hash):
+        with self.transaction() as db:
+            db.execute("DELETE FROM admin_sessions WHERE token_hash=?", (token_hash,))
+            self.audit(db, actor, "logout")
+
+    def admin_users(self, actor):
+        if actor["role"] != "owner":
+            raise APIError(403, "forbidden", "Owner access is required.")
+        with self.connection() as db:
+            return [{"id": row["id"], "username": row["username"], "role": row["role"], "active": bool(row["active"])}
+                    for row in db.execute("SELECT id,username,role,active FROM admin_users ORDER BY id")]
+
+    def admin_user_change(self, actor, identity, body):
+        if actor["role"] != "owner" or identity == actor["id"]:
+            raise APIError(403, "forbidden", "Only the owner may change other accounts.")
+        action = body.get("action")
+        if action not in ("disable", "enable", "password"):
+            raise APIError(400, "invalid_request", "Unknown account action.")
+        hashed = password_hash(body.get("password")) if action == "password" else None
+        with self.transaction() as db:
+            row = db.execute("SELECT username,role FROM admin_users WHERE id=?", (identity,)).fetchone()
+            if not row or row["role"] == "owner":
+                raise APIError(404, "not_found", "Account not found.")
+            if action == "password":
+                db.execute("UPDATE admin_users SET password_hash=? WHERE id=?", (hashed, identity))
+            else:
+                db.execute("UPDATE admin_users SET active=? WHERE id=?", (int(action == "enable"), identity))
+            db.execute("DELETE FROM admin_sessions WHERE user_id=?", (identity,))
+            self.audit(db, actor, "user_" + action, kind="user", target_id=identity, details={"username": row["username"]})
+        return {"ok": True}
+
+    def admin_artworks(self):
+        identities = sorted(self.gallery_ids())
+        with self.connection() as db:
+            db.execute("BEGIN")
+            result = [self.summary(db, artwork) for artwork in identities]
+            db.commit()
+        return result
+
+    def admin_detail(self, artwork, offset=0):
+        self.artwork(artwork)
+        with self.connection() as db:
+            db.execute("BEGIN")
+            names = db.execute("""SELECT n.id,n.text,n.hidden,n.created_at,n.display_votes,n.vote_base,
+                COUNT(v.visitor) AS real_votes,
+                MAX(0,COALESCE(n.display_votes + COUNT(v.visitor) - n.vote_base,COUNT(v.visitor))) AS votes
+                FROM names n LEFT JOIN votes v ON v.name_id=n.id WHERE n.artwork=? GROUP BY n.id
+                ORDER BY votes DESC,n.created_at,n.id LIMIT 101 OFFSET ?""", (artwork, offset)).fetchall()
+            comments = db.execute("SELECT id,text,hidden,created_at FROM comments WHERE artwork=? ORDER BY id DESC LIMIT 101 OFFSET ?", (artwork, offset)).fetchall()
+            selection = db.execute("SELECT name_id FROM title_selections WHERE artwork=?", (artwork,)).fetchone()
+            summary = self.summary(db, artwork)
+            db.commit()
+        return {"artwork": summary, "selectedNameId": selection[0] if selection else None,
+                "names": [{"id": r["id"], "text": r["text"], "hidden": bool(r["hidden"]), "votes": r["votes"], "realVotes": r["real_votes"], "votesAdjusted": r["display_votes"] is not None, "createdAt": utc(r["created_at"])} for r in names[:100]],
+                "comments": [{"id": r["id"], "text": r["text"], "hidden": bool(r["hidden"]), "createdAt": utc(r["created_at"])} for r in comments[:100]],
+                "nextNamesOffset": offset + 100 if len(names) > 100 else None,
+                "nextCommentsOffset": offset + 100 if len(comments) > 100 else None}
+
+    def admin_change(self, actor, kind, identity, body):
+        table = {"name": "names", "comment": "comments"}.get(kind)
+        if not table or not isinstance(identity, int) or identity < 1:
+            raise APIError(400, "invalid_request", "Choose a valid entry.")
+        action = body.get("action")
+        if action not in ("hide", "restore", "edit", "delete", "votes", "title") or action in ("votes", "title") and kind != "name":
+            raise APIError(400, "invalid_request", "Unknown moderation action.")
+        normalized = None
+        if action == "edit":
+            text, normalized = normalize_text(body.get("text"), 40 if kind == "name" else 280)
+        if action == "votes":
+            votes = body.get("votes")
+            if type(votes) is not int or not 0 <= votes <= 1000000000:
+                raise APIError(400, "invalid_request", "Set a vote count from 0 to 1,000,000,000.")
+        with self.transaction() as db:
+            row = db.execute(f"SELECT id,artwork,text,hidden FROM {table} WHERE id=?", (identity,)).fetchone()
+            if not row:
+                raise APIError(404, "not_found", "Entry not found.")
+            artwork = row["artwork"]
+            details = {}
+            if action in ("hide", "restore"):
+                db.execute(f"UPDATE {table} SET hidden=? WHERE id=?", (int(action == "hide"), identity))
+                if action == "hide" and kind == "name":
+                    db.execute("DELETE FROM title_selections WHERE artwork=? AND name_id=?", (artwork, identity))
+            elif action == "edit":
+                try:
+                    db.execute(f"UPDATE {table} SET text=?,normalized=? WHERE id=?", (text, normalized, identity))
+                except sqlite3.IntegrityError as exc:
+                    raise APIError(409, "duplicate", "This text already exists for the artwork.") from exc
+                details = {"previousLength": len(row["text"]), "newLength": len(text)}
+            elif action == "delete":
+                db.execute(f"DELETE FROM {table} WHERE id=?", (identity,))
+                details = {"deleted": True}
+            elif action == "votes":
+                current = db.execute("SELECT COUNT(*) FROM votes WHERE name_id=?", (identity,)).fetchone()[0]
+                db.execute("UPDATE names SET display_votes=?,vote_base=? WHERE id=?", (votes, current, identity))
+                details = {"previousRealVotes": current, "displayVotes": votes}
+            elif action == "title":
+                if row["hidden"]:
+                    raise APIError(409, "hidden_entry", "Restore this name before selecting it.")
+                db.execute("INSERT INTO title_selections(artwork,name_id,selected_at) VALUES(?,?,?) ON CONFLICT(artwork) DO UPDATE SET name_id=excluded.name_id,selected_at=excluded.selected_at", (artwork, identity, int(self.clock())))
+            self.audit(db, actor, action, artwork, kind, identity, details)
+            return {"ok": True, "artwork": self.summary(db, artwork)}
+
+    def admin_clear_title(self, actor, artwork):
+        self.artwork(artwork)
+        with self.transaction() as db:
+            db.execute("DELETE FROM title_selections WHERE artwork=?", (artwork,))
+            self.audit(db, actor, "title_auto", artwork)
+            return {"ok": True, "artwork": self.summary(db, artwork)}
+
+    def admin_audit_entries(self, actor, offset=0):
+        with self.connection() as db:
+            rows = db.execute("SELECT id,actor_name,action,artwork,kind,target_id,details,created_at FROM admin_audit ORDER BY id DESC LIMIT 101 OFFSET ?", (offset,)).fetchall()
+        return {"entries": [{"id": r["id"], "actor": r["actor_name"], "action": r["action"], "artwork": r["artwork"], "kind": r["kind"], "targetId": r["target_id"], "details": json.loads(r["details"]), "createdAt": utc(r["created_at"])} for r in rows[:100]], "nextOffset": offset + 100 if len(rows) > 100 else None}
 
     def backup(self, destination):
         destination = Path(destination).resolve()
@@ -410,7 +682,8 @@ class Guestbook:
         with self.transaction() as db:
             challenges = db.execute("DELETE FROM challenges WHERE expires_at<=?", (now,)).rowcount
             rates = db.execute("DELETE FROM rates WHERE expires_at<=?", (now,)).rowcount
-        return {"challengesRemoved": challenges, "rateCountersRemoved": rates}
+            sessions = db.execute("DELETE FROM admin_sessions WHERE expires_at<=? OR last_seen<=?", (now, now - ADMIN_IDLE_TTL)).rowcount
+        return {"challengesRemoved": challenges, "rateCountersRemoved": rates, "adminSessionsRemoved": sessions}
 
 
 class GuestbookServer(ThreadingHTTPServer):
@@ -467,7 +740,7 @@ class Handler(BaseHTTPRequestHandler):
     def service(self):
         return self.server.service
 
-    def json_response(self, status, data, cookie=None, retry_after=None):
+    def json_response(self, status, data, cookie=None, retry_after=None, admin_cookie=None):
         payload = json.dumps(data, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -479,6 +752,11 @@ class Handler(BaseHTTPRequestHandler):
         if cookie:
             secure = "; Secure" if not self.service.config.dev_static else ""
             self.send_header("Set-Cookie", f"{COOKIE}={cookie}; HttpOnly; SameSite=Strict; Path={API}; Max-Age={COOKIE_TTL}{secure}")
+        if admin_cookie is not None:
+            secure = "; Secure" if not self.service.config.dev_static else ""
+            age = ADMIN_SESSION_TTL if admin_cookie else 0
+            self.send_header("Set-Cookie", f"{ADMIN_COOKIE}={admin_cookie}; HttpOnly; SameSite=Strict; Path={API}/admin; Max-Age={age}{secure}")
+        self.send_header("Referrer-Policy", "no-referrer")
         if retry_after is not None:
             self.send_header("Retry-After", str(retry_after))
         self.send_header("Connection", "close")
@@ -565,6 +843,8 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError(405, "method_not_allowed", "Method not allowed.")
         ip = self.service.ip_hash(self.client_ip())
         self.service.read_limit(ip)
+        if path == API + "/admin" or path.startswith(API + "/admin/"):
+            return self.admin_dispatch(path, parsed.query, ip)
         visitor = self.service.visitor(self.headers.get("Cookie"))
         if self.command == "POST":
             if not visitor:
@@ -610,6 +890,53 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_response(200, self.service.detail(match[1], visitor, *offsets))
         raise APIError(404, "not_found", "Unknown endpoint.")
 
+    def admin_dispatch(self, path, query_string, ip):
+        base = API + "/admin"
+        if self.command == "POST" and path == base + "/login":
+            body = self.body()
+            token, session = self.service.admin_login(body.get("username"), body.get("password"), ip)
+            return self.json_response(200, session, admin_cookie=token)
+        actor, token_hash, csrf = self.service.admin_identity(self.headers.get("Cookie"))
+        if self.command == "POST":
+            supplied = self.headers.get("X-CSRF-Token", "")
+            if not re.fullmatch(r"[0-9a-f]{64}", supplied) or not hmac.compare_digest(supplied, csrf):
+                raise APIError(403, "csrf_invalid", "Refresh your admin session.")
+            body = self.body()
+            if path == base + "/logout":
+                self.service.admin_logout(actor, token_hash)
+                return self.json_response(200, {"ok": True}, admin_cookie="")
+            if path == base + "/users":
+                return self.json_response(200, self.service.create_admin(actor, body.get("username"), body.get("password")))
+            match = re.fullmatch(re.escape(base) + r"/users/([1-9][0-9]*)", path)
+            if match:
+                return self.json_response(200, self.service.admin_user_change(actor, int(match[1]), body))
+            match = re.fullmatch(re.escape(base) + r"/entries/(name|comment)/([1-9][0-9]*)", path)
+            if match:
+                return self.json_response(200, self.service.admin_change(actor, match[1], int(match[2]), body))
+            match = re.fullmatch(re.escape(base) + r"/artworks/([^/]+)/title", path)
+            if match and body.get("action") == "auto":
+                return self.json_response(200, self.service.admin_clear_title(actor, match[1]))
+        elif self.command == "GET":
+            try:
+                query = parse_qs(query_string, keep_blank_values=True, max_num_fields=4)
+            except ValueError:
+                raise APIError(400, "invalid_request", "Too many query parameters.")
+            if path == base + "/session":
+                return self.json_response(200, {"username": actor["username"], "role": actor["role"], "csrf": csrf})
+            if path == base + "/users" and not query:
+                return self.json_response(200, {"users": self.service.admin_users(actor)})
+            if path == base + "/artworks" and not query:
+                return self.json_response(200, {"artworks": self.service.admin_artworks()})
+            if path == base + "/audit" or re.fullmatch(re.escape(base) + r"/artworks/[^/]+", path):
+                if set(query) - {"offset"} or len(query.get("offset", ["0"])) != 1 or not re.fullmatch(r"[0-9]{1,7}", query.get("offset", ["0"])[0]):
+                    raise APIError(400, "invalid_request", "Invalid offset.")
+                offset = int(query.get("offset", ["0"])[0])
+                if path == base + "/audit":
+                    return self.json_response(200, self.service.admin_audit_entries(actor, offset))
+                artwork = path[len(base + "/artworks/"):]
+                return self.json_response(200, self.service.admin_detail(artwork, offset))
+        raise APIError(404, "not_found", "Unknown admin endpoint.")
+
     def static(self, path):
         """Opt-in local preview; explicit public asset classes, no directory listing."""
         parts = Path(path.lstrip("/")).parts
@@ -617,7 +944,7 @@ class Handler(BaseHTTPRequestHandler):
             parts = ("index.html",)
         if any(part.startswith(".") or part in ("..", "server", "scripts", "tests", "docs", "deploy", "files") for part in parts):
             raise APIError(404, "not_found", "Not found.")
-        allowed_root = {"index.html", "museum.html", "mc-calc.html", "favicon.ico", "robots.txt"}
+        allowed_root = {"index.html", "museum.html", "museum-admin.html", "mc-calc.html", "favicon.ico", "robots.txt"}
         public_types = {
             "js": {".js"}, "css": {".css"},
             "images": {".jpg", ".jpeg", ".png", ".webp", ".avif", ".svg", ".tiff", ".json"},
@@ -655,7 +982,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("serve", "moderate", "list", "backup", "prune"))
+    parser.add_argument("action", choices=("serve", "moderate", "list", "backup", "prune", "admin-bootstrap", "admin-reset-password"))
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--public-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--gallery-index", type=Path)
@@ -670,6 +997,8 @@ def main(argv=None):
     parser.add_argument("--artwork")
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--destination", type=Path)
+    parser.add_argument("--username")
+    parser.add_argument("--password-stdin", action="store_true")
     args = parser.parse_args(argv)
     os.umask(0o077)
     secret = os.environ.get("MUSEUM_SECRET", "").encode()
@@ -699,7 +1028,23 @@ def main(argv=None):
             finally:
                 server.server_close()
             return
-        if args.action == "moderate":
+        if args.action in ("admin-bootstrap", "admin-reset-password"):
+            if not args.username:
+                parser.error("Specify --username")
+            password = sys.stdin.readline().rstrip("\n") if args.password_stdin else getpass.getpass("Admin password: ")
+            if args.action == "admin-bootstrap":
+                result = service.create_admin(None, args.username, password)
+            else:
+                hashed = password_hash(password)
+                with service.transaction() as db:
+                    row = db.execute("SELECT id FROM admin_users WHERE username=?", (args.username,)).fetchone()
+                    if not row:
+                        raise APIError(404, "not_found", "Account not found.")
+                    db.execute("UPDATE admin_users SET password_hash=? WHERE id=?", (hashed, row["id"]))
+                    db.execute("DELETE FROM admin_sessions WHERE user_id=?", (row["id"],))
+                    service.audit(db, None, "user_password_recovery", kind="user", target_id=row["id"], details={"username": args.username})
+                result = {"ok": True, "username": args.username}
+        elif args.action == "moderate":
             if not args.kind or not args.id or args.hidden is None:
                 parser.error("moderate requires --kind, --id, --hidden yes|no")
             result = service.moderate(args.kind, args.id, args.hidden == "yes")

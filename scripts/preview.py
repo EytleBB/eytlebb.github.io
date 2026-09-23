@@ -7,8 +7,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 PAGES = {path: '/index.html' for path in ('/', '/projects', '/tools', '/patchlog', '/gallery', '/downloads')}
-PAGES.update({'/museum': '/museum.html', '/mc-calc': '/mc-calc.html'})
-LEGACY = {'/index.html': '/', '/museum.html': '/museum', '/mc-calc.html': '/mc-calc'}
+PAGES.update({'/museum': '/museum.html', '/museum-admin': '/museum-admin.html', '/mc-calc': '/mc-calc.html'})
+LEGACY = {'/index.html': '/', '/museum.html': '/museum', '/museum-admin.html': '/museum-admin', '/mc-calc.html': '/mc-calc'}
 
 
 class Preview(SimpleHTTPRequestHandler):

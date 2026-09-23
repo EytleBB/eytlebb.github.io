@@ -181,7 +181,7 @@ location ^~ /server/ { return 404; }
 
 ## 内容管理、备份和恢复
 
-CLI 只在服务器本机使用，没有公开管理接口。管理员执行命令时应通过受控环境加载 `/etc/eytle-museum.env`，命令行不要携带密钥值；例如 root 的维护 shell 使用 `set -a`、`. /etc/eytle-museum.env`、`set +a`，或者使用 systemd 一次性维护单元的 `EnvironmentFile=`。以下示例省略重复的服务环境加载步骤：
+现在另有带登录和权限控制的[浏览器管理后台](museum-admin-platform.md)。下列 CLI 仍只在服务器本机使用。管理员执行命令时应通过受控环境加载 `/etc/eytle-museum.env`，命令行不要携带密钥值；例如 root 的维护 shell 使用 `set -a`、`. /etc/eytle-museum.env`、`set +a`，或者使用 systemd 一次性维护单元的 `EnvironmentFile=`。以下示例省略重复的服务环境加载步骤：
 
 ```bash
 python3 /opt/eytle-museum/museum_guest_api.py list \
