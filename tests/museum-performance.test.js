@@ -109,6 +109,7 @@ async function museumLoopHarness() {
     contextLost: false, focusState: null, createMuseumFrameScheduler, settings: { fps: 60 }, document, canvas,
     performance: { now: () => state.now }, PERF_AUTOWALK: false, PERF_CAPTURE: true,
     isLocked: () => state.locked,
+    museumKnife: { update() {} },
     renderer: {
       setAnimationLoop: callback => { state.loop = callback; },
       initTexture: () => { state.uploads++; },

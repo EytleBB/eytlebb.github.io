@@ -12,6 +12,8 @@ body { font-family:'Hanken Grotesk','PingFang SC','Noto Sans KR',system-ui,sans-
 button { -webkit-tap-highlight-color:transparent; }
 button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--ivory); outline-offset:5px; }
 #scene-canvas { display:block; width:100vw; height:100vh; }
+#knife-canvas { position:fixed; inset:0; z-index:8; display:block; width:100vw; height:100vh; pointer-events:none; visibility:hidden; }
+body.locked:not(.focused):not(.knife-hidden) #knife-canvas { visibility:visible; }
 
 /* ---- start / pause overlay (same element doubles as the pause menu) ---- */
 #enter {

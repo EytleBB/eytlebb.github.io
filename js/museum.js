@@ -15,6 +15,7 @@ import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-202609
 import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r3';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
+import { createMuseumKnifeController } from './museum-knife.js?v=20260924';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -305,6 +306,7 @@ const ART_INTERACT_DISTANCE = 3.5;
 const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
+const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'));
 const audioListener = new THREE.AudioListener();
 audioListener.setMasterVolume(0);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -349,6 +351,7 @@ camera.position.set(0, EYE_Y, SPAWN_Z);
 camera.add(audioListener);
 
 const updaters = [];
+updaters.push(dt => museumKnife.update(dt, isLocked() && !focusState));
 const frameScheduler = createMuseumFrameScheduler({ fps: settings.fps });
 let lastRenderedAt = null;
 let lastMaintenanceAt = 0;
@@ -1703,6 +1706,17 @@ function onKey(e, down) {
     if (down && !e.repeat) inspectArtwork();
     return;
   }
+  if (e.code === 'KeyQ' || e.code === 'Digit3' || e.code === 'Digit1' ||
+      e.code === 'Numpad3' || e.code === 'Numpad1') {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    if (!focusState && down && !e.repeat) {
+      if (e.code === 'KeyQ') museumKnife.toggle();
+      else if (e.code === 'Digit3' || e.code === 'Numpad3') museumKnife.equip();
+      else museumKnife.stow();
+    }
+    return;
+  }
   if (!movementCodes.has(e.code)) return;
   e.preventDefault();
   if (focusState) return;
@@ -1811,7 +1825,7 @@ function focusOn(mesh) {
   roamReturn = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
   setZoomHeld(false);
   setArtHintVisible(false);
-  document.body.classList.add('focused');
+  document.body.classList.add('focused', 'knife-hidden');
   focusState = {
     phase: 'toArt', t: 0,
     kind: isPlaque ? 'plaque' : 'art',
@@ -1856,7 +1870,7 @@ function cancelFocus() {  // hard reset (used when pausing)
   roamEnabled = true;
   setZoomHeld(false);
   setArtHintVisible(false);
-  document.body.classList.remove('focused');
+  document.body.classList.remove('focused', 'knife-hidden');
 }
 
 const _q = new THREE.Quaternion();
@@ -1879,7 +1893,7 @@ updaters.push((dt) => {
     focusState = null;
     roamReturn = null;
     plaqueSession = null;
-    document.body.classList.remove('plaque-active');
+    document.body.classList.remove('plaque-active', 'knife-hidden');
     enterEl.inert = isLocked();
     if (!isLocked() && entered) enterGo.textContent = T('继续参观', 'Resume visit', '관람 계속');
   }

@@ -40,8 +40,8 @@ function eventTarget() {
 function classList() {
   const classes = new Set();
   return {
-    add: value => classes.add(value),
-    remove: value => classes.delete(value),
+    add(...values) { for (const value of values) classes.add(value); },
+    remove(...values) { for (const value of values) classes.delete(value); },
     toggle(value, on) { if (on) classes.add(value); else classes.delete(value); },
     contains: value => classes.has(value),
   };
@@ -57,13 +57,19 @@ async function createControls() {
     fov: 74, rotation: { set(...values) { this.last = values; } }, updateProjectionMatrix() {},
   };
   const loops = [];
+  const museumKnife = {
+    equipped: false,
+    equip() { this.equipped = true; },
+    stow() { this.equipped = false; },
+    toggle() { this.equipped = !this.equipped; },
+  };
   document.pointerLockElement = canvas;
   document.exitPointerLock = () => {
     document.pointerLockElement = null;
     document.emit('pointerlockchange');
   };
   const context = vm.createContext({
-    createMuseumPlayer, document, window, canvas, camera,
+    createMuseumPlayer, document, window, canvas, camera, museumKnife,
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
     plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48,
@@ -101,7 +107,7 @@ async function createControls() {
     document.pointerLockElement = locked ? canvas : null;
     document.emit('pointerlockchange');
   }
-  return { api, context, document, window, canvas, camera, key, tick, lock, loops };
+  return { api, context, document, window, canvas, camera, museumKnife, key, tick, lock, loops };
 }
 
 const near = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a - b) < tolerance, `${a} should be near ${b}`);
@@ -124,6 +130,33 @@ test('real keyboard handlers preserve overlapping bindings and ignore unlocked i
   h.tick(60);
   assert.equal(h.api.keys.forward, false);
   near(h.api.player.state.speed, 0);
+});
+
+test('Q toggles the knife, 3 equips and 1 stows only during free roaming', async () => {
+  const h = await createControls();
+  assert.equal(h.key('KeyQ', true).prevented, true);
+  assert.equal(h.museumKnife.equipped, true);
+  h.key('KeyQ', true, true);
+  assert.equal(h.museumKnife.equipped, true, 'key repeat must not toggle the knife');
+  h.key('Digit1', true);
+  assert.equal(h.museumKnife.equipped, false);
+  h.key('Digit3', true);
+  assert.equal(h.museumKnife.equipped, true);
+  h.key('Numpad1', true);
+  assert.equal(h.museumKnife.equipped, false);
+  h.key('Numpad3', true);
+  assert.equal(h.museumKnife.equipped, true);
+  h.lock(false);
+  assert.equal(h.key('Digit1', true).prevented, false);
+  assert.equal(h.museumKnife.equipped, true);
+  h.lock(true);
+  h.api.focusOn({
+    userData: {},
+    getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+    getWorldQuaternion(out) { return out; },
+  });
+  h.key('Digit1', true);
+  assert.equal(h.museumKnife.equipped, true, 'inspecting artwork must not switch the knife');
 });
 
 test('Space press and release between rendered frames still jumps once', async () => {
@@ -212,6 +245,7 @@ test('artwork focus preserves a crouched position and returns control without st
   h.context.artMeshes.push(mesh);
   h.key('KeyE', true);
   assert.ok(h.api.focusState);
+  assert.equal(h.document.body.classList.contains('knife-hidden'), true);
   h.key('ControlLeft', false);
   h.key('KeyW', true);
   h.tick(40);
@@ -223,6 +257,7 @@ test('artwork focus preserves a crouched position and returns control without st
   near(h.camera.position.y, before.y);
   h.tick(60);
   assert.equal(h.api.focusState, null);
+  assert.equal(h.document.body.classList.contains('knife-hidden'), false);
   near(h.camera.position.y, 1.65);
   near(h.api.player.state.speed, 0);
 });

@@ -950,6 +950,7 @@ class Handler(BaseHTTPRequestHandler):
             "images": {".jpg", ".jpeg", ".png", ".webp", ".avif", ".svg", ".tiff", ".json"},
             "fonts": {".woff", ".woff2", ".ttf", ".otf", ".txt"},
             "audio": {".mp3", ".ogg", ".wav", ".m4a"},
+            "models": {".glb"},
             "logs": {".json", ".txt"},
             "_shots": {".html", ".js", ".css", ".png", ".webp"},
         }
