@@ -142,3 +142,100 @@ test('different blade contact heights leave a wall painting leaning or flat thro
   assert.ok(heights[0] > .4, 'a lower contact can leave the frame propped against the wall');
   assert.ok(heights[1] < .08, 'a higher contact can topple the frame flat');
 });
+
+
+test('floor impact reports material, contact point and pre-solve speed; resting props are silent', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  for (const fps of [30, 60, 144]) {
+    const impacts = [], physics = createMuseumPhysics({ onFloorImpact: impact => impacts.push(impact) });
+    const entity = prop(physics, { kind: 'lamp', mass: .9, halfExtents: [.1, .1, .1], position: at(1, 2, -3) });
+    step(physics, .2, fps);
+    assert.equal(impacts.length, 0, 'no sound while still in mid-air');
+    step(physics, 6, fps);
+    assert.ok(impacts.length >= 1 && impacts.length <= 4, 'only audible bounces, no contact chatter');
+    assert.equal(impacts[0].kind, 'lamp');
+    assert.equal(impacts[0].mass, .9);
+    assert.ok(impacts[0].speed > 5 && impacts[0].speed < 7);
+    assert.ok(Math.abs(impacts[0].position.y - .006) < 1e-5);
+    const settled = impacts.length;
+    step(physics, 3, fps);
+    assert.equal(impacts.length, settled);
+    physics.hit(entity, { direction: at(0, 0, -1), point: entity.body.position, heavy: true });
+    step(physics, 3, fps);
+    assert.ok(impacts.length > settled, 'a kicked prop sounds on its next landing');
+    physics.dispose();
+  }
+});
+
+test('wall contact stays silent; tipping an already-grounded frame still emits its floor slap', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const impacts = [], physics = createMuseumPhysics({ onFloorImpact: impact => impacts.push(impact) });
+  const wall = prop(physics, { position: at(2.7, 3, -4), halfExtents: [.1, .1, .1] });
+  wall.body.velocity.set(8, 0, 0);
+  step(physics, .15);
+  assert.equal(impacts.length, 0);
+  physics.remove(wall);
+  const frame = prop(physics, { position: at(0, .608, 0) });
+  step(physics, 3);
+  impacts.length = 0;
+  physics.hit(frame, { direction: at(0, 0, -1), point: at(0, 1.15, .06), heavy: true });
+  step(physics, 5);
+  assert.ok(impacts.some(impact => impact.speed > 1.5), 'rotation contributes to the floor impact');
+  const count = impacts.length;
+  physics.removeOwner(frame.owner); step(physics, 3);
+  assert.equal(impacts.length, count, 'removed bodies cannot leave delayed sound callbacks');
+  physics.dispose();
+});
+
+test('a front wall configured before the first break stays lazy and blocks forward-moving props', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  physics.syncHall([], 10, -1);
+  assert.equal(physics.initialized, false);
+  const entity = prop(physics, { halfExtents: [.1, .1, .1], position: at(0, 3, -.4) });
+  assert.equal(physics.bodyCount, 7, 'one prop plus six boundaries');
+  entity.body.velocity.z = -6;
+  step(physics, .5);
+  assert.equal(physics.entities.length, 1);
+  assert.ok(entity.body.position.z >= -.91, `front plane faces inward: ${entity.body.position.z}`);
+  physics.dispose();
+});
+
+test('front collision can be added, moved and removed after physics has started', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  const entity = prop(physics, { halfExtents: [.1, .1, .1], position: at(0, 3, 0) });
+  assert.equal(physics.bodyCount, 6);
+  physics.syncHall([], 10, -1);
+  assert.equal(physics.bodyCount, 7);
+  physics.syncHall([], 10, -2);
+  assert.equal(physics.bodyCount, 7, 'moving a front wall reuses its body');
+  entity.body.velocity.z = -7;
+  step(physics, .5);
+  assert.ok(entity.body.position.z < -1.1 && entity.body.position.z >= -1.91);
+  physics.syncHall([], 10);
+  assert.equal(physics.bodyCount, 6);
+  entity.body.position.set(0, 3, 0); entity.body.velocity.set(0, 0, -7); entity.body.wakeUp();
+  step(physics, .5);
+  assert.ok(entity.body.position.z < -2.5, 'normal mode has no front collider');
+  physics.dispose();
+});
+
+test('wall synchronization immediately removes outside debris by center and disposes each once', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  const removed = [];
+  physics.syncHall([], 10, -20);
+  prop(physics, { owner: 'rear', position: at(0, 2, 5), onRemove: () => removed.push('rear') }).body.sleep();
+  prop(physics, { owner: 'inside', position: at(0, 2, -2), onRemove: () => removed.push('inside') });
+  prop(physics, { owner: 'front', position: at(0, 2, -25), onRemove: () => removed.push('front') }).body.sleep();
+  physics.syncHall([], 0, -20);
+  assert.deepEqual(removed, ['rear', 'front']);
+  assert.deepEqual(physics.entities.map(entity => entity.owner), ['inside']);
+  physics.syncHall([], -2, -20);
+  assert.equal(physics.entities.length, 1, 'a center exactly on the boundary is retained');
+  physics.syncHall([], -3, -20);
+  assert.deepEqual(removed, ['rear', 'front', 'inside']);
+  physics.dispose();
+  assert.deepEqual(removed, ['rear', 'front', 'inside']);
+});

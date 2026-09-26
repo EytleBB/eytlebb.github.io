@@ -1,0 +1,257 @@
+/* Activated only by the hidden museum ending. The normal site keeps its own tokens. */
+@font-face {
+  font-family:MuseumObfuscated;
+  src:url('../fonts/museum-obfuscated.woff?v=pixel-20260926') format('woff');
+  font-style:normal; font-weight:100 900; font-display:swap;
+}
+html.site-horror,
+html.site-horror[data-theme="day"],
+html.site-horror[data-theme="night"] {
+  color-scheme:dark;
+  --ink:#180a0f; --ink-deep:#090508; --ink-rise:#2b1118;
+  --amber:#d26a69; --amber-deep:#854043; --amber-ink:#130609; --amber-flare:#edaaa0;
+  --parchment:#e3c7be; --dim:#b79997; --faint:#9f7f81;
+  --line:rgba(185,90,97,.23); --line-2:rgba(195,100,104,.42);
+  --panel:rgba(22,9,14,.95); --field:rgba(73,15,26,.16);
+  --surface-sheen:rgba(161,44,55,.085); --feedback:rgba(120,34,46,.15);
+  --bg-img:url('../images/forest-night.webp');
+  --scrim:linear-gradient(90deg,rgba(10,3,7,.78),rgba(21,4,9,.14) 58%,rgba(8,2,5,.1)),
+    linear-gradient(180deg,rgba(12,2,7,.18),transparent 38%,rgba(12,2,6,.19) 69%,#090508);
+  --horror-text:#b97773;
+  --mc-bg:#11090c; --mc-panel:#1c0c12; --mc-btn:#54222c;
+  --mc-green:#d8857c; --mc-red:#ed746f; --mc-white:#e3c7be;
+  background:#090508; color:var(--parchment);
+  scrollbar-color:#68333d #0d060a;
+}
+html.site-horror body {
+  background:var(--ink-deep); color:var(--parchment); caret-color:#ef9b8f;
+}
+html.site-horror ::selection { color:#fff1e6; background:#76333e; }
+html.site-horror :focus-visible { outline-color:#e1958b; }
+
+/* Keep the real birches visible under a red-black exposure and fine scan texture. */
+html.site-horror .bg {
+  filter:grayscale(1) sepia(1) saturate(2.6) hue-rotate(311deg) brightness(.49) contrast(1.2);
+}
+html.site-horror .bg::after {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(145deg,rgba(18,0,7,.26),transparent 50%,rgba(33,2,9,.4));
+}
+html.site-horror :is(.forest-scene,.ambient-motes) { visibility:hidden; }
+html.site-horror #site-horror-field {
+  position:fixed; inset:0; z-index:0; display:block; width:100%; height:100%;
+  pointer-events:none; user-select:none; image-rendering:pixelated;
+  opacity:.57;
+}
+html.site-horror .scrim { background:var(--scrim); }
+html.site-horror:not([data-section="about"]) .scrim {
+  background:linear-gradient(90deg,rgba(9,3,7,.94),rgba(12,4,9,.78)),
+    radial-gradient(ellipse at 83% 16%,rgba(106,21,36,.13),transparent 66%);
+  opacity:1;
+}
+html.site-horror .grain { opacity:.043; mix-blend-mode:soft-light; }
+html.site-horror body::before {
+  content:''; position:fixed; inset:0; z-index:2; pointer-events:none;
+  background:radial-gradient(ellipse at 70% 57%,rgba(120,16,37,.085),transparent 60%),
+    radial-gradient(ellipse at center,transparent 30%,rgba(10,0,4,.28) 100%),
+    repeating-linear-gradient(0deg,transparent 0 3px,rgba(4,0,2,.105) 3px 4px);
+}
+
+/* Red copper edges, smoked surfaces, and restrained warm text replace both themes. */
+html.site-horror .rail {
+  background:rgba(14,5,10,.88); border-color:rgba(167,63,77,.3);
+  box-shadow:0 1px 0 rgba(87,16,31,.25),0 12px 36px rgba(0,0,0,.15);
+  backdrop-filter:blur(8px);
+}
+html.site-horror .brand img {
+  filter:grayscale(1) sepia(.65) saturate(2.4) hue-rotate(313deg) brightness(.8);
+}
+html.site-horror :is(.nav-i,.lang button) { color:var(--dim); }
+html.site-horror :is(.nav-i.on,.lang button.on) { color:#f0b8aa; }
+html.site-horror .nav-i::after { background:#c65b62; box-shadow:0 0 9px rgba(173,35,60,.3); }
+html.site-horror .lamp { border-color:#69353f; background:rgba(40,9,18,.5); color:#c9827b; }
+html.site-horror .lamp:is(:hover,:focus-visible) { color:#f2b2a1; border-color:#cd6b68; }
+html.site-horror .hero-status i { background:#d76c70; box-shadow:0 0 12px rgba(199,56,67,.55); }
+html.site-horror .hero h1 { text-shadow:2px 0 rgba(141,27,44,.26),-1px 0 rgba(203,84,93,.12); }
+html.site-horror .hero-period { color:#e47779; }
+html.site-horror :is(.hero-topline,.hero-bottom) { color:#ba9292; }
+html.site-horror .hero-bottom { border-color:rgba(168,69,82,.26); }
+html.site-horror :is(.home-body,.site-footer) { background:#090508; }
+html.site-horror .home-body::before { background:linear-gradient(transparent,#090508); }
+html.site-horror .site-footer { border-color:rgba(170,76,88,.25); }
+html.site-horror :is(.panel,.col-right,.gallery-foot,.list-item,.dl-item,.project-group) { border-color:var(--line); }
+html.site-horror :is(.list-item,.dl-item):is(:hover,:focus-visible),
+html.site-horror .list-item.on { color:var(--amber-flare); background:rgba(96,22,35,.16); }
+html.site-horror .list-sub { border-color:#71343d; }
+html.site-horror .motion-surface::after { background:linear-gradient(100deg,rgba(133,30,49,.09),transparent 80%); }
+html.site-horror :is(.msg-text,.msg-send,.patch-action) {
+  color:var(--parchment); background:rgba(26,8,15,.48); border-color:#66303b;
+}
+html.site-horror .msg-text::placeholder { color:#ac8588; }
+html.site-horror .msg-text:focus { border-color:#d17470; outline-color:#b36165; }
+html.site-horror :is(.msg-send,.patch-action):enabled:hover {
+  background:#36131e; border-color:#bd6267;
+}
+html.site-horror .theme-wipe,
+html.site-horror .theme-wipe.to-day {
+  background:radial-gradient(circle at var(--theme-x) var(--theme-y),#4e1827,#170910 60%,#090508);
+}
+
+/* Archive and reader have the same thin red ruled-paper treatment. */
+html.site-horror .patchlog-surface {
+  background:linear-gradient(135deg,rgba(82,19,34,.16),transparent 64%),#13080e;
+  border-color:#532531; box-shadow:0 16px 50px rgba(0,0,0,.18);
+  backdrop-filter:none;
+}
+html.site-horror :is(.patch-index-card,.patch-calendar-card) { background:rgba(28,9,17,.7); border-color:#49232c; }
+html.site-horror .patch-index-card:is(:hover,:focus-visible) { background:#2d101b; border-color:#a2545d; }
+html.site-horror :is(.patch-toolbar,.patch-calendar-bar,.patch-load-warning) { border-color:#4b242f; }
+html.site-horror .cal-day-today { border-color:#82525a; }
+html.site-horror .cal-day-entry { color:#dd8580; border-color:#75404a; background:rgba(65,14,28,.17); }
+html.site-horror .cal-day-entry:is(:hover,:focus-visible) { background:#391420; border-color:#c16a70; }
+html.site-horror .cal-day-active,
+html.site-horror .cal-day-active:is(:hover,:focus-visible) { background:#bc6468; border-color:#e39a8d; color:#16090d; }
+html.site-horror .overlay { background:rgba(10,2,7,.9); backdrop-filter:blur(8px); }
+html.site-horror .ov-close { color:#e2aba2; background:#1f0b13; border-color:#773e49; }
+html.site-horror .ov-close:is(:hover,:focus-visible) { background:#35121e; border-color:#cb7474; }
+html.site-horror .reader { background:#13080d; border-color:#502832; border-top-color:#c26a69; }
+html.site-horror :is(.r-header,.r-nav,.r-step + .r-step) { border-color:#49252e; }
+html.site-horror .r-step:enabled:hover { background:#2b1019; color:#ebaba0; }
+html.site-horror .reader .r-body { color:#d7b2ad; }
+html.site-horror .lightbox-photo { background:#14040b; border-color:#874951; }
+html.site-horror .lightbox-unexposed {
+  background:linear-gradient(180deg,#230a15,#0c0308),
+    repeating-linear-gradient(90deg,transparent 0 3px,rgba(134,39,57,.025) 3px 4px);
+}
+html.site-horror .lightbox-developer-line {
+  background:linear-gradient(90deg,transparent,rgba(204,63,90,.65),#dc938b,rgba(204,63,90,.65),transparent);
+  box-shadow:0 0 20px rgba(167,38,60,.16);
+}
+html.site-horror .lightbox-developer-line::before,
+html.site-horror .lightbox-developer-line::after { background:none; animation:none; }
+html.site-horror .lightbox-status { color:#bd8c8d; }
+
+/* Hide public artwork immediately, including before the lazy overlay is mounted. */
+html.site-horror[data-horror-surface="site"] :is(.gal-item,.gallery-grid,.gallery-masonry,.lightbox-photo) img {
+  opacity:0!important;
+}
+/* The loading cover hides text paint without changing currentColor used by SVG icons. */
+html.site-horror.site-horror-covering[data-horror-surface="site"] body,
+html.site-horror.site-horror-covering[data-horror-surface="site"] body :not(input):not(textarea):not(canvas):not(svg):not(svg *) {
+  -webkit-text-fill-color:transparent!important; text-shadow:none!important;
+}
+html.site-horror.site-horror-covering[data-horror-surface="site"] :is(input,textarea,svg) {
+  -webkit-text-fill-color:currentColor!important;
+}
+
+/* The image remains the layout/click target; its canvas is a visual-only sibling. */
+html.site-horror .site-horror-image-host { position:relative; isolation:isolate; }
+html.site-horror .site-horror-image-covered { opacity:0!important; }
+html.site-horror .site-horror-image {
+  position:absolute; inset:0; z-index:4; display:block; width:100%; height:100%;
+  max-width:100%; max-height:100%; border-radius:inherit; object-fit:cover;
+  pointer-events:none; user-select:none; image-rendering:pixelated;
+}
+html.site-horror .gallery-masonry > .site-horror-image-host {
+  display:block; break-inside:avoid; margin:0 0 22px;
+}
+html.site-horror .gallery-masonry > .site-horror-image-host > img { margin-bottom:0; }
+html.site-horror :is(.gal-item,.gallery-grid .site-horror-image-host) { background:#15050c; }
+html.site-horror .gal-item { box-shadow:inset 0 0 0 1px rgba(194,65,81,.35); }
+html.site-horror .gallery-grid img { border-color:#693440; }
+html.site-horror .gallery-grid img:hover { border-color:#d1747a; }
+html.site-horror .lightbox-photo > .site-horror-image { z-index:5; object-fit:contain; }
+
+/* Pixel glyph canvases preserve the original DOM, values, and measured text cells. */
+html.site-horror .museum-horror-copy {
+  position:relative; display:inline-block; max-width:100%; vertical-align:baseline;
+}
+html.site-horror .museum-horror-original { opacity:0; color:transparent!important; text-shadow:none!important; }
+html.site-horror .museum-horror-visual {
+  position:absolute; inset:0; display:block; width:100%; height:100%; overflow:hidden;
+  image-rendering:pixelated; pointer-events:none; user-select:none;
+}
+html.site-horror body.museum-horror :is(select,option) { font-family:MuseumObfuscated,monospace; }
+html.site-horror body.museum-horror :is(input,textarea)::placeholder { font-family:MuseumObfuscated,monospace; }
+/* Selection, hover, and native dragging must not uncover the original artwork or labels. */
+html.site-horror :is(.museum-horror-copy,.museum-horror-original) {
+  -webkit-user-select:none; user-select:none; -webkit-user-drag:none; -webkit-touch-callout:none;
+}
+html.site-horror :is(.museum-horror-copy,.museum-horror-original)::selection {
+  color:transparent!important; background:transparent!important; text-shadow:none!important;
+}
+html.site-horror body.museum-horror img {
+  -webkit-user-drag:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+
+/* Only the public horror surface opts in; admin controls and typed input stay intact. */
+html.site-horror body.site-horror-locked .site-horror-denied {
+  outline:1px solid #a74d5c; outline-offset:2px;
+  box-shadow:inset 0 0 0 1px rgba(116,32,49,.22);
+  animation:site-horror-denied-jolt 180ms steps(1,end) both;
+}
+@keyframes site-horror-denied-jolt {
+  0%,100% { translate:0 0; }
+  20%,60% { translate:-1px 0; }
+  40% { translate:2px 0; }
+  80% { translate:1px 0; }
+}
+
+/* Standalone tools and administration keep their native layout and real labels. */
+html.site-horror body:has(> .container),
+html.site-horror body:has(> .topbar) {
+  background:radial-gradient(ellipse at 85% 0,rgba(109,26,44,.19),transparent 52%),#0c060a;
+}
+html.site-horror body > .container,
+html.site-horror body > .topbar,
+html.site-horror body:has(> .topbar) > main { position:relative; z-index:3; }
+html.site-horror body > .container {
+  background:#1c0c12; border-color:#0b0408; box-shadow:0 0 0 4px #63303d,0 18px 50px rgba(0,0,0,.35);
+}
+html.site-horror .container :is(input,#result) { background:#10060c; border-color:#63303d; color:#e3c7be; }
+html.site-horror .container button { color:#edc5b9; border-color:#16070f; background:#54222c; box-shadow:inset 3px 3px #753b46,inset -3px -3px #260c17; }
+html.site-horror .container .section-title { color:#c58a83; border-color:#69303e; }
+html.site-horror .container #visualizer { border-color:#c56568; }
+html.site-horror .topbar { color:#e3c7be; background:#16080fe6; border-color:#532a36; }
+html.site-horror :is(.mark,.kicker,.account) { color:#c89189; }
+html.site-horror :is(.login-card,.artworks-panel,.detail-panel,.subview) {
+  background:#1a0c13; border-color:#59303b;
+}
+html.site-horror :is(.topbar,.login-card,#app-view,#edit-dialog) button {
+  color:#edc5b9; background:#552530; border-color:#96505c;
+}
+html.site-horror :is(.topbar,.login-card,#app-view,#edit-dialog) button:enabled:hover { background:#70313e; border-color:#c8747b; }
+html.site-horror :is(.login-card,#app-view,#edit-dialog) :is(input,textarea) { color:#edc5b9; background:#140810; border-color:#643240; }
+html.site-horror :is(.login-card,#app-view,#edit-dialog) :is(label,.empty,.detail-head p,.artwork-button small,.entry small,.log-row time) { color:#b49799; }
+html.site-horror #app-view :is(.tabs,.detail-head,.log-row,.user-row) { border-color:#502c36; }
+html.site-horror #app-view :is(.artwork-button,.entry) { background:#25121c; border-color:#643341; }
+html.site-horror #app-view :is(.artwork-button.active,.tabs button.active) { background:#4b1e2a; border-color:#b4696b; }
+html.site-horror #app-view :is(.detail-head .title,.entry-header strong,.log-row code) { color:#d2a69b; }
+html.site-horror #app-view .badge { background:#69313f; color:#edd0c4; }
+html.site-horror #app-view .badge.warn { background:#82424a; }
+html.site-horror :is(#notice,#notice.error) { color:#df9c93; }
+html.site-horror #edit-dialog { background:#210d18; color:#e5c0b6; border-color:#99535f; }
+html.site-horror #edit-dialog::backdrop { background:rgba(12,1,8,.78); }
+
+@media (max-width:760px) {
+  html.site-horror,
+  html.site-horror[data-theme="day"],
+  html.site-horror[data-theme="night"] { --bg-img:url('../images/forest-night-mobile.webp'); }
+  html.site-horror #site-horror-field { opacity:.45; }
+  html.site-horror .rail { backdrop-filter:blur(5px); }
+  html.site-horror .overlay { backdrop-filter:blur(4px); }
+  html.site-horror .gallery-masonry > .site-horror-image-host { margin-bottom:12px; }
+  html.site-horror body::before {
+    background:radial-gradient(ellipse at 70% 57%,rgba(120,16,37,.07),transparent 65%),
+      repeating-linear-gradient(0deg,transparent 0 3px,rgba(4,0,2,.07) 3px 4px);
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  html.site-horror body.site-horror-locked .site-horror-denied { animation:none; }
+  html.site-horror body::before { background:radial-gradient(ellipse at 70% 57%,rgba(100,16,32,.07),transparent 65%); }
+  html.site-horror #site-horror-field { opacity:.34; }
+  html.site-horror :is(.motion-reveal,.hero-copy h1,.hero-description,.hero-link),
+  html.site-horror .lightbox-developer-line::after { animation:none; }
+  html.site-horror :is(.site-horror-image,.gal-item img,.msg-plane),
+  html.site-horror .nav-i::after { transition:none; }
+}

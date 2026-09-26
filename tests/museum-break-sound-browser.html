@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><title>Museum break sound checks</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
+<style>body{font:15px system-ui;background:#142127;color:white;padding:24px}button{padding:12px}pre{white-space:pre-wrap}</style>
+<button id="run">Check break threshold and original audio</button><pre id="status">Ready</pre>
+<script type="module">
+import * as THREE from 'three';
+import { createMuseumDestruction } from '../js/museum-destruction.js?v=break-sound-20260926';
+import { createMuseumBreakSound } from '../js/museum-break-sound.js?v=break-sound-20260926';
+const status=document.querySelector('#status');
+const assert=(ok,label)=>{if(!ok)throw Error(label);};
+document.querySelector('#run').onclick=async()=>{
+ let destruction,sound;
+ try{
+  status.textContent='Checking actual ray hits and decoding the supplied MP3…';
+  const decoder=new OfflineAudioContext(2,1,48000);
+  const file=await (await fetch('../audio/ccream.mp3')).arrayBuffer();
+  const decoded=await decoder.decodeAudioData(file.slice(0));
+  const offline=new OfflineAudioContext(decoded.numberOfChannels,decoded.length+128,decoded.sampleRate);
+  const sources=[],gains=[];
+  const context=new Proxy(offline,{get(target,key){
+   if(key==='state')return 'running';
+   if(key==='createBufferSource')return()=>{const source=target.createBufferSource();sources.push(source);return source;};
+   if(key==='createGain')return()=>{const gain=target.createGain();gains.push(gain);return gain;};
+   const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+  }});
+  sound=createMuseumBreakSound({context,output:offline.destination});sound.setEnabled(true);
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(74,1,.1,100),pending=[];
+  let breakEvents=0;
+  destruction=createMuseumDestruction({scene,camera,onBreak(){breakEvents++;pending.push(sound.breakObject());}});
+  const slots=[];
+  function makeSlot(z){
+   const parent=new THREE.Group();parent.position.z=z;scene.add(parent);
+   const frame=new THREE.Mesh(new THREE.BoxGeometry(1,1,.08),new THREE.MeshBasicMaterial());frame.position.set(2.85,1.65,0);frame.rotation.y=-Math.PI/2;parent.add(frame);
+   const pic=new THREE.Mesh(new THREE.PlaneGeometry(.9,.9),new THREE.MeshBasicMaterial());pic.position.set(2.8,1.65,0);pic.rotation.y=-Math.PI/2;parent.add(pic);
+   const plaque=new THREE.Mesh(new THREE.PlaneGeometry(.1,.1),new THREE.MeshBasicMaterial());plaque.position.set(2.9,.6,1);plaque.rotation.y=-Math.PI/2;parent.add(plaque);
+   const titlePlaque=plaque.clone();titlePlaque.position.y=.4;parent.add(titlePlaque);
+   const slot={parent,frame,pic,plaque,titlePlaque,fixtures:[],side:1,imageIndex:slots.length};destruction.registerSlot(slot);slots.push(slot);return slot;
+  }
+  function aim(mesh,distance=2){const p=mesh.getWorldPosition(new THREE.Vector3());camera.position.copy(p).add(new THREE.Vector3(-distance,0,0));camera.lookAt(p);camera.updateMatrixWorld();}
+  for(let i=0;i<12;i++){
+   const slot=makeSlot(-i*4);aim(slot.pic);assert(destruction.strike(i%2?'heavy':'light'),'in-range hit '+i);
+   assert((await pending.pop())===false,'first twelve must remain silent');
+  }
+  assert(breakEvents===12&&sources.length===0,'twelve unique breaks, zero sounds');
+  const thirteenth=makeSlot(-48);aim(thirteenth.pic,4);
+  assert(!destruction.strike('light')&&breakEvents===12,'out-of-reach hit does not count');
+  aim(thirteenth.pic);assert(destruction.strike('heavy'),'thirteenth hit');assert(await pending.pop(),'thirteenth plays');
+  assert(breakEvents===13&&sources.length===1,'one source for the thirteenth break');
+  assert(gains[0].gain.value===1&&sources[0].playbackRate.value===1&&!sources[0].loop,'full original volume and speed');
+  for(let i=0;i<720;i++)destruction.update(1/120);
+  const rubble=destruction.bodies.find(e=>e.owner===thirteenth);const p=new THREE.Vector3().copy(rubble.body.position);
+  camera.position.copy(p).add(new THREE.Vector3(-1,1,1));camera.lookAt(p);camera.updateMatrixWorld();
+  assert(destruction.strike('heavy'),'ground rubble hit');assert(breakEvents===13&&sources.length===1,'ground rubble does not trigger');
+  destruction.resetChunk({slots});assert(destruction.count===0,'chunk cleanup');
+  sound.setEnabled(false);sound.setEnabled(true);
+  const next=makeSlot(-52);aim(next.pic);assert(destruction.strike('light'),'post-cleanup hit');
+  assert(await pending.pop(),'count persists after chunk cleanup');
+  assert(breakEvents===14&&sources.length===2,'next new object gets one more source');
+  const rendered=await offline.startRendering();
+  let peak=0,error=0,energy=0;
+  for(let c=0;c<decoded.numberOfChannels;c++)for(let i=0;i<decoded.length;i++){
+   const actual=rendered.getChannelData(c)[i],expected=decoded.getChannelData(c)[i];
+   peak=Math.max(peak,Math.abs(actual));error=Math.max(error,Math.abs(actual-expected));energy+=actual*actual;
+  }
+  assert(energy>0&&error<.00001,'rendered output matches original at 100%');
+  sound.dispose();destruction.dispose();
+  status.textContent='PASS: first 12 silent; 13th plays once at 100%; misses and fallen objects do not trigger; count survives chunk cleanup.\nOriginal MP3: '+decoded.duration.toFixed(3)+' s, '+decoded.numberOfChannels+' channels, peak '+peak.toFixed(3)+'. Render error: '+error.toExponential(2);
+ }catch(error){sound?.dispose();destruction?.dispose();status.textContent='FAIL: '+error.stack;}
+};
+</script>

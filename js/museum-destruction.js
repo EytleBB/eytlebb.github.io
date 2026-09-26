@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { createMuseumPhysics } from './museum-physics.js?v=destruction-20260926';
+import { createMuseumPhysics } from './museum-physics.js?v=horror-finale-20260926';
 
 const LAMP_PARTS = ['base', 'armA', 'armB', 'knuckle', 'head', 'rim', 'lens', 'glow'];
 
-export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth = 3, onAdd, onRemove }) {
-  const physics = createMuseumPhysics({ halfWidth });
+export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth = 3, onAdd, onRemove, onFloorImpact, onBreak }) {
+  const physics = createMuseumPhysics({ halfWidth, onFloorImpact });
   const records = [];
   const debris = new Map();
   const raycaster = new THREE.Raycaster();
@@ -56,6 +56,8 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
         const copy = new THREE.Mesh(source.geometry, Array.isArray(source.material) ? materials : materials[0]);
         matrix.multiplyMatrices(inverse, source.matrixWorld);
         matrix.decompose(copy.position, copy.quaternion, copy.scale);
+        copy.userData.museumSurface = source === record.slot.pic ? 'artwork'
+          : record.kind === 'plaque' ? 'plaque' : record.kind === 'title' ? 'name' : null;
         copy.castShadow = true; copy.receiveShadow = true;
         // Lamp source layers are disabled by instancing; detached meshes render normally.
         copy.layers.set(0);
@@ -152,6 +154,7 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
       direction: raycaster.ray.direction, point: hit.point, heavy: kind === 'heavy',
       detachSide: hit.item ? 0 : hit.record.slot.side,
     });
+    if (!hit.item) onBreak?.();
     return true;
   }
 
@@ -171,9 +174,10 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
 
   return {
     registerSlot, resetSlot, strike,
+    removeSlotDebris(slot) { physics.removeOwner(slot); },
     resetChunk(chunk) { chunk.slots.forEach(resetSlot); },
     protectTextures(indices) { for (const item of debris.values()) if (item.imageIndex !== null) indices.add(item.imageIndex); },
-    syncHall(chunks, rearZ) { physics.syncHall(chunks.flatMap(chunk => [chunk.group.position.z, chunk.group.position.z - 7]), rearZ); },
+    syncHall(chunks, rearZ, frontZ = null) { physics.syncHall(chunks.flatMap(chunk => [chunk.group.position.z, chunk.group.position.z - 7]), rearZ, frontZ); },
     update(dt) {
       physics.update(dt, camera.position.z);
       for (const { root, entity } of debris.values()) {
@@ -181,6 +185,7 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
         root.quaternion.copy(entity.body.quaternion);
       }
     },
+    forEachDebris(callback) { for (const item of debris.values()) callback(item.root); },
     get count() { return debris.size; },
     get bodies() { return physics.entities; },
     dispose() { physics.dispose(); records.length = 0; },

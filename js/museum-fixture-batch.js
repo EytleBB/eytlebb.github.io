@@ -71,6 +71,8 @@ export function createMuseumFixtureBatch({ scene, fixtures, camera, maxDistance 
       for (const batch of batches) {
         const source = fixture[batch.part];
         if (!source.visible) continue;
+        if (fixture.horrorGain !== undefined && fixture.horrorGain < .1
+          && (batch.part === 'lens' || batch.part === 'glow' || batch.part === 'wash')) continue;
         source.updateMatrix();
         worldMatrix.multiplyMatrices(groupMatrix, source.matrix);
         batch.mesh.setMatrixAt(batch.count++, worldMatrix);

@@ -6,18 +6,22 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=museum-mobile-20260926';
-import { createMuseumPlayer } from './museum-player.js?v=museum-mobile-20260926';
+import { createMuseumArchitecture } from './museum-architecture.js?v=ending-20260926';
+import { createMuseumPlayer } from './museum-player.js?v=ending-20260926';
 import { createMuseumTouchControls, museumPixelRatio, museumTextureSize, museumFocusDistance } from './museum-touch.js?v=museum-mobile-20260926';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=destruction-20260926';
-import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
-import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r6';
+import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=horror-20260926';
+import { createMuseumAtmosphere } from './museum-atmosphere.js?v=horror-20260926';
 import { createMuseumPlaques } from './museum-plaques.js?v=destruction-20260926';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
-import { createMuseumKnifeController } from './museum-knife.js?v=destruction-20260926';
-import { createMuseumDestruction } from './museum-destruction.js?v=destruction-20260926';
+import { createMuseumKnifeController } from './museum-knife.js?v=ending-20260926';
+import { createMuseumSounds } from './museum-sounds.js?v=site-horror-20260926';
+import { createMuseumDestruction } from './museum-destruction.js?v=ending-20260926';
+import { createMuseumHorror } from './museum-horror.js?v=horror-immersion-20260926';
+import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=hall-distances-20260926';
+import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=chiptune-20260926';
 
 const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
   || new URLSearchParams(location.search).get('controls') === 'touch';
@@ -180,15 +184,15 @@ const SMALL_IMAGE_BYTES = 1024 * 1024;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
-// Keep every artwork from the rear wall through the first 100 m resident before
+// Keep every artwork from the rear wall through the first 150 m resident before
 // the entrance becomes interactive. This makes the loading screen truthful:
 // walking can begin without decode/upload work competing with the first frames.
 const INITIAL_TEXTURE_START = 0;
-const INITIAL_TEXTURE_COUNT = 48;
+const INITIAL_TEXTURE_COUNT = 56;
 const HOMEPAGE_TEXTURE_INSERTION_INDEX = 16;
 const STREAM_BATCH_SIZE = 20;
 const TEXTURE_LOAD_CONCURRENCY = 4;
-const PREFETCH_AHEAD_DISTANCE = 100;
+const PREFETCH_AHEAD_DISTANCE = 100 * (3 / 2);
 const KEEP_BEHIND_DISTANCE = 42;
 const MAX_RESIDENT_TEXTURES = 60;
 const STREAM_UPDATE_INTERVAL_MS = 400;
@@ -328,9 +332,13 @@ const ART_INTERACT_DISTANCE = 3.5;
 const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
+let museumHorror = null, horrorEnding = null;
 const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'), {
+  onSwing(kind) {
+    if (isLocked() && !focusState && !plaqueSession) museumSounds.swing(kind);
+  },
   onStrike(kind) {
-    if (isLocked() && !focusState && !plaqueSession) destruction.strike(kind);
+    if (isLocked() && !focusState && !plaqueSession && !horrorEnding?.active) destruction.strike(kind);
   },
 });
 const audioListener = new THREE.AudioListener();
@@ -375,10 +383,14 @@ scene.add(new THREE.HemisphereLight(0xc4d7de, 0x192a2d, 0.75));
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 88);
 camera.position.set(0, EYE_Y, SPAWN_Z);
+const museumSounds = createMuseumSounds({ context: audioListener.context, output: audioListener.getInput(),
+  listenerPosition: camera.position });
 const destruction = createMuseumDestruction({
   scene, camera, reach: ART_INTERACT_DISTANCE, halfWidth: HALL_HALF_WIDTH,
-  onAdd: root => bloomOcclusion?.addObject(root),
-  onRemove: root => bloomOcclusion?.removeObject(root),
+  onAdd(root) { bloomOcclusion?.addObject(root); museumHorror?.applyDebris(root); },
+  onRemove(root) { bloomOcclusion?.removeObject(root); museumHorror?.releaseDebris(root); },
+  onFloorImpact: impact => museumSounds.floorImpact(impact),
+  onBreak() { museumSounds.breakObject(); museumHorror?.recordBreak(); },
 });
 
 // One listener follows every camera pose, including artwork focus tweens.
@@ -387,9 +399,11 @@ camera.add(audioListener);
 const updaters = [];
 updaters.push(dt => museumKnife.update(dt, isLocked() && !focusState));
 updaters.push(dt => destruction.update(dt));
+updaters.push(dt => museumHorror?.update(dt));
 const frameScheduler = createMuseumFrameScheduler({ fps: settings.fps });
 let lastRenderedAt = null;
 let lastMaintenanceAt = 0;
+let lastHorrorUIAt = null;
 let presentedFrames = 0;
 function resetFrameTiming() {
   lastRenderedAt = null;
@@ -403,6 +417,11 @@ function frame(timestamp) {
   if (contextLost) return;
   const frameStartedAt = performance.now();
   const presentationTime = Number.isFinite(timestamp) ? timestamp : frameStartedAt;
+  if (museumHorror?.active && !document.hidden) {
+    const uiDelta = lastHorrorUIAt === null ? 0 : Math.min(.1, (presentationTime - lastHorrorUIAt) / 1000);
+    lastHorrorUIAt = presentationTime;
+    museumHorror.updateUI(uiDelta);
+  }
   const active = PERF_AUTOWALK || isLocked() || Boolean(focusState && focusState.phase !== 'readingPlaque');
   if (!frameScheduler.shouldRender({ now: presentationTime, active, visible: !document.hidden })) {
     // Paused streaming can finish, but a settled menu does no draw work.
@@ -581,16 +600,20 @@ const mats = {
    Textures stream in batches and are released from GPU memory behind the player.
    ============================================================ */
 
-const POOL = 20;
-const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const RECYCLE_BACK_BUFFER = 112;
-const REAR_WALL_OFFSET = 72;
-const FORWARD_VIEW_BUFFER = 170;
+// The old first chunk (and actual rear wall) was at 72 - 14 = 58 m.
+const INITIAL_REAR_WALL_DISTANCE = 58 * (2 / 3);
+const REAR_WALL_OFFSET = SPAWN_Z + INITIAL_REAR_WALL_DISTANCE + CHUNK_LEN;
+const FORWARD_VIEW_BUFFER = 170 * (3 / 2);
 // Prepare a recycled chunk only after it is fully hidden behind the fog. Each
 // artwork is retargeted on a separate frame so crossing a chunk boundary never
 // rebuilds four picture layouts in one visible frame.
 const CHUNK_RETARGET_PREPARE_DISTANCE = 88;
 const CHUNK_RETARGET_FRAME_BUDGET_MS = 11.5;
+// Extending the front needs six more resident chunks. Keep the same hidden
+// rear preparation and cleanup distances instead of taking visible rear chunks.
+const POOL = Math.ceil((FORWARD_VIEW_BUFFER + CHUNK_RETARGET_PREPARE_DISTANCE) / CHUNK_LEN) + 1;
+const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const ART_PER_SIDE = 2;
 const ART_SPACING = CHUNK_LEN / ART_PER_SIDE;
 const PILLAR_SPACING = CHUNK_LEN; // one left/right pilaster pair per chunk
@@ -607,7 +630,7 @@ const SPEAKER_REF_DISTANCE = 4;
 const SPEAKER_EDGE_GAIN = 0.18;
 const SPEAKER_ROLLOFF = 1 - SPEAKER_EDGE_GAIN;
 const SPEAKER_CROSSFADE_SECONDS = 0.12;
-const MUSEUM_MUSIC_VOLUME = 0.70;
+const MUSEUM_MUSIC_VOLUME = 0.90;
 const MUSEUM_MUSIC_URL = 'audio/museum.mp3';
 const ART_H = 1.52;           // artwork height (width derives from aspect)
 const ART_MAX_W = 2.16;       // clamp very wide images
@@ -680,6 +703,59 @@ museumTrack.addEventListener('error', () => reportMuseumTrackFailure(museumTrack
 let museumTrackNode = null;
 let museumTrackStarting = false;
 let museumTrackWarningShown = false;
+let horrorMusic = null, horrorMusicStarting = null;
+
+async function enableHorrorMusic() {
+  if (horrorMusicStarting || !museumTrackNode) return horrorMusicStarting;
+  museumTrack.preservesPitch = false;
+  if ('webkitPreservesPitch' in museumTrack) museumTrack.webkitPreservesPitch = false;
+  museumTrack.playbackRate = MUSEUM_HORROR_PLAYBACK_RATE;
+  horrorMusic = createMuseumHorrorAudio({ context: audioListener.context });
+  horrorMusicStarting = horrorMusic.enable(museumTrackNode).then(output => {
+    if (!output) return;
+    for (const rig of speakerRigs) { rig.sound.disconnect(); rig.sound.setNodeSource(output); }
+  }).catch(error => { console.warn('Museum altered music unavailable', error); });
+  return horrorMusicStarting;
+}
+
+museumHorror = createMuseumHorror({ scene, renderer, architecture, atmosphere, fixtures: pictureLightFixtures,
+  getSlots: () => chunks.flatMap(chunk => chunk.slots),
+  forEachDebris: callback => destruction.forEachDebris(callback),
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  onActivate() {
+    window.eytleHorror?.activate();
+    void museumSounds.prepareHorror();
+    // Stop queueing original paintings; all horror surfaces share three small textures.
+    streamBatchQueue.length = 0;
+    queuedBatchStarts.clear();
+    chunkRetargetQueue.length = 0;
+    for (const chunk of chunks) chunk.pendingRetarget = null;
+    museumKnife.setHorror(true);
+    horrorEnding = createMuseumHorrorEnding({ scene, camera, chunks, architecture, rearWall,
+      sectionLength: ART_SPACING, chunkLength: CHUNK_LEN,
+      onBounds(state) { destruction.syncHall(chunks.filter(chunk => chunk.group.visible), state.rearZ, state.frontZ); },
+      onProgress(progress) { museumHorror.setProgress(progress); museumKnife.setIntensity(1 - progress * .55); },
+      onAdd(root) { bloomOcclusion?.addObject(root); museumHorror.applyMatte(root); },
+      onRemove(root) { bloomOcclusion?.removeObject(root); },
+      removeSlotDebris: slot => destruction.removeSlotDebris(slot),
+      onStart() {
+        clearInput(); roamEnabled = false; museumKnife.stow();
+        document.body.classList.add('museum-horror-finale');
+        setArtHintVisible(false);
+      },
+      onImpact() { museumSounds.finale(); },
+      onComplete() {
+        museumSounds.setEnabled(false); museumTrack.pause(); audioListener.setMasterVolume(0);
+        location.assign('/');
+      },
+    });
+    // Register the lazily created matte floor as an opaque bloom occluder.
+    bloomOcclusion?.addObject(floorRig);
+    horrorEnding.advance();
+    void enableHorrorMusic();
+    requestSceneFrame();
+  },
+});
 
 function speakerZForIndex(index) {
   return FIRST_SPEAKER_Z - index * SPEAKER_SPACING;
@@ -785,6 +861,7 @@ function connectMuseumTrack() {
   if (museumTrackNode) return;
   museumTrackNode = audioListener.context.createMediaElementSource(museumTrack);
   for (const rig of speakerRigs) rig.sound.setNodeSource(museumTrackNode);
+  if (museumHorror?.active) void enableHorrorMusic();
 }
 
 function startMuseumTrack() {
@@ -1102,6 +1179,7 @@ async function loadTextureIndices(indices, onProgress, onTextureReady) {
   let cursor = 0;
   const worker = async () => {
     while (cursor < indices.length) {
+      if (museumHorror?.active) break;
       const imageIndex = indices[cursor++];
       const texture = await loadTexture(imageIndex);
       if (texture && onTextureReady) onTextureReady(imageIndex, texture);
@@ -1148,6 +1226,12 @@ function fitArtwork(pic, frame, tex, imageIndex) {
 }
 
 function showArtworkTexture(slot, tex, imageIndex) {
+  if (museumHorror?.active) {
+    fitArtwork(slot.pic, slot.frame, tex, imageIndex);
+    museumHorror.applySlot(slot);
+    requestSceneFrame();
+    return;
+  }
   const hadMap = Boolean(slot.pic.material.map);
   slot.pic.material.map = tex;
   slot.pic.material.color.setHex(0xffffff);
@@ -1158,6 +1242,7 @@ function showArtworkTexture(slot, tex, imageIndex) {
 }
 
 function showArtworkPlaceholder(slot) {
+  if (museumHorror?.active) { museumHorror.applySlot(slot); requestSceneFrame(); return; }
   const hadMap = Boolean(slot.pic.material.map);
   slot.pic.material.map = null;
   slot.pic.material.color.setHex(0x263248);
@@ -1309,7 +1394,7 @@ function updatePictureSpotPool() {
   camera.updateMatrixWorld();
 
   for (const fixture of pictureLightFixtures) {
-    if (!fixture.lightActive || !fixture.group.visible) continue;
+    if (!fixture.lightActive || !fixture.group.visible || !fixture.parent.visible || (fixture.horrorGain !== undefined && fixture.horrorGain < .1)) continue;
     // Hall chunks only translate along Z. Adding the parent translation gives
     // the exact same world position without walking the scene graph twice for
     // every one of the 160 picture-light fixtures on every frame.
@@ -1330,7 +1415,8 @@ function updatePictureSpotPool() {
       pooled.target.position.set(camera.position.x, camera.position.y, camera.position.z - 1);
       continue;
     }
-    pooled.spot.intensity = fixture.spotIntensity;
+    pooled.spot.intensity = fixture.spotIntensity * (fixture.horrorGain ?? 1);
+    pooled.spot.color.setHex(museumHorror?.active ? 0xd8d0bb : 0xffe9c8);
     pooled.spot.distance = fixture.spotDistance;
     pooled.spot.angle = fixture.spotAngle;
     pooled.spot.penumbra = fixture.spotPenumbra;
@@ -1492,6 +1578,7 @@ function removeChunkRetargetFromQueue(chunk) {
 }
 
 function processChunkRetargetQueue(frameStartedAt) {
+  if (museumHorror?.active) return false;
   while (chunkRetargetQueue.length && !chunkRetargetQueue[0].pendingRetarget) {
     chunkRetargetQueue.shift();
   }
@@ -1546,6 +1633,8 @@ function recycleChunks() {
   if (floorRig) {
     floorRig.position.z = playerZ;
   }
+
+  if (museumHorror?.active) return;
 
   let leadingZ = Math.min(...chunks.map(chunk => chunk.group.position.z));
   let rearZ = Math.max(...chunks.map(chunk => chunk.group.position.z));
@@ -1675,6 +1764,7 @@ function queueTextureBatch(imageIndex) {
 }
 
 function updateTextureStreaming(force = false) {
+  if (museumHorror?.active) return;
   if (!entered && !force) return;
   const now = performance.now();
   if (!force && now - lastStreamUpdate < STREAM_UPDATE_INTERVAL_MS) return;
@@ -1744,7 +1834,8 @@ let ignoreNextLook = true;
 let touchPlaying = false;
 // This predicate means active visitor control on either input surface.
 const isLocked = () => TOUCH_MODE ? touchPlaying : document.pointerLockElement === canvas;
-const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6 });
+const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6,
+  frontLimitZ: () => horrorEnding?.frontLimitZ ?? -Infinity });
 const heldCodes = new Set();
 const keys = { forward: false, back: false, left: false, right: false, walk: false, crouch: false, jump: false, jumpPressed: false };
 const movementCodes = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
@@ -1754,6 +1845,7 @@ let jumpQueued = false;
 function syncMuseumAudioState() {
   const audible = entered && (isLocked() || guestbook.isOpen()) && !document.hidden;
   audioListener.setMasterVolume(audible ? 1 : 0);
+  museumSounds.setEnabled(audible);
 }
 
 function clearInput() {
@@ -1768,7 +1860,7 @@ function clearInput() {
 }
 
 function onKey(e, down) {
-  if (plaqueSession || !isLocked()) return;
+  if (plaqueSession || !isLocked() || horrorEnding?.active) return;
   if (TOUCH_MODE && e.code === 'Escape') { if (down) pauseVisit(); return; }
   if (e.code === 'KeyE') {
     e.preventDefault();
@@ -1812,6 +1904,7 @@ document.addEventListener('mousemove', (e) => {
 });
 
 function applyLook(dx, dy) {
+  if (horrorEnding?.active) return;
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > MAX_LOOK_SPIKE || Math.abs(dy) > MAX_LOOK_SPIKE) return;
   // Scale by the visible field of view so zoom stays precise without smoothing latency.
   const zoomScale = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
@@ -1828,7 +1921,7 @@ function approachScalar(current, target, maxDelta) {
 }
 
 function setZoomHeld(active) {
-  zoomHeld = Boolean(active && isLocked() && !focusState);
+  zoomHeld = Boolean(active && isLocked() && !focusState && !horrorEnding?.active);
 }
 
 updaters.push((dt) => {
@@ -1842,7 +1935,7 @@ updaters.push((dt) => {
 const autoWalkInput = { forward: true };
 updaters.push((dt) => {
   if (!focusState) camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  if (!focusState && !plaqueSession && (PERF_AUTOWALK || (roamEnabled && isLocked()))) {
+  if (!horrorEnding?.active && !focusState && !plaqueSession && (PERF_AUTOWALK || (roamEnabled && isLocked()))) {
     const jumpHeld = keys.jump;
     keys.jump = keys.jump || jumpQueued;
     keys.jumpPressed = jumpQueued;
@@ -1854,6 +1947,8 @@ updaters.push((dt) => {
   }
   recycleChunks();
   updateTextureStreaming();
+  if (!focusState && !plaqueSession && (PERF_AUTOWALK || isLocked())) horrorEnding?.advance();
+  horrorEnding?.update(dt);
 });
 
 /* ============================================================
@@ -2093,6 +2188,7 @@ canvas.addEventListener('click', (e) => {
 });
 
 function inspectArtwork() {
+  if (horrorEnding?.active) return;
   if (!isLocked()) return;
   if (focusState) { unfocus(); return; }
   const hit = getAimedArtworkHit();
@@ -2195,6 +2291,7 @@ async function boot() {
   fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
   bloomOcclusion = createMuseumBloomOcclusion(scene);
   try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
+  if (window.eytleHorror?.isActive()) museumHorror.restore();
   await prewarmScene();
   if (contextLost) return;
   startLoop();        // render the hall behind the translucent start overlay

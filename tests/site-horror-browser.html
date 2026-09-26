@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Site horror local verification</title><script src="../js/site-horror-state.js?v=site-horror-20260926"></script></head>
+<body><h1>Local theme verification</h1><p>Development harness only; excluded from deployment.</p>
+<button id="activate">Activate and visit home</button><button id="normal">Reset this test tab and visit home</button>
+<nav><a href="/">Home</a> <a href="/gallery">Gallery</a> <a href="/mc-calc">Calculator</a></nav>
+<script>
+document.getElementById('activate').onclick=()=>{ window.eytleHorror.activate(); location.assign('/'); };
+document.getElementById('normal').onclick=()=>{ sessionStorage.removeItem('eytle-horror'); location.assign('/'); };
+</script></body></html>

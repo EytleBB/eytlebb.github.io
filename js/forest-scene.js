@@ -86,7 +86,9 @@
     canvas.classList.remove('ready');
     canvas.hidden = true;
     if (frameId) cancelAnimationFrame(frameId);
+    if (scrollFrame) cancelAnimationFrame(scrollFrame);
     frameId = 0;
+    scrollFrame = 0;
     lastPaint = 0;
   }
 
@@ -155,7 +157,7 @@
   }
 
   function canAnimate() {
-    return !failed && !document.hidden && !reducedMotion.matches && heroVisible
+    return !root.classList.contains('site-horror') && !failed && !document.hidden && !reducedMotion.matches && heroVisible
       && (root.dataset.section || 'about') === 'about';
   }
 
@@ -305,6 +307,7 @@
   if (stage) new MutationObserver(trackHero).observe(stage, { childList: true });
   document.addEventListener('visibilitychange', synchronize);
   window.addEventListener('pageshow', synchronize);
+  window.addEventListener('eytle:horror', synchronize);
   window.addEventListener('pagehide', hideScene);
   window.addEventListener('resize', () => {
     resize();
@@ -312,7 +315,7 @@
   }, { passive: true });
   window.addEventListener('scroll', () => {
     // IntersectionObserver handles current browsers without scroll layout reads.
-    if (heroObserver || scrollFrame || !hero) return;
+    if (root.classList.contains('site-horror') || heroObserver || scrollFrame || !hero) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = 0;
       const bounds = hero.getBoundingClientRect();

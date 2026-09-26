@@ -8,7 +8,9 @@ import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './
 export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, ceilingY, springY, chunkLength, mobile = false }) {
   const width = halfWidth * 2;
   const materials = {};
-  let reflection;
+  let reflection, floorGroup, matteFloor;
+  let reflectionsEnabled = true;
+  let blackout = false, normalEmitters = null;
   const chunkMeshes = new Map();
   const luminous = new Set();
 
@@ -195,13 +197,14 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       sourceX: {value: LIGHTING_LAYOUT.sourceX},
       poolRadius: {value: LIGHTING_LAYOUT.poolRadius},
       lightHeight: {value: LIGHTING_LAYOUT.lensY - LIGHTING_LAYOUT.floorY},
+      poolStrength: {value: 1},
     },
     vertexShader: `uniform mat4 textureMatrix; varying vec4 vReflection; varying vec3 vWorld;
       void main() { vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
         vReflection = textureMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `uniform sampler2D tDiffuse;
-      uniform float stationSpacing, stationOffset, sourceX, poolRadius, lightHeight;
+      uniform float stationSpacing, stationOffset, sourceX, poolRadius, lightHeight, poolStrength;
       varying vec4 vReflection; varying vec3 vWorld;
       float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       // Box-filter thin inlays/seams: subpixel lines lose coverage instead of
@@ -238,7 +241,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         float softPool = exp(-3.5*normalizedRadius*normalizedRadius)
           * (1.0-smoothstep(0.8,1.0,normalizedRadius));
         float incidence = lightHeight/sqrt(lightHeight*lightHeight+radialDistance*radialDistance);
-        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0);
+        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0)*poolStrength;
         float distanceFade = smoothstep(32.0,95.0,distance(cameraPosition,vWorld));
         result = mix(result,vec3(0.007,0.014,0.019),distanceFade);
         gl_FragColor = vec4(result,1.0);
@@ -247,6 +250,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
 
   function makeFloor(length) {
     const group = new THREE.Group();
+    floorGroup = group;
     reflection = new Reflector(new THREE.PlaneGeometry(width, length), {
       clipBias: 0.003, textureWidth: 1, textureHeight: 1,
       multisample: mobile ? 0 : Math.min(4, renderer.capabilities.maxSamples),
@@ -265,7 +269,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     reflection.material.toneMapped = false;
     group.add(reflection);
     scene.add(group);
-    resize();
+    setReflectionsEnabled(reflectionsEnabled);
     return group;
   }
 
@@ -277,7 +281,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     return group;
   }
   function resize() {
-    if (!reflection) return;
+    if (!reflection || !reflectionsEnabled) return;
     // Give enlarged floor details enough samples, while bounding the secondary
     // view instead of allocating another native 4K/HiDPI scene.
     const ratio = Math.min(renderer.getPixelRatio(), (mobile ? 768 : 1536) / Math.max(window.innerWidth, window.innerHeight));
@@ -285,5 +289,45 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     const h = Math.max(240, Math.round(window.innerHeight * ratio));
     reflection.getRenderTarget().setSize(w, h);
   }
-  return { materials, attachChunk, makeFloor, makeRearWall, resize };
+  function setBlackout(value) {
+    blackout = Boolean(value);
+    if (!normalEmitters) normalEmitters = [materials.light.color.clone(), materials.coolLight.color.clone()];
+    for (const [index, material] of [materials.light, materials.coolLight].entries()) {
+      if (blackout) material.color.setRGB(0, 0, 0);
+      else material.color.copy(normalEmitters[index]);
+    }
+    syncFloorPools();
+  }
+  function syncFloorPools() {
+    const strength = blackout || !reflectionsEnabled ? 0 : 1;
+    floorShader.uniforms.poolStrength.value = strength;
+    if (reflection) reflection.material.uniforms.poolStrength.value = strength;
+  }
+  function setReflectionsEnabled(value) {
+    reflectionsEnabled = Boolean(value);
+    syncFloorPools();
+    if (!reflection) return;
+    // Hiding Reflector also prevents its onBeforeRender secondary camera pass.
+    reflection.visible = reflectionsEnabled;
+    if (reflectionsEnabled) {
+      if (matteFloor) {
+        matteFloor.removeFromParent();
+        matteFloor.material.dispose();
+        // The plane geometry is shared with Reflector and remains owned by it.
+        matteFloor = null;
+      }
+      resize();
+      return;
+    }
+    if (!matteFloor) {
+      const material = new THREE.MeshLambertMaterial({ color: 0x141318,
+        emissive: 0x19151f, reflectivity: 0, fog: true });
+      matteFloor = new THREE.Mesh(reflection.geometry, material);
+      matteFloor.name = 'Unreflective horror floor';
+      matteFloor.position.copy(reflection.position);
+      matteFloor.rotation.copy(reflection.rotation);
+      floorGroup.add(matteFloor);
+    }
+  }
+  return { materials, attachChunk, makeFloor, makeRearWall, resize, setBlackout, setReflectionsEnabled };
 }

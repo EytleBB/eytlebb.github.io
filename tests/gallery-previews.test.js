@@ -45,6 +45,6 @@ test('3D museum uses preview textures with an original-image fallback', () => {
   assert.match(museum, /let TEXTURE_IMAGES = \[\]/);
   assert.match(museum, /galleryImageSource\(TEXTURE_IMAGES\[i\] \|\| IMAGES\[i\], i\)/);
   assert.match(museum, /INITIAL_TEXTURE_START = 0/);
-  assert.match(museum, /INITIAL_TEXTURE_COUNT = 48/);
+  assert.match(museum, /INITIAL_TEXTURE_COUNT = 56/);
   assert.match(museum, /start \+ i/);
 });

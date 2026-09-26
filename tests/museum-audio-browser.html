@@ -1,0 +1,69 @@
+<!doctype html><meta charset="utf-8"><title>Museum audio checks</title>
+<style>body{background:#142127;color:#eee;font:15px system-ui;padding:24px}button{padding:10px;margin:4px}pre{white-space:pre-wrap}</style>
+<h1>Museum audio checks</h1>
+<button id="check">Check rendered audio</button><button id="play">Play sound sequence</button><button id="drop">Drop four materials</button><button id="stop">Stop</button>
+<pre id="status">Ready</pre>
+<script type="module">
+import { createMuseumSounds } from '../js/museum-sounds.js';
+import { createMuseumPhysics } from '../js/museum-physics.js?v=audio-20260926';
+const status = document.querySelector('#status');
+const position = { x: 0, y: 1.65, z: 0 };
+const impact = (kind, x=1, z=-2) => ({kind, mass:kind==='artwork'?3:.5, speed:5, position:{x,y:.006,z}});
+const assert = (ok,label) => { if(!ok) throw Error(label); };
+function metrics(buffer) {
+  let peak=0,energy=0;const channels=[];
+  for(let c=0;c<buffer.numberOfChannels;c++) {
+    const data=buffer.getChannelData(c);let sum=0;
+    for(const value of data){assert(Number.isFinite(value),'non-finite sample');peak=Math.max(peak,Math.abs(value));sum+=value*value;}
+    channels.push(Math.sqrt(sum/data.length));energy+=sum;
+  }
+  return {peak,rms:Math.sqrt(energy/(buffer.length*buffer.numberOfChannels)),channels};
+}
+async function render(kind,{x=1,z=-2,count=1,mute=false}={}) {
+  const offline = new OfflineAudioContext(2,48000,48000);
+  offline.listener.positionY.value=position.y;
+  // Offline graphs are scheduled before rendering; only its state gate is adapted.
+  const context=new Proxy(offline,{get(target,key){if(key==='state')return 'running';const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});
+  const sounds=createMuseumSounds({context,output:offline.destination,listenerPosition:position});
+  sounds.setEnabled(true);
+  let accepted=0;
+  for(let i=0;i<count;i++) accepted+=Number(kind==='light'||kind==='heavy'?sounds.swing(kind):sounds.floorImpact(impact(kind,x,z)));
+  if(mute)sounds.setEnabled(false);
+  const result=metrics(await offline.startRendering());sounds.dispose();return {...result,accepted};
+}
+document.querySelector('#check').onclick=async()=>{
+  try{
+    status.textContent='Rendering…';const rows=[];
+    for(const kind of ['light','heavy','artwork','lamp','plaque','title']) {
+      const result=await render(kind);assert(result.rms>.005&&result.peak<.95,kind+' signal');
+      rows.push(kind+': peak '+result.peak.toFixed(3)+', RMS '+result.rms.toFixed(4));
+    }
+    const near=await render('lamp',{x:2,z:-2}),far=await render('lamp',{x:2,z:-20});
+    assert(near.rms>far.rms*3,'distance attenuation');
+    const left=await render('lamp',{x:-3,z:-2}),right=await render('lamp',{x:3,z:-2});
+    assert(left.channels[0]>left.channels[1]*1.15,'left positioning');
+    assert(right.channels[1]>right.channels[0]*1.15,'right positioning');
+    const pile=await render('artwork',{count:64});assert(pile.accepted===14&&pile.peak<.95,'pile limiter: '+JSON.stringify(pile));
+    const muted=await render('heavy',{mute:true});assert(muted.peak===0,'pause cancels sound');
+    status.textContent='PASS: six sounds, stereo position, distance, 64-impact limit, pause cleanup.\n'+rows.join('\n')+'\nPile peak: '+pile.peak.toFixed(3);
+  }catch(error){status.textContent='FAIL: '+error.stack;}
+};
+let context,sounds,physics,timer=0,raf=0;
+async function start(){if(!context){context=new AudioContext();context.listener.positionY.value=position.y;sounds=createMuseumSounds({context,output:context.destination,listenerPosition:position});}await context.resume();sounds.setEnabled(true);}
+function stop(){clearTimeout(timer);cancelAnimationFrame(raf);physics?.dispose();sounds?.setEnabled(false);}
+document.querySelector('#stop').onclick=()=>{stop();status.textContent='Stopped';};
+document.querySelector('#play').onclick=async()=>{
+  stop();await start();const kinds=['light','heavy','artwork','lamp','plaque','title'];let index=0;
+  function play(){const kind=kinds[index++];if(!kind){status.textContent='Sequence complete';return;}status.textContent='Playing '+kind;if(index<3)sounds.swing(kind);else sounds.floorImpact(impact(kind));timer=setTimeout(play,900);}play();
+};
+document.querySelector('#drop').onclick=async()=>{
+  stop();await start();let hits=0;
+  physics=createMuseumPhysics({onFloorImpact(event){hits++;sounds.floorImpact(event);status.textContent='Actual floor impacts: '+hits+' — '+event.kind+' at '+event.speed.toFixed(2)+' m/s';}});
+  for(const [i,kind] of ['artwork','lamp','plaque','title'].entries()){
+    const e=physics.add({owner:i,kind,position:{x:(i-1.5)*1.2,y:1.7+i*.22,z:-2},quaternion:{x:0,y:0,z:0,w:1},halfExtents:kind==='artwork'?[.45,.55,.06]:[.1,.15,.05],mass:kind==='artwork'?3:.5});
+    e.body.angularVelocity.set(.8,.2,0);
+  }
+  let previous=performance.now();function frame(now){physics.update(Math.min(.05,(now-previous)/1000),0);previous=now;if(physics.entities.some(e=>e.body.sleepState!==2))raf=requestAnimationFrame(frame);else status.textContent+='\nSettled; no repeated resting sound.';}raf=requestAnimationFrame(frame);
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+</script>
