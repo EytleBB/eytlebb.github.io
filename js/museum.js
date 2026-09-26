@@ -394,9 +394,9 @@ scene.fog = new THREE.Fog(0x09151b, 18, 82);
 const _pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = _pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 _pmrem.dispose();
-scene.environmentIntensity = 0.32;
-scene.add(new THREE.AmbientLight(0x92abb3, 0.23));
-scene.add(new THREE.HemisphereLight(0xc4d7de, 0x192a2d, 0.75));
+scene.environmentIntensity = 0.25;
+scene.add(new THREE.AmbientLight(0x92abb3, 0.11));
+scene.add(new THREE.HemisphereLight(0xb9cfda, 0x16252b, 0.42));
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 88);
 camera.position.set(0, EYE_Y, SPAWN_Z);
@@ -606,7 +606,7 @@ const mats = {
   pictureFrame: architecture.materials.frame,
   pictureLight: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.5, 2.1, 1.45) }),
   pictureLightWash: new THREE.MeshBasicMaterial({
-    color: 0xffebcc, map: makeSpotWashTexture(), transparent: true, opacity: 0.22,
+    color: 0xffebcc, map: makeSpotWashTexture(), transparent: true, opacity: 0.14,
     depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   }),
 };
@@ -1338,7 +1338,7 @@ function makePictureLight(parent, side) {
   const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 10), mats.frame);
   group.add(knuckle);
 
-  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.22, 24), mats.frame);
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.22, 24), architecture.materials.projector);
   group.add(head);
 
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.086, 0.01, 8, 24), mats.frame);
@@ -1455,23 +1455,23 @@ function configurePictureSpot(fixture, count, active) {
   if (!active) {
     fixture.spotIntensity = 0;
     fixture.spotDistance = 0.01;
-    fixture.spotAngle = Math.PI / 6.5;
-    fixture.spotPenumbra = 0.5;
+    fixture.spotAngle = Math.PI / 7.5;
+    fixture.spotPenumbra = 0.7;
     fixture.spotDecay = 2;
     return;
   }
   if (count > 1) {
-    fixture.spotIntensity = 17;
+    fixture.spotIntensity = 13.5;
     fixture.spotDistance = 8.5;
-    fixture.spotAngle = Math.PI / 6.0;
-    fixture.spotPenumbra = 0.62;
+    fixture.spotAngle = Math.PI / 7.5;
+    fixture.spotPenumbra = 0.78;
     fixture.spotDecay = 2;
     return;
   }
-  fixture.spotIntensity = 27;
+  fixture.spotIntensity = 22;
   fixture.spotDistance = 9;
-  fixture.spotAngle = Math.PI / 6.5;
-  fixture.spotPenumbra = 0.5;
+  fixture.spotAngle = Math.PI / 7.5;
+  fixture.spotPenumbra = 0.7;
   fixture.spotDecay = 2;
 }
 
@@ -1490,9 +1490,10 @@ function positionPictureLightFixture(slot, fixture, artH, zOffset, count, active
   const baseDepth = LAMP_BASE_DEPTH * size;
   const wallPoint = new THREE.Vector3(wallSurfaceX + inward.x * (baseDepth / 2), y, z);
   const armRootOffset = count > 1 ? baseDepth / 2 : 0.03 * size;
-  const jointPoint = new THREE.Vector3(x + (-side) * 0.14 * armReach, y - 0.02 * size, z);
-  const headPoint = new THREE.Vector3(x + (-side) * 0.32 * armReach, y - 0.055 * size, z);
-  const targetPoint = new THREE.Vector3(targetX + targetWallBias, ART_Y + 0.1, slot.frame.position.z + zOffset * 0.9);
+  const jointPoint = new THREE.Vector3(x + (-side) * 0.23 * armReach, y - 0.02 * size, z);
+  // A deeper throw and lower aim put the soft beam on the art, clearing the wall above.
+  const headPoint = new THREE.Vector3(x + (-side) * 0.54 * armReach, y - 0.055 * size, z);
+  const targetPoint = new THREE.Vector3(targetX + targetWallBias, ART_Y - 0.06, slot.frame.position.z + zOffset * 0.9);
   const aimDir = targetPoint.clone().sub(headPoint).normalize();
 
   fixture.group.visible = active;

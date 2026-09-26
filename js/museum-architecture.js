@@ -19,10 +19,13 @@ export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, c
       emissive: color, emissiveIntensity: glow });
     material.onBeforeCompile = shader => {
       shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
-varying vec3 vStoneWorld;`).replace('#include <begin_vertex>', `#include <begin_vertex>
-vStoneWorld = (modelMatrix * vec4(position, 1.0)).xyz;`);
+varying vec3 vStoneWorld;
+varying vec3 vStoneLocal;`).replace('#include <begin_vertex>', `#include <begin_vertex>
+vStoneWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+vStoneLocal = position;`);
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
 varying vec3 vStoneWorld;
+varying vec3 vStoneLocal;
 float stoneHash(vec3 p) { return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
 float stoneNoise(vec3 p) {
   vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -30,30 +33,66 @@ float stoneNoise(vec3 p) {
     mix(mix(stoneHash(i+vec3(0,0,1)),stoneHash(i+vec3(1,0,1)),f.x),mix(stoneHash(i+vec3(0,1,1)),stoneHash(i+vec3(1,1,1)),f.x),f.y),f.z);
 }`).replace('#include <color_fragment>', `#include <color_fragment>
 float cloud = stoneNoise(vStoneWorld * 2.4);
-float mineral = stoneNoise(vStoneWorld * 27.0);
+vec3 mineralFootprint = fwidth(vStoneWorld * 27.0);
+float mineralVisibility = 1.0 - smoothstep(0.4, 1.2,
+  max(max(mineralFootprint.x, mineralFootprint.y), mineralFootprint.z));
+float rawMineral = stoneNoise(vStoneWorld * 27.0);
+float mineral = mix(0.5, rawMineral, mineralVisibility);
 // Fade grains smaller than a pixel to their mean instead of sampling white noise.
 vec3 grainFootprint = fwidth(vStoneWorld * 460.0);
 float grainVisibility = 1.0-smoothstep(0.5,1.5,max(max(grainFootprint.x,grainFootprint.y),grainFootprint.z));
 float grain = mix(0.5,stoneHash(floor(vStoneWorld * 460.0)),grainVisibility);
-diffuseColor.rgb *= 0.88 + cloud * 0.13 + mineral * 0.055 + grain * 0.025;
+diffuseColor.rgb *= 0.84 + cloud * 0.20 + mineral * 0.065 + grain * 0.025;
 float footShade = smoothstep(0.02, 0.72, vStoneWorld.y);
-diffuseColor.rgb *= mix(0.48, 1.0, footShade);
+diffuseColor.rgb *= mix(0.42, 1.0, footShade);
+// Contact shading belongs to the wall/vault behind each rib, not its front face.
+float ribDistance = abs(mod(vStoneLocal.z + 3.5, 7.0) - 3.5);
+float shellRadius = length(vec2(vStoneWorld.x, max(0.0, vStoneWorld.y - ${springY.toFixed(4)})));
+float shellContact = smoothstep(${(halfWidth - 0.05).toFixed(4)}, ${halfWidth.toFixed(4)}, shellRadius);
+float ribOcclusion = exp(-max(ribDistance - 0.155, 0.0) * 8.0) * shellContact;
+diffuseColor.rgb *= 1.0 - ribOcclusion * 0.34;
+`).replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor * (0.92 + cloud * 0.10 + mineral * 0.10), 0.2, 1.0);
+`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+// Sub-millimetre mineral relief uses derivatives of the same band-limited stone.
+// A world-space height field keeps the relief stable across chunks and mirrors.
+// Apply footprint attenuation after differentiating: derivatives of fwidth
+// would be undefined higher-order derivatives on some mobile GPUs.
+float reliefDx = dFdx(cloud) * 0.0014 + dFdx(rawMineral) * 0.0007 * mineralVisibility;
+float reliefDy = dFdy(cloud) * 0.0014 + dFdy(rawMineral) * 0.0007 * mineralVisibility;
+vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+vec3 reliefX = cross(dpdy, normal), reliefY = cross(normal, dpdx);
+float determinant = dot(dpdx, reliefX);
+vec3 reliefGradient = sign(determinant) * (reliefDx * reliefX + reliefDy * reliefY);
+normal = normalize(max(abs(determinant), 0.00000001) * normal - reliefGradient);
+`).replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+// Low-energy indirect spill from the existing rib and skirting light channels.
+// Analytic architectural bounce avoids adding lights/shadow maps per hall bay.
+float channelReach = smoothstep(${(halfWidth - 0.52).toFixed(4)}, ${(halfWidth - 0.22).toFixed(4)}, shellRadius);
+float ribBounce = exp(-ribDistance * 4.2) * channelReach;
+float footBounce = exp(-abs(vStoneWorld.y - 0.21) * 8.0)
+  * smoothstep(${(halfWidth - 0.7).toFixed(4)}, ${halfWidth.toFixed(4)}, abs(vStoneWorld.x));
+reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(1.0, 0.69, 0.38)
+  * (ribBounce * 0.22 + footBounce * 0.14);
 `);
     };
-    material.customProgramCacheKey = () => 'nocturne-mineral-v2';
+    material.customProgramCacheKey = () => `nocturne-mineral-relief-v3:${halfWidth}:${springY}`;
     return material;
   }
-  materials.wall = stone(0x142d32, 0.86, 0.018);
-  materials.panel = stone(0x1f3a3c, 0.82, 0.024);
-  materials.ivory = stone(0xb5b3a6, 0.66, 0.035);
+  materials.wall = stone(0x142d32, 0.86, 0.008);
+  materials.panel = stone(0x203b3d, 0.82, 0.012);
+  materials.ivory = stone(0x96978b, 0.68, 0.006);
   materials.dark = stone(0x101c20, 0.72);
-  materials.ceiling = stone(0x182b30, 0.78, 0.035);
+  materials.ceiling = stone(0x14272d, 0.82, 0.009);
   materials.bronze = new THREE.MeshPhysicalMaterial({ color: 0xb8a078, metalness: 0.88,
     roughness: 0.3, anisotropy: 0.45, anisotropyRotation: Math.PI / 2, envMapIntensity: 1.2 });
   materials.frame = new THREE.MeshPhysicalMaterial({ color: 0xb5a58b, metalness: 0.82,
     roughness: 0.27, clearcoat: 0.18, envMapIntensity: 1.35 });
-  materials.light = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.1, 1.58, 0.91) });
-  materials.coolLight = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.47, 0.72, 0.78) });
+  // One shared satin housing material: fixture detail remains merged per chunk.
+  materials.projector = new THREE.MeshPhysicalMaterial({ color: 0x252a29,
+    metalness: 0.82, roughness: 0.34, clearcoat: 0.12, envMapIntensity: 1.25 });
+  materials.light = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.85, 1.35, 0.75) });
+  materials.coolLight = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.28, 0.43, 0.48) });
   luminous.add(materials.light); luminous.add(materials.coolLight);
 
   // A centered light channel follows the pier and the arch intrados.
@@ -71,7 +110,11 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       shape.lineTo(Math.cos(a) * (radius - thickness), centerY + Math.sin(a) * (radius - thickness));
     }
     shape.closePath();
-    return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1, curveSegments: 64 }).translate(0, 0, z - depth / 2);
+    // Only the stone rib has a 10 mm bevel; the precision light channel stays crisp.
+    const bevel = thickness > 0.2 ? 0.01 : 0;
+    return new THREE.ExtrudeGeometry(shape, { depth: depth - bevel * 2,
+      bevelEnabled: bevel > 0, bevelSegments: 2, bevelSize: bevel,
+      bevelThickness: bevel, steps: 1, curveSegments: 64 }).translate(0, 0, z - depth / 2 + bevel);
   }
   function shellGeometry() {
     const points = [], normals = [], uv = [], indices = [];
@@ -95,7 +138,17 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       buckets.get(material).push(geometry);
     }
     function box(sx, sy, sz, x, y, z, material) {
-      add(new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z), material);
+      if (material === materials.ivory) {
+        const b = 0.01, shape = new THREE.Shape();
+        const hw = sx / 2 - b, hh = sy / 2 - b;
+        shape.moveTo(-hw, -hh); shape.lineTo(hw, -hh);
+        shape.lineTo(hw, hh); shape.lineTo(-hw, hh); shape.closePath();
+        add(new THREE.ExtrudeGeometry(shape, { depth: sz - b * 2, bevelEnabled: true,
+          bevelSize: b, bevelThickness: b, bevelSegments: 2, steps: 1 })
+          .translate(x, y, z - sz / 2 + b), material);
+      } else {
+        add(new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z), material);
+      }
     }
     add(shellGeometry(), materials.ceiling);
     for (const side of [-1, 1]) {
@@ -147,24 +200,45 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         box(0.10, 0.027, 3.65, x, y - 0.017, z - 3.5, materials.coolLight);
       }
     }
-    // Downward-facing ceiling lamps share world stations with their soft floor pools.
+    // A recessed optical cartridge and stepped cooling body make the downlights
+    // read as real fittings. Every part joins shared material buckets, so adding
+    // machining detail does not create a draw call for each repeated fixture.
     const lighting = LIGHTING_LAYOUT;
+    const housingProfile = [
+      [0.103, 0.058], [0.103, -0.025], [0.142, -0.025],
+      [0.158, -0.008], [0.162, 0.026], [0.148, 0.216],
+      [0.123, 0.292], [0.095, 0.321], [0, 0.321],
+    ].map(([radius, y]) => new THREE.Vector2(radius, y));
     for (const z of projectorStationsInChunk(originZ, chunkLength)) {
       const x = lighting.sourceX;
       const lensY = lighting.lensY;
       const canopyY = ceilingY - 0.025;
-      add(new THREE.CylinderGeometry(0.19, 0.19, 0.045, 32).translate(x, canopyY, z), materials.dark);
-      const stemBottom = lensY + 0.37;
-      const stemHeight = canopyY - stemBottom;
-      add(new THREE.CylinderGeometry(0.018, 0.018, stemHeight, 12)
-        .translate(x, stemBottom + stemHeight / 2, z), materials.bronze);
-      add(new THREE.CylinderGeometry(0.115, 0.15, 0.29, 32)
-        .translate(x, lensY + 0.205, z), materials.bronze);
-      add(new THREE.CylinderGeometry(0.13, 0.13, 0.065, 32, 1, true)
-        .translate(x, lensY + 0.03, z), materials.dark);
-      add(new THREE.TorusGeometry(0.112, 0.012, 8, 32).rotateX(Math.PI / 2)
-        .translate(x, lensY - 0.003, z), materials.bronze);
-      // Finite luminous aperture, facing down towards its own circular pool.
+      // Thin champagne reveal between the ceiling canopy and its dark cover.
+      add(new THREE.CylinderGeometry(0.185, 0.185, 0.035, 32)
+        .translate(x, canopyY, z), materials.projector);
+      add(new THREE.CylinderGeometry(0.152, 0.159, 0.026, 32)
+        .translate(x, canopyY - 0.029, z), materials.bronze);
+      const stemBottom = lensY + 0.345;
+      const stemTop = canopyY - 0.04;
+      add(new THREE.CylinderGeometry(0.017, 0.017, stemTop - stemBottom, 12)
+        .translate(x, (stemBottom + stemTop) / 2, z), materials.projector);
+      add(new THREE.CylinderGeometry(0.044, 0.047, 0.065, 24)
+        .translate(x, lensY + 0.332, z), materials.bronze);
+      add(new THREE.LatheGeometry(housingProfile, 40)
+        .translate(x, lensY, z), materials.projector);
+      // Three restrained ribs catch highlights without a noisy serrated outline.
+      for (const [y, radius] of [[0.208, 0.151], [0.236, 0.143], [0.264, 0.133]]) {
+        add(new THREE.CylinderGeometry(radius, radius, 0.009, 32)
+          .translate(x, lensY + y, z), materials.projector);
+      }
+      add(new THREE.TorusGeometry(0.147, 0.008, 8, 40).rotateX(Math.PI / 2)
+        .translate(x, lensY - 0.013, z), materials.bronze);
+      // A dark anti-glare throat surrounds the warm lens, 25 mm behind the lip.
+      // Keep the actual emitter center and downward normal on the shared layout.
+      add(new THREE.CircleGeometry(0.103, 40).rotateX(Math.PI / 2)
+        .translate(x, lensY + 0.006, z), materials.projector);
+      add(new THREE.TorusGeometry(lighting.apertureRadius + 0.005, 0.003, 6, 40)
+        .rotateX(Math.PI / 2).translate(x, lensY + 0.002, z), materials.bronze);
       add(new THREE.CircleGeometry(lighting.apertureRadius, 40).rotateX(Math.PI / 2)
         .translate(x, lensY, z), materials.light);
     }
@@ -220,10 +294,10 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         float rough = (hash(floor(vWorld.xz*210.0)) - 0.5) * grainVisibility;
         // Filter minified reflections isotropically; the old diagonal 3-tap blur
         // smeared near detail while leaving stair steps on the opposite diagonal.
-        vec3 reflected = texture2D(tDiffuse, uv, 0.35).rgb;
+        vec3 reflected = texture2D(tDiffuse, uv, 1.05).rgb;
         vec3 view = normalize(cameraPosition - vWorld);
-        float fresnel = 0.26 + 0.4 * pow(1.0-max(view.y,0.0),3.0);
-        vec3 base = vec3(0.016,0.025,0.028) * (0.95 + rough*0.08);
+        float fresnel = 0.14 + 0.36 * pow(1.0-max(view.y,0.0),3.0);
+        vec3 base = vec3(0.012,0.020,0.023) * (0.95 + rough*0.12);
         vec3 result = mix(base, reflected, fresnel);
         float seamX = line(mod(vWorld.x+0.7,1.4)-0.7,0.003);
         float seamZ = line(mod(vWorld.z+1.75,3.5)-1.75,0.004);
@@ -241,7 +315,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         float softPool = exp(-3.5*normalizedRadius*normalizedRadius)
           * (1.0-smoothstep(0.8,1.0,normalizedRadius));
         float incidence = lightHeight/sqrt(lightHeight*lightHeight+radialDistance*radialDistance);
-        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0)*poolStrength;
+        result += vec3(1.0,0.82,0.57)*0.072*softPool*pow(incidence,3.0)*poolStrength;
         float distanceFade = smoothstep(32.0,95.0,distance(cameraPosition,vWorld));
         result = mix(result,vec3(0.007,0.014,0.019),distanceFade);
         gl_FragColor = vec4(result,1.0);

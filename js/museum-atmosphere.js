@@ -134,7 +134,7 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
           float normalizedRadius = length(samplePoint.xz) / radius;
           float density = exp(-3.5 * normalizedRadius * normalizedRadius)
             * (1.0 - smoothstep(0.8, 1.0, normalizedRadius));
-          float sourceFalloff = 0.30 / max(radius, 0.12);
+          float sourceFalloff = 0.34 / max(radius, 0.12);
           vec3 worldSample = samplePoint + vec3(uSourceX, uLensY, vSourceZ);
           // Fade to zero before either proxy cap, rather than exposing a clipped
           // luminous surface. No camera/time-dependent noise in the ray samples.
@@ -143,8 +143,8 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
           float fogFade = 1.0 - smoothstep(50.0, 77.0, distance(cameraPosition, worldSample));
           integrated += density * sourceFalloff * capFade * fogFade * stride;
         }
-        float alpha = 1.0 - exp(-integrated * 0.021);
-        gl_FragColor = vec4(1.0, 0.865, 0.665, min(alpha, 0.085));
+        float alpha = 1.0 - exp(-integrated * 0.045);
+        gl_FragColor = vec4(1.0, 0.82, 0.57, min(alpha, 0.13));
       }
     `,
     transparent: true,
@@ -232,7 +232,7 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
         float r = length(gl_PointCoord - 0.5) * 2.0;
         if (r > 1.0) discard;
         float softDisc = exp(-r * r * 3.5) * (1.0 - smoothstep(0.55, 1.0, r));
-        gl_FragColor = vec4(1.0, 0.865, 0.665, softDisc * vAlpha);
+        gl_FragColor = vec4(1.0, 0.82, 0.57, softDisc * vAlpha);
       }
     `,
     transparent: true,
