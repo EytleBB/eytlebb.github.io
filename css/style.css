@@ -137,25 +137,21 @@ html:not([data-section="about"]) .stage { padding:72px var(--gutter) 100px; max-
 .plog-card .more:hover, .home-archive-link:hover { color:var(--amber); }
 .home-archive-link { margin-top:8px; color:var(--dim); }
 .col-right { min-width:0; border-top:1px solid var(--line); padding-top:28px; }
-.gallery-heading { margin-bottom:12px; }
-.gallery-description { margin:0 0 16px; color:var(--dim); font-size:13px; line-height:1.8; }
+.gallery-heading { margin-bottom:26px; }
 .gallery-heading .eyebrow { margin-bottom:12px; }
 .gallery-heading h2 { font:400 29px/1.4 var(--disp); letter-spacing:.02em; text-wrap:balance; }
 .gallery-mark { flex-shrink:0; font-size:24px; font-weight:400; color:var(--amber); }
-.gal { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:20px 18px; position:relative; }
-.gal-item { display:flex; flex-direction:column; align-items:stretch; min-width:0; width:100%; padding:0; border:0; background:none; color:var(--dim); text-align:left; cursor:pointer; }
+/* Unframed artwork keeps its own proportions; whitespace separates the pieces. */
+.gal { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:center; gap:24px 20px; position:relative; }
+.gal-item { display:block; justify-self:center; min-width:0; width:fit-content; max-width:100%; padding:0; border:0; background:none; cursor:zoom-in; }
 .gal-item:first-child, .gal-placeholder:first-child { grid-column:1/-1; }
-.gal-image-frame { display:flex; align-items:center; justify-content:center; width:100%; padding:12px; background:var(--ink-rise); overflow:hidden; transition:background .25s; }
-.gal-item:first-child .gal-image-frame { padding:14px; }
-.gal-item img { display:block; width:100%; height:auto; max-height:180px; object-fit:contain; transition:opacity .25s; }
-.gal-item:first-child img { max-height:270px; }
+.gal-item img { display:block; width:auto; height:auto; max-width:100%; max-height:180px; transition:opacity .25s; }
+.gal-item:first-child img { max-height:300px; }
 .gal-item:hover img { opacity:.88; }
-.gal-caption { display:flex; align-items:baseline; gap:12px; padding-top:12px; font-size:11px; line-height:1.8; letter-spacing:.035em; }
-.gal-placeholder { padding:12px; background:var(--ink-rise); opacity:.5; }
+.gal-placeholder { justify-self:center; width:70%; background:var(--line); opacity:.5; }
 .gal-placeholder::before { content:''; display:block; aspect-ratio:3/4; max-height:180px; }
-.gal-placeholder::after { content:''; display:block; height:32px; }
-.gal-placeholder:first-child { padding:14px; }
-.gal-placeholder:first-child::before { aspect-ratio:4/3; max-height:270px; }
+.gal-placeholder:first-child { width:100%; }
+.gal-placeholder:first-child::before { aspect-ratio:4/3; max-height:300px; }
 .gallery-loading-label { position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:12px; }
 .gallery-foot { display:flex; align-items:center; justify-content:space-between; gap:20px; border-top:1px solid var(--line); margin-top:25px; padding-top:15px; color:var(--faint); font-size:11px; line-height:1.7; }
 .gallery-foot button { display:inline-flex; align-items:center; gap:15px; min-height:44px; border:0; padding:8px 0; background:none; color:var(--parchment); cursor:pointer; font-size:12px; }
@@ -547,10 +543,6 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
   .grid2 { grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr); gap:34px; }
   .gallery-heading h2 { font-size:26px; }
   .gal { gap:20px 16px; }
-  .gal-image-frame { padding:10px; }
-  .gal-placeholder { padding:10px; }
-  .gal-item:first-child .gal-image-frame { padding:14px; }
-  .gal-placeholder:first-child { padding:14px; }
   .gallery-foot { gap:12px; }
   .message-card { padding:26px 0 0; }
 }
@@ -590,14 +582,10 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
   .plog-card .txt { -webkit-line-clamp:4; }
   .col-right { padding-top:26px; }
   .gal { gap:22px 14px; }
-  .gal-image-frame { padding:10px; }
-  .gal-placeholder { padding:10px; }
-  .gal-item:first-child .gal-image-frame { padding:14px; }
-  .gal-placeholder:first-child { padding:14px; }
   .gal-item img { max-height:240px; }
   .gal-placeholder::before { max-height:240px; }
-  .gal-placeholder:first-child::before { max-height:none; }
-  .gal-item:first-child img { max-height:none; }
+  .gal-placeholder:first-child::before { max-height:440px; }
+  .gal-item:first-child img { max-height:min(440px,75svh); }
   .gallery-heading { margin-bottom:23px; }
   .gallery-heading h2 { font-size:28px; }
   .gallery-foot { gap:10px; margin-top:22px; padding-top:12px; }

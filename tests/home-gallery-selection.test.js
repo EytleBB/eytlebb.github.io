@@ -81,21 +81,19 @@ test('small and empty galleries return every available image without duplicates'
   }
 });
 
-test('three static previews retain metadata, gallery numbering and the correct lightbox targets', async () => {
+test('three uncaptioned previews retain metadata, accessible labels and the correct lightbox targets', async () => {
   for (const lang of ['zh', 'en', 'ko']) {
     const { context, gal, images, buttons, opened } = gallery(undefined, lang);
     await context.renderHomeGallery(1);
     assert.equal((gal.innerHTML.match(/class="gal-item"/g) || []).length, 3);
     assert.equal((gal.innerHTML.match(/loading="lazy" decoding="async"/g) || []).length, 3);
-    assert.doesNotMatch(gal.innerHTML, /gal-track|gal-set|images\/gallery\//);
+    assert.doesNotMatch(gal.innerHTML, /gal-track|gal-set|gal-caption|images\/gallery\//);
     assert.equal(gal.attributes['aria-busy'], 'false');
     for (const index of [3, 2, 1]) {
       assert.ok(gal.innerHTML.includes(images[index].preview));
       assert.ok(gal.innerHTML.includes(`width="${images[index].width}" height="${images[index].height}"`));
       const number = index + 1;
-      const caption = { zh: `图片 ${number}`, en: `Picture ${number}`, ko: `이미지 ${number}` }[lang];
       const label = { zh: `查看图片 ${number}`, en: `View picture ${number}`, ko: `이미지 ${number} 보기` }[lang];
-      assert.ok(gal.innerHTML.includes(`<span class="gal-caption">${caption}</span>`));
       assert.ok(gal.innerHTML.includes(`aria-label="${label}"`));
     }
     buttons.forEach(button => button.click());
