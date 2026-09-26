@@ -77,3 +77,70 @@ test('disposing during decode cannot start a late sound; a fresh visit starts it
   for (let n=0;n<12;n++) assert.equal(await next.breakObject(), false);
   assert.equal(fresh.sources.length, 0);next.dispose();
 });
+
+test('finale uses the cached clip at unity without fetching again or advancing the destruction count', async () => {
+  const { createMuseumBreakSound } = await ready, h = harness();
+  const sound = createMuseumBreakSound(h);
+  sound.setEnabled(true);
+  assert.equal(sound.finale(), false, 'an uncached ending never queues a late clip');
+  assert.equal(h.fetches, 0);
+  assert.equal(await sound.breakObject(), false);
+  assert.equal(sound.finale(), true);
+  assert.equal(h.sources.length, 1);
+  assert.equal(h.sources[0].buffer, h.buffer);
+  assert.equal(h.sources[0].starts, 1);
+  assert.equal(h.sources[0].playbackRate.value, 1);
+  assert.equal(h.gains[0].gain.value, 1);
+  assert.equal(h.gains[0].target, h.output);
+  for (let n = 2; n <= 12; n++) assert.equal(await sound.breakObject(), false);
+  assert.equal(h.sources.length, 1, 'finale is not counted as a newly destroyed object');
+  assert.equal(await sound.breakObject(), true);
+  assert.equal(h.sources.length, 2);
+  assert.equal(h.fetches, 1); assert.equal(h.decodes, 1);
+  sound.dispose();
+});
+
+test('finale replaces overlapping break clips and respects pause, suspension and disposal', async () => {
+  const { createMuseumBreakSound } = await ready, h = harness();
+  const sound = createMuseumBreakSound(h);
+  sound.setEnabled(true);
+  for (let n = 1; n <= 16; n++) await sound.breakObject();
+  assert.equal(h.sources.length, 4);
+  assert.equal(sound.finale(), true);
+  assert.equal(h.sources.length, 5);
+  assert.ok(h.sources.slice(0, 4).every(source => source.stops === 1 && source.disconnected));
+  assert.equal(h.sources[4].stops, 0);
+  assert.equal(h.gains.length, 1);
+  sound.setEnabled(false);
+  assert.equal(h.sources[4].stops, 1);
+  assert.equal(sound.finale(), false);
+  sound.setEnabled(true);
+  h.context.state = 'suspended';
+  assert.equal(sound.finale(), false);
+  h.context.state = 'running';
+  assert.equal(h.sources.length, 5, 'resume never replays the ending');
+  assert.equal(sound.finale(), true);
+  sound.dispose();
+  assert.equal(h.sources[5].stops, 1);
+  sound.setEnabled(true);
+  assert.equal(sound.finale(), false);
+  assert.equal(h.sources.length, 6);
+});
+
+test('an ending during decode cancels waiting break requests and never starts a late scream', async () => {
+  const { createMuseumBreakSound } = await ready, h = harness();
+  let finish;
+  h.context.decodeAudioData = () => new Promise(resolve => { finish = resolve; });
+  const sound = createMuseumBreakSound(h);
+  sound.setEnabled(true);
+  const pending = Array.from({ length: 13 }, () => sound.breakObject());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sound.finale(), false, 'decode is still in progress');
+  finish(h.buffer);
+  assert.deepEqual(await Promise.all(pending), Array(13).fill(false));
+  assert.equal(h.sources.length, 0, 'finishing decode does not play any previously queued hit');
+  sound.setEnabled(false); sound.setEnabled(true);
+  assert.equal(h.sources.length, 0);
+  assert.equal(sound.finale(), true, 'an explicit later call may use the now-cached buffer');
+  sound.dispose();
+});

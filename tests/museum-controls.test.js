@@ -87,7 +87,7 @@ async function createControls(touch = false) {
     },
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
-    plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48,
+    plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48, horrorEnding: null,
     IMAGES: ['images/gallery/0x0000.jpg'], TEXTURE_IMAGES: ['images/gallery-preview/0x0000.webp'],
     guestbook: { opened: false, open() { this.opened = true; }, close() { this.opened = false; }, isOpen() { return this.opened; } },
     settings: { sensitivity: 1 }, updaters: [], artMeshes: [],
@@ -124,7 +124,8 @@ async function createControls(touch = false) {
     document.pointerLockElement = locked ? canvas : null;
     document.emit('pointerlockchange');
   }
-  return { api, context, document, window, canvas, camera, museumKnife, key, tick, lock, loops };
+  return { api, context, document, window, canvas, camera, museumKnife, key, tick, lock, loops,
+    setEnding(value) { context.horrorEnding = value; } };
 }
 
 const near = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a - b) < tolerance, `${a} should be near ${b}`);
@@ -616,4 +617,60 @@ test('effects follow visit, hidden-tab and resume audio state on desktop and tou
     h.api.pauseVisit();
     assert.equal(h.context.museumSounds.enabled, false);
   }
+});
+
+test('an active ending freezes held desktop movement and rejects look, artwork focus and knife hotkeys', async () => {
+  const h = await createControls();
+  h.context.artMeshes.push(artwork());
+  h.document.emit('mousemove', { movementX: 0, movementY: 0 });
+  h.document.emit('mousemove', { movementX: 100, movementY: 40 });
+  h.key('KeyW', true);
+  h.tick(20);
+  assert.ok(h.api.player.state.speed > 0, 'ordinary movement works before the ending');
+  const before = h.camera.position.clone();
+  const yaw = h.api.yaw, pitch = h.api.pitch;
+  const ending = { active: true, advances: 0, updates: 0,
+    advance() { this.advances++; }, update() { this.updates++; } };
+  h.setEnding(ending);
+  h.document.emit('mousemove', { movementX: 350, movementY: 200 });
+  for (const code of ['KeyA', 'Space', 'KeyE', 'KeyF', 'KeyQ', 'Digit3']) h.key(code, true);
+  h.api.inspectArtwork();
+  mouse(h, 'click', 0);
+  h.tick(60);
+  assert.deepEqual(h.camera.position, before, 'even a movement key held before activation cannot move the view');
+  near(h.api.yaw, yaw); near(h.api.pitch, pitch);
+  near(h.camera.rotation.last[0], pitch); near(h.camera.rotation.last[1], yaw);
+  assert.equal(h.api.keys.left, false);
+  assert.equal(h.api.keys.jump, false);
+  assert.equal(h.api.focusState, null, 'E, mouse click and direct inspection all stay blocked');
+  assert.equal(h.context.guestbook.isOpen(), false);
+  assert.equal(h.museumKnife.equipped, false);
+  assert.equal(h.museumKnife.inspections, 0);
+  assert.equal(ending.updates, 60, 'the ending animation still advances while visitor input is blocked');
+});
+
+test('an active ending also blocks touch movement, drag rotation and the View action', async () => {
+  const h = await createControls(true);
+  h.api.enterPlay();
+  h.context.artMeshes.push(artwork());
+  h.context.touchOptions.onMove(0, 1);
+  h.context.touchOptions.onLook(40, 20);
+  h.tick(20);
+  assert.ok(h.api.player.state.speed > 0);
+  const before = h.camera.position.clone();
+  const yaw = h.api.yaw, pitch = h.api.pitch;
+  const ending = { active: true, updates: 0, advance() {}, update() { this.updates++; } };
+  h.setEnding(ending);
+  h.context.touchOptions.onMove(1, -1);
+  h.context.touchOptions.onLook(120, -60);
+  h.context.touchOptions.onJump(true);
+  h.context.touchOptions.onCrouch(true);
+  h.context.touchOptions.onInspect();
+  h.tick(60);
+  assert.deepEqual(h.camera.position, before);
+  near(h.api.yaw, yaw); near(h.api.pitch, pitch);
+  near(h.camera.rotation.last[0], pitch); near(h.camera.rotation.last[1], yaw);
+  assert.equal(h.api.focusState, null);
+  assert.equal(h.context.guestbook.isOpen(), false);
+  assert.equal(ending.updates, 60);
 });

@@ -43,15 +43,15 @@ test('art module stays inert until activation, then shares exactly three bounded
   art.dispose();
 });
 
-test('texture uploads remain at eight frames per second regardless of render frequency', () => {
+test('texture uploads remain at twenty-four frames per second regardless of render frequency', () => {
   for (const fps of [30, 60, 144]) {
     const harness = load();
     const art = harness.create();
     const initialCanvases = harness.canvases.length;
     let updates = 0;
     for (let i = 0; i < fps * 3; i++) updates += Number(art.update(1 / fps));
-    assert.equal(updates, 24, `${fps} Hz rendering`);
-    assert.ok(harness.textures.every(texture => texture.uploads === 25));
+    assert.equal(updates, 72, `${fps} Hz rendering`);
+    assert.ok(harness.textures.every(texture => texture.uploads === 73));
     assert.equal(harness.canvases.length, initialCanvases, 'redraws reuse surfaces and glyph atlases');
     assert.equal(harness.textures.length, 3, 'redraws reuse original textures');
     art.dispose();

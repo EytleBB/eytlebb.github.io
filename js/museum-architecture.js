@@ -8,7 +8,8 @@ import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './
 export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, ceilingY, springY, chunkLength, mobile = false }) {
   const width = halfWidth * 2;
   const materials = {};
-  let reflection;
+  let reflection, floorGroup, matteFloor;
+  let reflectionsEnabled = true;
   let blackout = false, normalEmitters = null;
   const chunkMeshes = new Map();
   const luminous = new Set();
@@ -249,6 +250,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
 
   function makeFloor(length) {
     const group = new THREE.Group();
+    floorGroup = group;
     reflection = new Reflector(new THREE.PlaneGeometry(width, length), {
       clipBias: 0.003, textureWidth: 1, textureHeight: 1,
       multisample: mobile ? 0 : Math.min(4, renderer.capabilities.maxSamples),
@@ -267,7 +269,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     reflection.material.toneMapped = false;
     group.add(reflection);
     scene.add(group);
-    resize();
+    setReflectionsEnabled(reflectionsEnabled);
     return group;
   }
 
@@ -279,7 +281,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     return group;
   }
   function resize() {
-    if (!reflection) return;
+    if (!reflection || !reflectionsEnabled) return;
     // Give enlarged floor details enough samples, while bounding the secondary
     // view instead of allocating another native 4K/HiDPI scene.
     const ratio = Math.min(renderer.getPixelRatio(), (mobile ? 768 : 1536) / Math.max(window.innerWidth, window.innerHeight));
@@ -294,8 +296,38 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       if (blackout) material.color.setRGB(0, 0, 0);
       else material.color.copy(normalEmitters[index]);
     }
-    floorShader.uniforms.poolStrength.value = blackout ? 0 : 1;
-    if (reflection) reflection.material.uniforms.poolStrength.value = blackout ? 0 : 1;
+    syncFloorPools();
   }
-  return { materials, attachChunk, makeFloor, makeRearWall, resize, setBlackout };
+  function syncFloorPools() {
+    const strength = blackout || !reflectionsEnabled ? 0 : 1;
+    floorShader.uniforms.poolStrength.value = strength;
+    if (reflection) reflection.material.uniforms.poolStrength.value = strength;
+  }
+  function setReflectionsEnabled(value) {
+    reflectionsEnabled = Boolean(value);
+    syncFloorPools();
+    if (!reflection) return;
+    // Hiding Reflector also prevents its onBeforeRender secondary camera pass.
+    reflection.visible = reflectionsEnabled;
+    if (reflectionsEnabled) {
+      if (matteFloor) {
+        matteFloor.removeFromParent();
+        matteFloor.material.dispose();
+        // The plane geometry is shared with Reflector and remains owned by it.
+        matteFloor = null;
+      }
+      resize();
+      return;
+    }
+    if (!matteFloor) {
+      const material = new THREE.MeshLambertMaterial({ color: 0x141318,
+        emissive: 0x19151f, reflectivity: 0, fog: true });
+      matteFloor = new THREE.Mesh(reflection.geometry, material);
+      matteFloor.name = 'Unreflective horror floor';
+      matteFloor.position.copy(reflection.position);
+      matteFloor.rotation.copy(reflection.rotation);
+      floorGroup.add(matteFloor);
+    }
+  }
+  return { materials, attachChunk, makeFloor, makeRearWall, resize, setBlackout, setReflectionsEnabled };
 }

@@ -335,3 +335,58 @@ test('stowing and losing control cancel an unplayed swish; the next accepted swi
     assert.deepEqual(sounds, ['light']);
   }
 });
+
+test('horror matte and intensity controls are lazy, survive model loading, and preserve ordinary defaults', async () => {
+  const normal = attackController();
+  normal.controller.equip(); await normal.load();
+  assert.equal(normal.demo.horror, false);
+  assert.equal(normal.demo.intensity, 1);
+  const h = attackController();
+  h.controller.setHorror(true);
+  h.controller.setIntensity(.4);
+  assert.equal(h.demo, undefined, 'changing appearance does not fetch or equip a knife');
+  assert.equal(h.controller.equipped, false);
+  h.controller.equip();
+  h.controller.setIntensity(.25);
+  await h.load();
+  assert.equal(h.demo.horror, true);
+  assert.equal(h.demo.intensity, .25);
+  h.controller.setHorror(false);
+  assert.equal(h.demo.horror, false);
+  h.controller.setIntensity(2);
+  assert.equal(h.demo.intensity, 1);
+  h.controller.setIntensity(-1);
+  assert.equal(h.demo.intensity, 0, 'zero must dim the glove fully');
+  for (const value of [NaN, Infinity, -Infinity, 'invalid']) h.controller.setIntensity(value);
+  assert.equal(h.demo.intensity, 0, 'invalid intensity never reaches the shader');
+  h.controller.stow(); h.tick(.3);
+  h.controller.setHorror(true);
+  h.controller.setIntensity(.18);
+  h.controller.equip(); h.tick(.7);
+  assert.equal(h.demo.horror, true);
+  assert.equal(h.demo.intensity, .18);
+  assert.equal(h.demo.state, 'idle');
+});
+
+test('the render pass sends the current matte and bounded intensity values to the GPU', () => {
+  const uniforms = new Map();
+  const demo = knife();
+  Object.assign(demo, {
+    state: 'hidden', canvas: { width: 1280, height: 720 },
+    loc: { uMatte: 'matte', uIntensity: 'intensity' },
+    gl: { viewport() {}, clearColor() {}, clear() {}, useProgram() {}, bindVertexArray() {},
+      uniform1i(location, value) { uniforms.set(location, value); },
+      uniform1f(location, value) { uniforms.set(location, value); } },
+  });
+  demo.render();
+  assert.equal(uniforms.get('matte'), 0);
+  assert.equal(uniforms.get('intensity'), 1);
+  demo.horror = true; demo.intensity = .2;
+  demo.render();
+  assert.equal(uniforms.get('matte'), 1);
+  assert.equal(uniforms.get('intensity'), .2);
+  demo.horror = false; demo.intensity = 0;
+  demo.render();
+  assert.equal(uniforms.get('matte'), 0);
+  assert.equal(uniforms.get('intensity'), 0);
+});

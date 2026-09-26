@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createMuseumPhysics } from './museum-physics.js?v=audio-20260926';
+import { createMuseumPhysics } from './museum-physics.js?v=horror-finale-20260926';
 
 const LAMP_PARTS = ['base', 'armA', 'armB', 'knuckle', 'head', 'rim', 'lens', 'glow'];
 
@@ -174,9 +174,10 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
 
   return {
     registerSlot, resetSlot, strike,
+    removeSlotDebris(slot) { physics.removeOwner(slot); },
     resetChunk(chunk) { chunk.slots.forEach(resetSlot); },
     protectTextures(indices) { for (const item of debris.values()) if (item.imageIndex !== null) indices.add(item.imageIndex); },
-    syncHall(chunks, rearZ) { physics.syncHall(chunks.flatMap(chunk => [chunk.group.position.z, chunk.group.position.z - 7]), rearZ); },
+    syncHall(chunks, rearZ, frontZ = null) { physics.syncHall(chunks.flatMap(chunk => [chunk.group.position.z, chunk.group.position.z - 7]), rearZ, frontZ); },
     update(dt) {
       physics.update(dt, camera.position.z);
       for (const { root, entity } of debris.values()) {

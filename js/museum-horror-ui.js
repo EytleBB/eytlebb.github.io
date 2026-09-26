@@ -2,7 +2,7 @@
 import { PIXEL_ROWS, randomPixelGlyph, drawPixelGlyph, scrambleMuseumText } from './museum-horror-glyphs.js?v=pixel-20260926';
 export { scrambleMuseumText };
 const IGNORED = 'script,style,noscript,template,canvas,svg,math,input,textarea,select,option,[contenteditable]:not([contenteditable="false"]),.guestbook-sr,.guestbook-honeypot,.museum-horror-copy';
-const UPDATE_INTERVAL = 1 / 8;
+const UPDATE_INTERVAL = 1 / 24;
 
 export function createMuseumHorrorUI({ root = document.body, reducedMotion = false, artCanvas = null } = {}) {
   const document = root.ownerDocument;
@@ -246,8 +246,8 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       if (!enabled || document.hidden || !Number.isFinite(dt) || dt <= 0) return;
       elapsed += Math.min(dt, 0.25);
       const interval = reducedMotion ? 0.5 : UPDATE_INTERVAL;
-      if (elapsed < interval) return;
-      elapsed %= interval;
+      if (elapsed + 1e-8 < interval) return;
+      elapsed = Math.max(0, elapsed - interval * Math.floor((elapsed + 1e-8) / interval));
       // Without MutationObserver, a periodic scan still keeps dynamically created labels covered.
       if (!observer) dirty = true;
       draw();

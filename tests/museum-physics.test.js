@@ -186,3 +186,56 @@ test('wall contact stays silent; tipping an already-grounded frame still emits i
   assert.equal(impacts.length, count, 'removed bodies cannot leave delayed sound callbacks');
   physics.dispose();
 });
+
+test('a front wall configured before the first break stays lazy and blocks forward-moving props', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  physics.syncHall([], 10, -1);
+  assert.equal(physics.initialized, false);
+  const entity = prop(physics, { halfExtents: [.1, .1, .1], position: at(0, 3, -.4) });
+  assert.equal(physics.bodyCount, 7, 'one prop plus six boundaries');
+  entity.body.velocity.z = -6;
+  step(physics, .5);
+  assert.equal(physics.entities.length, 1);
+  assert.ok(entity.body.position.z >= -.91, `front plane faces inward: ${entity.body.position.z}`);
+  physics.dispose();
+});
+
+test('front collision can be added, moved and removed after physics has started', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  const entity = prop(physics, { halfExtents: [.1, .1, .1], position: at(0, 3, 0) });
+  assert.equal(physics.bodyCount, 6);
+  physics.syncHall([], 10, -1);
+  assert.equal(physics.bodyCount, 7);
+  physics.syncHall([], 10, -2);
+  assert.equal(physics.bodyCount, 7, 'moving a front wall reuses its body');
+  entity.body.velocity.z = -7;
+  step(physics, .5);
+  assert.ok(entity.body.position.z < -1.1 && entity.body.position.z >= -1.91);
+  physics.syncHall([], 10);
+  assert.equal(physics.bodyCount, 6);
+  entity.body.position.set(0, 3, 0); entity.body.velocity.set(0, 0, -7); entity.body.wakeUp();
+  step(physics, .5);
+  assert.ok(entity.body.position.z < -2.5, 'normal mode has no front collider');
+  physics.dispose();
+});
+
+test('wall synchronization immediately removes outside debris by center and disposes each once', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const physics = createMuseumPhysics();
+  const removed = [];
+  physics.syncHall([], 10, -20);
+  prop(physics, { owner: 'rear', position: at(0, 2, 5), onRemove: () => removed.push('rear') }).body.sleep();
+  prop(physics, { owner: 'inside', position: at(0, 2, -2), onRemove: () => removed.push('inside') });
+  prop(physics, { owner: 'front', position: at(0, 2, -25), onRemove: () => removed.push('front') }).body.sleep();
+  physics.syncHall([], 0, -20);
+  assert.deepEqual(removed, ['rear', 'front']);
+  assert.deepEqual(physics.entities.map(entity => entity.owner), ['inside']);
+  physics.syncHall([], -2, -20);
+  assert.equal(physics.entities.length, 1, 'a center exactly on the boundary is retained');
+  physics.syncHall([], -3, -20);
+  assert.deepEqual(removed, ['rear', 'front', 'inside']);
+  physics.dispose();
+  assert.deepEqual(removed, ['rear', 'front', 'inside']);
+});

@@ -10,7 +10,9 @@ function harness({ reducedMotion = false } = {}) {
   class Color { constructor(value) { this.value = value; made.colors.push(this); } }
   class Fog { constructor(color, near, far) { Object.assign(this, { color, near, far }); made.fog.push(this); } }
   class Material {
-    constructor(options) { Object.assign(this, options); this.disposals = 0; made.materials.push(this); }
+    constructor(options) { Object.assign(this, options); this.isMeshStandardMaterial = true; this.disposals = 0; made.materials.push(this); }
+    onBeforeCompile() {}
+    customProgramCacheKey() { return this.onBeforeCompile.toString(); }
     dispose() { this.disposals++; }
   }
   const context = vm.createContext({
@@ -35,10 +37,12 @@ function harness({ reducedMotion = false } = {}) {
   const debris = [root(...debrisNodes)];
   const lights = [{ isAmbientLight: true, intensity: .3 }, { isHemisphereLight: true, intensity: .75 },
     { isSpotLight: true, intensity: 4 }];
+  const sceneNodes = [];
   const scene = { background: { normal: 'background' }, fog: { normal: 'fog' }, environmentIntensity: .8,
-    traverse(visit) { lights.forEach(visit); } };
+    traverse(visit) { lights.forEach(visit); sceneNodes.forEach(visit); } };
   const renderer = { toneMappingExposure: 1.12 };
-  const architecture = { calls: [], setBlackout(value) { this.calls.push(value); } };
+  const architecture = { calls: [], reflections: [], setBlackout(value) { this.calls.push(value); },
+    setReflectionsEnabled(value) { this.reflections.push(value); } };
   const atmosphere = { group: { visible: true } };
   const fixtures = [];
   for (let station = 0; station < 80; station++) for (const side of [-1, 1]) {
@@ -49,7 +53,7 @@ function harness({ reducedMotion = false } = {}) {
     getSlots: () => slots, forEachDebris: callback => debris.forEach(callback), reducedMotion,
     onActivate: () => { activations++; } });
   return { ...context.api, controller, made, mesh, slot, root, slots, debris, debrisNodes,
-    lights, scene, renderer, architecture, atmosphere, fixtures, activations: () => activations,
+    lights, scene, sceneNodes, renderer, architecture, atmosphere, fixtures, activations: () => activations,
     activate() { for (let i = 0; i < 24; i++) controller.recordBreak(); } };
 }
 
@@ -69,6 +73,7 @@ test('first 23 newly broken objects leave the normal museum intact and allocate 
   assert.ok(Object.values(h.made).every(items => items.length === 0));
   assert.equal(h.activations(), 0);
   assert.deepEqual(h.architecture.calls, []);
+  assert.deepEqual(h.architecture.reflections, []);
   assert.equal(h.scene.background, background); assert.equal(h.scene.fog, fog);
   assert.equal(h.scene.environmentIntensity, .8);
   assert.equal(h.renderer.toneMappingExposure, 1.12);
@@ -91,8 +96,9 @@ test('the 24th break switches existing pictures, plaques, debris and lighting ex
   assert.equal(h.made.materials.length, 3);
   assert.equal(h.made.colors.length, 1); assert.equal(h.made.fog.length, 1);
   assert.deepEqual(h.architecture.calls, [true]);
+  assert.deepEqual(h.architecture.reflections, [false]);
   assert.equal(h.atmosphere.group.visible, false);
-  assert.ok(h.scene.environmentIntensity < .8 && h.scene.environmentIntensity > 0);
+  assert.equal(h.scene.environmentIntensity, 0);
   assert.ok(h.renderer.toneMappingExposure < 1.12 && h.renderer.toneMappingExposure > 0);
   assert.ok(h.lights[0].intensity < .3 && h.lights[0].intensity > 0);
   assert.ok(h.lights[1].intensity < .75 && h.lights[1].intensity > 0);
@@ -162,6 +168,7 @@ test('releasing removed debris forgets its material mapping and dispose restores
   assert.equal(h.atmosphere.group.visible, true);
   assert.deepEqual(h.lights.map(light => light.intensity), [.3, .75, 4]);
   assert.deepEqual(h.architecture.calls, [true, false]);
+  assert.deepEqual(h.architecture.reflections, [false, true]);
   assert.ok(h.fixtures.every(fixture => !('horrorGain' in fixture)));
   assert.ok(h.made.materials.every(material => material.disposals === 1));
   assert.equal(h.made.art[0].disposals, 1); assert.equal(h.made.ui[0].disposals, 1);
@@ -219,4 +226,109 @@ test('parked menus and plaques keep shared artwork animating without a scene upd
   assert.equal(h.made.ui[0].updates.length, 8);
   assert.deepEqual(h.fixtures.map(fixture => fixture.horrorGain), gains);
   h.controller.dispose();
+});
+
+function reflectiveMaterial(overrides = {}) {
+  return {
+    isMeshStandardMaterial: true, roughness: .3, metalness: .88,
+    envMapIntensity: 1.2, clearcoat: .4, reflectivity: .7, anisotropy: .45,
+    onBeforeCompile() {}, customProgramCacheKey() { return this.onBeforeCompile.toString(); },
+    ...overrides,
+  };
+}
+
+test('all standard and physical surfaces lose real shader specular while original shader hooks remain callable and restorable', () => {
+  const h = harness();
+  const calls = [];
+  const originalHook = function(shader, renderer) {
+    calls.push({ material: this, renderer });
+    shader.fragmentShader = '// Original stone grain\n' + shader.fragmentShader;
+  };
+  const originalKey = function() { return 'original-stone'; };
+  const material = reflectiveMaterial({ onBeforeCompile: originalHook, customProgramCacheKey: originalKey });
+  const secondMaterial = reflectiveMaterial();
+  const basic = { isMeshBasicMaterial: true, color: 'bronze emitter' };
+  const saved = { ...material };
+  h.sceneNodes.push({ isMesh: true, material: [material, secondMaterial, basic] });
+  h.activate();
+  for (const item of [material, secondMaterial, ...h.made.materials]) {
+    assert.equal(item.roughness, 1);
+    assert.equal(item.metalness, 0);
+    assert.equal(item.envMapIntensity, 0);
+    const shader = { fragmentShader: 'void main() {\n#include <lights_physical_fragment>\n}' };
+    item.onBeforeCompile(shader, h.renderer);
+    assert.match(shader.fragmentShader, /#include <lights_physical_fragment>\s+material\.specularColor = vec3\(0\.0\); material\.specularF90 = 0\.0;/,
+      'roughness alone still reflects; the physical shader specular terms must be zero');
+  }
+  assert.equal(material.clearcoat, 0);
+  assert.equal(material.reflectivity, 0);
+  assert.equal(material.anisotropy, 0);
+  assert.deepEqual(basic, { isMeshBasicMaterial: true, color: 'bronze emitter' });
+  assert.deepEqual(calls, [{ material, renderer: h.renderer }]);
+  const shader = { fragmentShader: '#include <lights_physical_fragment>' };
+  material.onBeforeCompile(shader, h.renderer);
+  assert.match(shader.fragmentShader, /^\/\/ Original stone grain/);
+  assert.equal(material.customProgramCacheKey(), 'original-stone:horror-matte');
+  h.controller.applyMatte(h.root({ isMesh: true, material }));
+  const repeated = { fragmentShader: '#include <lights_physical_fragment>' };
+  material.onBeforeCompile(repeated, h.renderer);
+  assert.equal(repeated.fragmentShader.match(/specularColor/g).length, 1, 'applying matte twice cannot nest shader wrappers');
+  h.controller.dispose();
+  for (const [key, value] of Object.entries(saved)) assert.equal(material[key], value, `restore ${key}`);
+  assert.equal(material.customProgramCacheKey(), 'original-stone');
+  const restored = { fragmentShader: '#include <lights_physical_fragment>' };
+  material.onBeforeCompile(restored, h.renderer);
+  assert.match(restored.fragmentShader, /^\/\/ Original stone grain/);
+  assert.doesNotMatch(restored.fragmentShader, /specularColor/);
+});
+
+test('matte shader caching retains each original hook key even with the Three default cache-key implementation', () => {
+  const h = harness();
+  const first = reflectiveMaterial({ onBeforeCompile(shader) { shader.fragmentShader += '\n// Material one'; } });
+  const second = reflectiveMaterial({ onBeforeCompile(shader) { shader.fragmentShader += '\n// Material two'; } });
+  const firstKey = first.customProgramCacheKey();
+  const secondKey = second.customProgramCacheKey();
+  assert.notEqual(firstKey, secondKey);
+  h.sceneNodes.push({ isMesh: true, material: [first, second] });
+  h.activate();
+  assert.equal(first.customProgramCacheKey(), firstKey + ':horror-matte');
+  assert.equal(second.customProgramCacheKey(), secondKey + ':horror-matte');
+  assert.notEqual(first.customProgramCacheKey(), second.customProgramCacheKey(), 'different source hooks must not share a cached shader');
+  h.controller.dispose();
+  assert.equal(first.customProgramCacheKey(), firstKey);
+  assert.equal(second.customProgramCacheKey(), secondKey);
+});
+
+test('progress darkens monotonically, clamps at a readable positive floor, and does not brighten on backward travel or bad input', () => {
+  const h = harness({ reducedMotion: true });
+  h.controller.setProgress(1);
+  assert.equal(h.renderer.toneMappingExposure, 1.12, 'progress is inert before activation');
+  h.activate();
+  const brightness = () => [h.renderer.toneMappingExposure, ...h.lights.slice(0, 2).map(light => light.intensity),
+    ...h.made.materials.map(material => material.emissiveIntensity),
+    ...h.fixtures.filter(fixture => fixture.horrorGain > 0).map(fixture => fixture.horrorGain),
+    h.scene.fog.near, h.scene.fog.far];
+  let previous = brightness();
+  for (const progress of [.25, .5, .75, 1, 10]) {
+    h.controller.setProgress(progress);
+    const current = brightness();
+    assert.equal(current.length, previous.length);
+    current.forEach((value, index) => {
+      assert.ok(Number.isFinite(value) && value > 0, `readable positive lighting channel ${index}`);
+      assert.ok(value <= previous[index], `lighting channel ${index} cannot brighten`);
+    });
+    assert.ok(h.scene.fog.far > h.scene.fog.near);
+    assert.equal(h.scene.environmentIntensity, 0);
+    assert.equal(h.lights[2].intensity, 4, 'fixture owner still controls direct spots');
+    previous = current;
+  }
+  assert.ok(h.renderer.toneMappingExposure >= .5, 'retain floor visibility at the final section');
+  assert.ok(h.scene.fog.far >= 20, 'the last two sections remain discernible');
+  for (const progress of [.8, .1, 0, -20, NaN, Infinity, -Infinity]) {
+    h.controller.setProgress(progress);
+    assert.deepEqual(brightness(), previous);
+  }
+  h.controller.dispose();
+  assert.equal(h.renderer.toneMappingExposure, 1.12);
+  assert.deepEqual(h.lights.map(light => light.intensity), [.3, .75, 4]);
 });

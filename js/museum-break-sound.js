@@ -36,6 +36,23 @@ export function createMuseumBreakSound({ context, output, fetchAudio = () => fet
     for (const source of [...sources]) { source.stop(); release(source); }
   }
 
+  function playBuffer(decoded) {
+    if (!gain) {
+      gain = context.createGain();
+      gain.gain.value = 1; // Full clip volume, unaffected by Foley attenuation.
+      gain.connect(output); // Still obey the visit's shared pause/master mute.
+    }
+    const source = context.createBufferSource();
+    source.buffer = decoded;
+    source.loop = false;
+    source.playbackRate.value = 1;
+    source.connect(gain);
+    sources.add(source);
+    source.onended = () => release(source);
+    source.start();
+    return true;
+  }
+
   return {
     async breakObject() {
       if (disposed) return false;
@@ -44,20 +61,14 @@ export function createMuseumBreakSound({ context, output, fetchAudio = () => fet
       // Start loading on the first break, well before the thirteenth strike.
       const decoded = await preload();
       if (!play || !decoded || !enabled || disposed || epoch !== requestEpoch || context.state !== 'running') return false;
-      if (!gain) {
-        gain = context.createGain();
-        gain.gain.value = 1; // Full clip volume, unaffected by Foley attenuation.
-        gain.connect(output); // Still obey the visit's shared pause/master mute.
-      }
-      const source = context.createBufferSource();
-      source.buffer = decoded;
-      source.loop = false;
-      source.playbackRate.value = 1;
-      source.connect(gain);
-      sources.add(source);
-      source.onended = () => release(source);
-      source.start(); // A separate one-shot for each newly broken prop.
-      return true;
+      return playBuffer(decoded);
+    },
+    finale() {
+      if (disposed || !enabled || context.state !== 'running') return false;
+      // Prioritize this one shot and invalidate any pending ordinary breaks.
+      stop();
+      // Never queue an ending sound that could arrive after the visit exits.
+      return buffer ? playBuffer(buffer) : false;
     },
     setEnabled(value) {
       enabled = Boolean(value) && !disposed;

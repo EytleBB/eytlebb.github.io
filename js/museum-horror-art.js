@@ -3,7 +3,7 @@ import { createPixelGlyphPainter } from './museum-horror-glyphs.js?v=pixel-20260
 
 // One small texture per surface type serves the entire streamed museum.
 // This module is inert until the hidden mode creates its first texture set.
-const FRAME_SECONDS = 1 / 8;
+const FRAME_SECONDS = 1 / 24;
 
 export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
   const glyphs = createPixelGlyphPainter(document);

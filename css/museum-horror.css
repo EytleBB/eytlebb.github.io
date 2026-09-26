@@ -64,3 +64,8 @@ body.museum-horror .guestbook-connection { background:rgba(118,28,34,.07); borde
 @media (prefers-reduced-motion:reduce) {
   body.museum-horror::after { background:radial-gradient(ellipse at center,transparent 40%,rgba(8,0,2,.32)); }
 }
+
+body.museum-horror-finale #knife-canvas,
+body.museum-horror-finale #hud,
+body.museum-horror-finale #art-hint,
+body.museum-horror-finale #touch-controls { visibility:hidden; }

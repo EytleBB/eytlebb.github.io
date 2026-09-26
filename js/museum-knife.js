@@ -17,10 +17,12 @@ in vec3 vWorld;in vec3 vNormal;in vec2 vUV;in vec3 vLocal;in vec3 vColor;out vec
 uniform vec4 uBase;uniform float uMetal;uniform float uRough;uniform float uNormalScale;
 uniform sampler2D uBaseMap;uniform sampler2D uMRMap;uniform sampler2D uNormalMap;
 uniform bool uHasBase;uniform bool uHasMR;uniform bool uHasNormal;uniform int uSurface;
+uniform bool uMatte;uniform float uIntensity;
 const float PI=3.14159265359;
 vec3 fresnel(float x,vec3 f0){return f0+(1.0-f0)*pow(clamp(1.0-x,0.0,1.0),5.0);}
 vec3 light(vec3 N,vec3 V,vec3 L,vec3 radiance,vec3 base,float metal,float rough){
  vec3 H=normalize(V+L);float nv=max(dot(N,V),0.001),nl=max(dot(N,L),0.0),nh=max(dot(N,H),0.0),hv=max(dot(H,V),0.0);
+ if(uMatte)return base/PI*radiance*nl;
  float a=rough*rough,a2=a*a,d=(nh*nh*(a2-1.0)+1.0);float D=a2/(PI*d*d+0.00001);
  float k=(rough+1.0);k=k*k/8.0;float G=(nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k));
  vec3 F=fresnel(hv,mix(vec3(0.04),base,metal));vec3 spec=D*G*F/(4.0*nv*max(nl,.001)+.00001);
@@ -47,6 +49,7 @@ void main(){
  float metal=uMetal,rough=uRough;
  if(uHasMR){vec4 mr=texture(uMRMap,vUV);metal*=mr.b;rough*=mr.g;}
  rough=clamp(rough,.10,.98);
+ if(uMatte){metal=0.0;rough=1.0;}
  if(uSurface==7){
    // Subtle woven cotton. Derivative attenuation suppresses distant moire.
    vec2 uv=vUV*vec2(660.,340.);vec2 a=1.-smoothstep(vec2(.45),vec2(1.5),fwidth(uv));
@@ -72,11 +75,11 @@ void main(){
  color+=light(N,V,normalize(vec3(.8,.24,-1.0)),vec3(2.0,2.1,2.3),base,metal,rough);
  color+=light(N,V,normalize(vec3(-1.0,-.3,.6)),vec3(.6,.65,.72),base,metal,rough);
  vec3 f0=mix(vec3(.04),base,metal);float nv=max(dot(N,V),0.0);vec3 F=fresnel(nv,f0),R=reflect(-V,N);
- color+=studio(R,rough)*(F*(.82-.26*rough));
+ if(!uMatte)color+=studio(R,rough)*(F*(.82-.26*rough));
  color+=base*(1.0-metal)*(.28+.16*max(N.y,0.0));
  // Cloth cavity shading is baked from the hand surface, not painted hard armour.
  color*=vColor;
- fragColor=vec4(pow(aces(color*1.04),vec3(1.0/2.2)),1.0);
+ fragColor=vec4(pow(aces(color*1.04),vec3(1.0/2.2))*uIntensity,1.0);
 }`;
 function identity(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);}
 function mul(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++){let v=0;for(let k=0;k<4;k++)v+=a[k*4+r]*b[c*4+k];o[c*4+r]=v;}return o;}
@@ -106,9 +109,9 @@ class KnifeDemo {
   Object.assign(this,parseGLB(buffer));this.textures=[];this.draws=[];this.handR=[];
   this.state='hidden';this.time=0;this.speed=1;this.paused=false;this.count=0;this.scale=1;this.idleTime=0;
   this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  this.pendingDraw=false;this.pendingInspect=false;
+  this.pendingDraw=false;this.pendingInspect=false;this.horror=false;this.intensity=1;
   this.program=this.programFrom(VERT,FRAG);this.loc={};
-  for(const n of ['uMVP','uModel','uBase','uMetal','uRough','uNormalScale','uBaseMap','uMRMap','uNormalMap','uHasBase','uHasMR','uHasNormal','uSurface'])this.loc[n]=this.gl.getUniformLocation(this.program,n);
+  for(const n of ['uMVP','uModel','uBase','uMetal','uRough','uNormalScale','uBaseMap','uMRMap','uNormalMap','uHasBase','uHasMR','uHasNormal','uSurface','uMatte','uIntensity'])this.loc[n]=this.gl.getUniformLocation(this.program,n);
   const gl=this.gl;gl.useProgram(this.program);gl.uniform1i(this.loc.uBaseMap,0);gl.uniform1i(this.loc.uMRMap,1);gl.uniform1i(this.loc.uNormalMap,2);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
   this.uploadModel();this.resizeObserver=new ResizeObserver(()=>{this.resize();if(this.loaded)this.render();});this.resizeObserver.observe(canvas);this.resize();
   this.ready=this.loadTextures().then(()=>{this.loaded=true;this.render();return this;});
@@ -177,6 +180,7 @@ class KnifeDemo {
 
  render(){if(!this.loaded)return;const gl=this.gl,c=this.canvas,aspect=c.width/c.height;
   gl.viewport(0,0,c.width,c.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
+  gl.uniform1i(this.loc.uMatte,this.horror?1:0);gl.uniform1f(this.loc.uIntensity,this.intensity??1);
   if(this.state!=='hidden'){
    // V4: keep the reference orientation while anchoring the grip in screen space.
    // A fixed horizontal FOV made the same knife tiny in portrait and clipped in
@@ -469,6 +473,7 @@ export function createMuseumKnifeController(canvas, { onStrike, onSwing } = {}) 
   let loading = null;
   let equipped = false;
   let inspectRequested = false;
+  let horror = false, intensity = 1;
   const heldAttacks = new Set();
   let queuedAttack = null;
 
@@ -506,6 +511,8 @@ export function createMuseumKnifeController(canvas, { onStrike, onSwing } = {}) 
         demo = loaded;
         demo.onStrike = onStrike;
         demo.onSwing = onSwing;
+        demo.horror = horror;
+        demo.intensity = intensity;
         if (equipped) draw();
       })
       .catch(error => { console.warn('Museum knife unavailable', error); })
@@ -538,6 +545,16 @@ export function createMuseumKnifeController(canvas, { onStrike, onSwing } = {}) 
     equip,
     stow,
     clearAttackInput,
+    setHorror(value) {
+      horror = Boolean(value);
+      if (demo) demo.horror = horror;
+    },
+    setIntensity(value) {
+      const next = Number(value);
+      if (!Number.isFinite(next)) return;
+      intensity = Math.max(0, Math.min(1, next));
+      if (demo) demo.intensity = intensity;
+    },
     setAttackHeld(kind, held) {
       if (kind !== 'light' && kind !== 'heavy') return;
       if (!held) { heldAttacks.delete(kind); return; }

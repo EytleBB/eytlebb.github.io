@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { createMuseumHorrorArt } from './museum-horror-art.js?v=obfuscated-20260926';
-import { createMuseumHorrorUI } from './museum-horror-ui.js?v=obfuscated-20260926';
+import { createMuseumHorrorArt } from './museum-horror-art.js?v=ending-20260926';
+import { createMuseumHorrorUI } from './museum-horror-ui.js?v=ending-20260926';
 
 export const HORROR_BREAK_THRESHOLD = 24;
 const fract = value => value - Math.floor(value);
@@ -24,6 +24,50 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
   let breaks = 0, active = false, disposed = false, elapsed = 0, lightingTick = -1;
   let art = null, ui = null, materials = null, before = null;
   const replaced = new Map();
+  const matte = new Map();
+  let progress = 0;
+
+  function makeMatte(material) {
+    if (!material || matte.has(material) || !material.isMeshStandardMaterial) return;
+    const saved = { roughness: material.roughness, metalness: material.metalness,
+      envMapIntensity: material.envMapIntensity, clearcoat: material.clearcoat,
+      reflectivity: material.reflectivity, anisotropy: material.anisotropy,
+      onBeforeCompile: material.onBeforeCompile, customProgramCacheKey: material.customProgramCacheKey };
+    matte.set(material, saved);
+    material.roughness = 1; material.metalness = 0; material.envMapIntensity = 0;
+    if ('clearcoat' in material) material.clearcoat = 0;
+    if ('reflectivity' in material) material.reflectivity = 0;
+    if ('anisotropy' in material) material.anisotropy = 0;
+    const key = saved.customProgramCacheKey.call(material);
+    material.onBeforeCompile = function(shader, renderer) {
+      saved.onBeforeCompile.call(this, shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_physical_fragment>',
+        '#include <lights_physical_fragment>\nmaterial.specularColor = vec3(0.0); material.specularF90 = 0.0;');
+    };
+    material.customProgramCacheKey = () => key + ':horror-matte';
+    material.needsUpdate = true;
+  }
+
+  function applyMatte(root) {
+    root.traverse(object => {
+      if (!object.isMesh) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) makeMatte(material);
+    });
+  }
+
+  function setProgress(value) {
+    if (!active || !Number.isFinite(value)) return;
+    progress = Math.max(progress, Math.min(1, Math.max(0, value)));
+    renderer.toneMappingExposure = .82 - .28 * progress;
+    scene.fog.near = 9 - 6 * progress; scene.fog.far = 48 - 26 * progress;
+    for (const [light, intensity] of before.lights) {
+      light.intensity = intensity * (light.isHemisphereLight ? .48 : .55) * (1 - .45 * progress);
+    }
+    for (const [kind, glow] of [['artwork', .55], ['plaque', .36], ['name', .42]]) {
+      materials[kind].emissiveIntensity = glow * (1 - .45 * progress);
+    }
+    updateLighting();
+  }
 
   function swap(mesh, material) {
     if (!mesh || mesh.material === material) return;
@@ -38,6 +82,7 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
     swap(slot.pic, materials.artwork);
     swap(slot.plaque, materials.plaque);
     swap(slot.titlePlaque, materials.name);
+    for (const mesh of [slot.pic, slot.plaque, slot.titlePlaque]) makeMatte(mesh?.material);
   }
 
   function applyDebris(root) {
@@ -46,12 +91,13 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
       const role = mesh.userData?.museumSurface;
       if (mesh.isMesh && materials[role]) swap(mesh, materials[role]);
     });
+    applyMatte(root);
   }
 
   function updateLighting() {
     for (const fixture of fixtures) {
       fixture.horrorGain = horrorLampGain(fixture.parent.position.z + fixture.lightLocalPosition.z,
-        fixture.side, elapsed, reducedMotion);
+        fixture.side, elapsed, reducedMotion) * (1 - .4 * progress);
     }
   }
 
@@ -69,14 +115,16 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
     });
     scene.background = new THREE.Color(0x080407);
     scene.fog = new THREE.Fog(0x0c070b, 9, 48);
-    scene.environmentIntensity *= .42;
+    scene.environmentIntensity = 0;
     renderer.toneMappingExposure = .82;
     architecture.setBlackout(true);
+    architecture.setReflectionsEnabled?.(false);
+    applyMatte(scene);
     atmosphere.group.visible = false;
     art = createMuseumHorrorArt({ reducedMotion });
     const surface = (texture, glow) => new THREE.MeshStandardMaterial({
       map: texture, emissiveMap: texture, emissive: 0xffffff, emissiveIntensity: glow,
-      roughness: .92, metalness: .02, color: 0xffffff,
+      roughness: 1, metalness: 0, envMapIntensity: 0, color: 0xffffff,
     });
     materials = { artwork: surface(art.artTexture, .55), plaque: surface(art.plaqueTexture, .36), name: surface(art.nameTexture, .42) };
     materials.plaque.polygonOffset = true;
@@ -97,8 +145,13 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
       breaks++;
       if (breaks === HORROR_BREAK_THRESHOLD) activate();
     },
-    applySlot, applyDebris,
-    releaseDebris(root) { root.traverse(mesh => replaced.delete(mesh)); },
+    applySlot, applyDebris, applyMatte, setProgress,
+    releaseDebris(root) { root.traverse(mesh => {
+      replaced.delete(mesh);
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (material && !Object.values(materials || {}).includes(material)) matte.delete(material);
+      }
+    }); },
     updateUI(dt) {
       if (!active) return;
       // The guestbook parks the 3D scene, but its shared artwork canvas must
@@ -120,10 +173,15 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
       ui.dispose();
       for (const [mesh, { original, applied }] of replaced) if (mesh.material === applied) mesh.material = original;
       replaced.clear();
+      for (const [material, saved] of matte) {
+        Object.assign(material, saved); material.needsUpdate = true;
+      }
+      matte.clear();
       Object.values(materials).forEach(material => material.dispose());
       art.dispose();
       for (const fixture of fixtures) delete fixture.horrorGain;
       architecture.setBlackout(false);
+      architecture.setReflectionsEnabled?.(true);
       atmosphere.group.visible = true;
       scene.background = before.background; scene.fog = before.fog;
       scene.environmentIntensity = before.environment;

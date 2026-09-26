@@ -86,12 +86,19 @@ document.getElementById('run').addEventListener('click', async () => {
     assert(glyph.tagName === 'CANVAS', 'Visual glyphs are still a platform text font');
     const shape = [control.offsetWidth, control.offsetHeight, glyph.width, glyph.height];
     const first = glyph.getAttribute('data-glyphs');
-    ui.update(0.05);
+    ui.update(0.02);
     assert(glyph.getAttribute('data-glyphs') === first, 'Corruption updated faster than its cap');
-    ui.update(0.08);
+    ui.update(0.022);
     assert(glyph.getAttribute('data-glyphs') !== first, 'Corruption did not animate');
     assert(shape.join() === [control.offsetWidth, control.offsetHeight, glyph.width, glyph.height].join(), 'Characters shifted their fixed cells');
-    pass('pixel glyphs remain in fixed character cells and update at eight per second');
+    let updates = 0;
+    for (let frame = 0; frame < 120; frame++) {
+      const previousGlyphs = glyph.getAttribute('data-glyphs');
+      ui.update(1 / 60);
+      updates += Number(glyph.getAttribute('data-glyphs') !== previousGlyphs);
+    }
+    assert(updates === 48, `Expected 48 redraws in two seconds; received ${updates}`);
+    pass('pixel glyphs remain in fixed character cells and update at twenty-four per second');
     assert(input.value === 'My original name' && textarea.value === 'Original draft', 'Draft changed');
     assert(option.value === 'Unlimited' && option.textContent === 'Unlimited', 'Implicit select value changed');
     assert(option.label !== 'Unlimited' && option.getAttribute('aria-label') === 'Unlimited', 'Option display/accessibility not separated');

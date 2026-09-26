@@ -105,3 +105,30 @@ test('a pile of 64 impacts has bounded voices, preserves the knife, and releases
   assert.equal(sounds.floorImpact(impact()), true);
   sounds.dispose();
 });
+
+test('the public finale trigger forwards the cached supplied clip through the master output', async (t) => {
+  const module = await ready, h = contextHarness();
+  const supplied = { duration: 8 };
+  let fetches = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    fetches++;
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+  });
+  h.context.decodeAudioData = async () => supplied;
+  const sounds = create(module, h);
+  assert.equal(sounds.finale(), false);
+  sounds.setEnabled(true);
+  assert.equal(await sounds.breakObject(), false);
+  assert.equal(sounds.finale(), true);
+  assert.equal(fetches, 1);
+  assert.equal(h.sources.length, 1);
+  assert.equal(h.sources[0].buffer, supplied);
+  assert.equal(h.sources[0].starts, 1);
+  const gain = h.nodes.find(node => node.type === 'gain');
+  assert.equal(gain.gain.value, 1);
+  assert.deepEqual(gain.targets, [h.output]);
+  sounds.setEnabled(false);
+  assert.equal(h.sources[0].stops, 1);
+  assert.equal(sounds.finale(), false);
+  sounds.dispose();
+});
