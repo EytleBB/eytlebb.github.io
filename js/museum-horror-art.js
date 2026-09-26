@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { createPixelGlyphPainter } from './museum-horror-glyphs.js?v=pixel-20260926';
 
 // One small texture per surface type serves the entire streamed museum.
 // This module is inert until the hidden mode creates its first texture set.
-const GLYPHS = '01╳╱╲┼┴┬┤├░▒▓ΩЖΨИФ∆∑≠⌐⌡<>[]{}#%';
 const FRAME_SECONDS = 1 / 8;
 
 export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
+  const glyphs = createPixelGlyphPainter(document);
   let frame = 0;
   let accumulator = 0;
   let disposed = false;
@@ -13,12 +14,6 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
   const random = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
-  };
-  const glyph = () => GLYPHS[Math.floor(random() * GLYPHS.length)];
-  const line = (length) => {
-    let value = '';
-    for (let i = 0; i < length; i++) value += glyph();
-    return value;
   };
   function surface(width, height) {
     const canvas = document.createElement('canvas');
@@ -28,7 +23,7 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.generateMipmaps = false;
-    texture.minFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.NearestFilter;
     texture.magFilter = THREE.NearestFilter;
     return { canvas, ctx, texture };
   }
@@ -54,12 +49,9 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     const drift = reducedMotion ? 0 : Math.sin(frame * .13) * 2;
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, 256, 256);
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.font = '9px monospace';
     for (let row = 0; row < 27; row++) {
       ctx.fillStyle = row % 4 === 0 ? '#75252a' : '#491217';
-      ctx.fillText(line(36), -4 + (row % 3) * 2, row * 10 - 2);
+      glyphs.line(ctx, 43, -2, row * 10 - 2, 1, random);
     }
     // Long broken registration bars make the texture feel damaged and encoded.
     for (let i = 0; i < 19; i++) {
@@ -92,11 +84,9 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     ctx.moveTo(145,181); ctx.lineTo(149,227); ctx.lineTo(161,256);
     ctx.stroke();
     ctx.fillStyle = '#af454b';
-    ctx.font = '10px monospace';
-    ctx.fillText(line(4), 114, 58);
+    glyphs.line(ctx, 4, 114, 58, 1, random);
     ctx.fillStyle = '#581720';
-    ctx.font = '12px monospace';
-    ctx.fillText(line(8), 94, 220);
+    glyphs.line(ctx, 6, 92, 220, 2, random);
     ctx.restore();
     // Narrow displaced strips animate without large bright flashes.
     for (let i = 0; i < 3; i++) {
@@ -121,20 +111,15 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     const ctx = plaque.ctx;
     ctx.fillStyle = '#170609'; ctx.fillRect(0, 0, 256, 160);
     ctx.fillStyle = '#622028'; ctx.fillRect(3, 3, 250, 1); ctx.fillRect(3, 156, 250, 1);
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.font = '12px monospace';
     ctx.fillStyle = '#b6454c';
-    ctx.fillText(line(18), 16, 15);
-    ctx.font = '22px monospace';
+    glyphs.line(ctx, 18, 16, 15, 1, random);
     ctx.fillStyle = '#d06b68';
-    ctx.fillText(line(13), 16, 46);
-    ctx.fillText(line(12), 16, 72);
+    glyphs.line(ctx, 18, 16, 46, 2, random);
+    glyphs.line(ctx, 18, 16, 72, 2, random);
     ctx.fillStyle = '#7c2932'; ctx.fillRect(16, 109, 223, 1);
-    ctx.font = '11px monospace';
     ctx.fillStyle = '#ae464e';
-    ctx.fillText(line(30), 16, 122);
-    ctx.fillText(line(19), 16, 137);
+    glyphs.line(ctx, 30, 16, 122, 1, random);
+    glyphs.line(ctx, 19, 16, 137, 1, random);
     plaque.texture.needsUpdate = true;
   }
 
@@ -142,11 +127,8 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     const ctx = name.ctx;
     ctx.fillStyle = '#170609'; ctx.fillRect(0, 0, 384, 64);
     ctx.fillStyle = '#6b232b'; ctx.fillRect(9, 8, 366, 1); ctx.fillRect(9, 55, 366, 1);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '23px monospace';
     ctx.fillStyle = '#cd5d64';
-    ctx.fillText(line(24), 192, 34);
+    glyphs.line(ctx, 29, 18, 25, 2, random);
     name.texture.needsUpdate = true;
   }
 
@@ -171,6 +153,7 @@ export function createMuseumHorrorArt({ reducedMotion = false } = {}) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      glyphs.dispose();
       for (const item of [art, plaque, name]) {
         item.texture.dispose();
         item.canvas.width = item.canvas.height = 1;

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="css/museum.css?v=museum-knife-20260924" />
   <link rel="stylesheet" href="css/museum-guestbook.css?v=guestbook-20260922-r3" />
   <link rel="stylesheet" href="css/museum-touch.css?v=museum-mobile-20260926" />
-  <link rel="stylesheet" href="css/museum-horror.css?v=horror-20260926" />
+  <link rel="stylesheet" href="css/museum-horror.css?v=obfuscated-20260926" />
   <script type="importmap">
   {
     "imports": {
@@ -93,7 +93,7 @@
   </div>
 
   <script type="module">
-    import('./js/museum.js?v=museum-horror-20260926').catch(() => {
+    import('./js/museum.js?v=museum-chip-obfuscated-20260926').catch(() => {
       let lang = 'zh';
       try { lang = localStorage.getItem('lang') || 'zh'; } catch {}
       const copy = lang === 'en'

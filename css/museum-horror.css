@@ -1,3 +1,8 @@
+/* This original tiny pixel face is requested only by the activated mode. */
+@font-face {
+  font-family:MuseumObfuscated; src:url('../fonts/museum-obfuscated.woff?v=pixel-20260926') format('woff');
+  font-style:normal; font-weight:100 900; font-display:swap;
+}
 /* Nothing in this file applies before the hidden exhibition state is activated. */
 body.museum-horror {
   --ivory:#bc8c86;
@@ -19,9 +24,10 @@ body.museum-horror .museum-horror-original {
 }
 body.museum-horror .museum-horror-visual {
   position:absolute; inset:0; overflow:hidden; pointer-events:none; user-select:none;
-  color:var(--horror-text); text-shadow:1px 0 rgba(118,19,24,.26); white-space:inherit;
+  display:block; width:100%; height:100%; image-rendering:pixelated;
 }
-body.museum-horror .museum-horror-visual::after { content:attr(data-glyphs); }
+body.museum-horror :is(select,option) { font-family:MuseumObfuscated,monospace; }
+body.museum-horror :is(input,textarea)::placeholder { font-family:MuseumObfuscated,monospace; }
 body.museum-horror #title { border-color:#794d45; }
 body.museum-horror #enter {
   background:linear-gradient(90deg,rgba(9,3,7,.84),rgba(9,3,7,.46) 55%,rgba(9,3,7,.28)),

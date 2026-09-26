@@ -1,8 +1,36 @@
 <!doctype html><meta charset="utf-8"><title>Museum horror audio QA</title>
-<button id="run">Render and check actual music</button><pre id="result">Ready</pre>
+<button id="run">Render and check actual music</button>
+<p>
+  <button id="play-normal" disabled>Play original</button>
+  <button id="play-horror" disabled>Play 8bit horror</button>
+  <button id="play-fallback" disabled>Play fallback</button>
+  <button id="stop" disabled>Stop</button>
+  <span id="playing" role="status"></span>
+</p>
+<pre id="result">Ready</pre>
 <script type="module">
 import {createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE} from '../js/museum-horror-audio.js';
-const result = document.querySelector('#result');
+const result = document.querySelector('#result'), playing = document.querySelector('#playing');
+const run = document.querySelector('#run'), stop = document.querySelector('#stop');
+const playButtons = ['normal', 'horror', 'fallback'].map(name => [name, document.querySelector(`#play-${name}`)]);
+let playbackContext, activeSource, rendered = {}, playbackGeneration = 0;
+function stopPlayback() {
+  playbackGeneration++;
+  if (activeSource) { activeSource.onended = null; activeSource.stop(); activeSource.disconnect(); activeSource = null; }
+  stop.disabled = true; playing.textContent = '';
+}
+stop.onclick = stopPlayback;
+for (const [name, button] of playButtons) button.onclick = async () => {
+  stopPlayback();
+  const generation = playbackGeneration;
+  playbackContext ||= new AudioContext();
+  await playbackContext.resume();
+  if (generation !== playbackGeneration) return;
+  const source = playbackContext.createBufferSource();
+  source.buffer = rendered[name]; source.connect(playbackContext.destination);
+  source.onended = () => { if (activeSource === source) { source.disconnect(); activeSource = null; stop.disabled = true; playing.textContent = ''; } };
+  activeSource = source; source.start(); stop.disabled = false; playing.textContent = `Playing ${name}`;
+};
 function metrics(buffer) {
   let sum = 0, peak = 0, finite = true;
   for (let c = 0; c < buffer.numberOfChannels; c++) for (const value of buffer.getChannelData(c)) {
@@ -10,25 +38,36 @@ function metrics(buffer) {
   }
   return {rms: Math.sqrt(sum / buffer.length / buffer.numberOfChannels), peak, finite};
 }
-document.querySelector('#run').onclick = async () => {
+run.onclick = async () => {
+  stopPlayback(); run.disabled = true; rendered = {};
+  for (const [, button] of playButtons) button.disabled = true;
   result.textContent = 'Rendering…';
   try {
-    const bytes = await (await fetch('../audio/museum.mp3')).arrayBuffer();
+    const response = await fetch('../audio/museum.mp3');
+    if (!response.ok) throw new Error(`Music request failed: ${response.status}`);
+    const bytes = await response.arrayBuffer();
     const decoder = new OfflineAudioContext(2, 1, 44100), music = await decoder.decodeAudioData(bytes);
     async function render(horror, fallback = false) {
       const context = new OfflineAudioContext(2, 44100 * 12, 44100), source = context.createBufferSource();
       source.buffer = music; source.playbackRate.value = horror ? MUSEUM_HORROR_PLAYBACK_RATE : 1;
       const effectContext = fallback ? Object.fromEntries(['createGain', 'createWaveShaper', 'createBiquadFilter', 'createDelay', 'createOscillator'].map(key => [key, context[key].bind(context)])) : context;
       const audio = createMuseumHorrorAudio({context: effectContext});
-      const output = horror ? await audio.enable(source) : source;
-      output.connect(context.destination); source.start(0, 12);
-      const buffer = await context.startRendering(); audio.dispose();
-      return metrics(buffer);
+      try {
+        const output = horror ? await audio.enable(source) : source;
+        output.connect(context.destination); source.start(0, 12);
+        return await context.startRendering();
+      } finally { audio.dispose(); }
     }
-    const normal = await render(false), horror = await render(true), fallback = await render(true, true);
+    rendered.normal = await render(false);
+    rendered.horror = await render(true);
+    rendered.fallback = await render(true, true);
+    const normal = metrics(rendered.normal), horror = metrics(rendered.horror), fallback = metrics(rendered.fallback);
     const louder = horror.rms > normal.rms * 1.15 && fallback.rms > normal.rms * 1.15;
     const bounded = horror.finite && horror.peak < .93 && fallback.finite && fallback.peak < .93;
     result.textContent = JSON.stringify({status: louder && bounded ? 'PASS' : 'FAIL', normal, horror, fallback, louder, bounded, worklet: Boolean(decoder.audioWorklet)}, null, 2);
+    for (const [, button] of playButtons) button.disabled = false;
   } catch (error) { result.textContent = `FAIL: ${error.stack}`; }
+  finally { run.disabled = false; }
 };
+window.addEventListener('pagehide', () => { stopPlayback(); playbackContext?.close(); });
 </script>

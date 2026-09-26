@@ -1,16 +1,8 @@
 /* A visual corruption layer: the exhibition's original text and input values remain intact. */
-const NARROW_GLYPHS = '01#%+=?/\\|{}[]<>!?';
-const WIDE_GLYPHS = '乂刈冂囗尸巛彡巜屮丿乚戈亠卄';
+import { PIXEL_ROWS, randomPixelGlyph, drawPixelGlyph, scrambleMuseumText } from './museum-horror-glyphs.js?v=pixel-20260926';
+export { scrambleMuseumText };
 const IGNORED = 'script,style,noscript,template,canvas,svg,math,input,textarea,select,option,[contenteditable]:not([contenteditable="false"]),.guestbook-sr,.guestbook-honeypot,.museum-horror-copy';
 const UPDATE_INTERVAL = 1 / 8;
-
-export function scrambleMuseumText(text, random = Math.random) {
-  return Array.from(text, character => {
-    if (/\s/u.test(character)) return character;
-    const alphabet = character.codePointAt(0) > 255 ? WIDE_GLYPHS : NARROW_GLYPHS;
-    return alphabet[Math.floor(random() * alphabet.length) % alphabet.length];
-  }).join('');
-}
 
 export function createMuseumHorrorUI({ root = document.body, reducedMotion = false, artCanvas = null } = {}) {
   const document = root.ownerDocument;
@@ -19,6 +11,8 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
   const nativeRecords = new Map();
   const artRecords = new Map();
   let observer = null;
+  let resizeObserver = null;
+  const invalidateLayout = () => { for (const record of textRecords.values()) record.layoutDirty = true; };
   let enabled = false;
   let dirty = false;
   let elapsed = 0;
@@ -34,7 +28,9 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
   }
 
   function unwrap(record) {
-    const { wrapper, original } = record;
+    const { wrapper, original, visual } = record;
+    resizeObserver?.unobserve(wrapper);
+    visual.width = visual.height = 0;
     // Preserve any application update to the real text; only remove our presentation nodes.
     if (wrapper.parentNode && original.parentNode === wrapper) {
       wrapper.replaceWith(...original.childNodes);
@@ -116,13 +112,15 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       wrapper.className = 'museum-horror-copy';
       const original = document.createElement('span');
       original.className = 'museum-horror-original';
-      const visual = document.createElement('span');
+      const visual = document.createElement('canvas');
       visual.className = 'museum-horror-visual';
       visual.setAttribute('aria-hidden', 'true');
+      const context = visual.getContext('2d');
       node.replaceWith(wrapper);
       original.append(node);
       wrapper.append(original, visual);
-      textRecords.set(node, { node, wrapper, original, visual });
+      textRecords.set(node, { node, wrapper, original, visual, context, cells: [], text: '', layoutDirty: true });
+      resizeObserver?.observe(wrapper);
     }
     // Native controls cannot contain spans. Their display labels can change without touching values.
     for (const option of root.querySelectorAll('option')) nativeRecord(option, 'label', 'aria-label');
@@ -133,13 +131,75 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
     dirty = false;
   }
 
+  function drawText(record) {
+    const { node, wrapper, visual, context } = record;
+    // Hidden menus have no geometry and consume no pixel work. Only an
+    // actual text/layout change needs character measurements; animated
+    // frames reuse the same cells and cannot shuffle the surrounding UI.
+    if (!context) return;
+    if (record.layoutDirty || node.data !== record.text || !resizeObserver) {
+      record.layoutDirty = false;
+      record.text = node.data;
+      const bounds = wrapper.getBoundingClientRect();
+      record.cells.length = 0;
+      if (!bounds.width || !bounds.height) return;
+      const ratio = Math.min(document.defaultView?.devicePixelRatio || 1, 2);
+      const style = document.defaultView.getComputedStyle(record.original);
+      visual.width = Math.ceil(bounds.width * ratio);
+      visual.height = Math.ceil(bounds.height * ratio);
+      const range = document.createRange();
+      let offset = 0;
+      for (const character of node.data) {
+        range.setStart(node, offset);
+        offset += character.length;
+        range.setEnd(node, offset);
+        if (/\s/u.test(character)) continue;
+        const cell = range.getBoundingClientRect();
+        record.cells.push({
+          x: Math.round((cell.left - bounds.left) * ratio),
+          y: Math.round((cell.top - bounds.top) * ratio),
+          width: Math.max(1, Math.floor(cell.width * ratio)),
+          height: Math.max(1, Math.floor(cell.height * ratio)),
+          scale: Math.max(1, Math.floor(parseFloat(style.fontSize) * ratio / 7)),
+        });
+      }
+      range.detach();
+    }
+    if (!record.cells.length) return;
+    context.clearRect(0, 0, visual.width, visual.height);
+    context.fillStyle = '#b46760';
+    context.imageSmoothingEnabled = false;
+    for (const cell of record.cells) {
+      const index = randomPixelGlyph();
+      const scale = Math.max(1, Math.min(cell.scale, Math.floor(cell.width / 6)));
+      const verticalScale = Math.max(1, Math.min(cell.scale, Math.floor(cell.height / 7)));
+      const width = Math.min(5 * scale, cell.width);
+      const x = cell.x + Math.floor((cell.width - width) / 2);
+      const y = cell.y + Math.floor((cell.height - 7 * verticalScale) / 2);
+      if (cell.width >= 5 * scale) drawPixelGlyph(context, index, x, y, scale, verticalScale);
+      else {
+        // Narrow original characters retain their own advance as well.
+        const rows = PIXEL_ROWS[index];
+        for (let row = 0; row < 7; row++) {
+          for (let column = 0; column < width; column++) {
+            if (rows[row] & (1 << Math.round(4 - column * 4 / Math.max(1, width - 1)))) context.fillRect(x + column, y + row * verticalScale, 1, verticalScale);
+          }
+        }
+      }
+    }
+    // A tiny frame marker is useful to verify the cadence without exposing
+    // gibberish to accessibility APIs or creating thousands of DOM spans.
+    record.frame = (record.frame || 0) + 1;
+    visual.setAttribute('data-glyphs', String(record.frame));
+  }
+
   function draw() {
     if (observer?.takeRecords().length) dirty = true;
     // Disconnect only for these synchronous presentation writes, avoiding observer feedback.
     observer?.disconnect();
     if (dirty) synchronize();
     for (const record of textRecords.values()) {
-      record.visual.setAttribute('data-glyphs', scrambleMuseumText(record.node.data));
+      drawText(record);
     }
     for (const record of nativeRecords.values()) {
       const current = record.node.getAttribute(record.attribute);
@@ -172,6 +232,12 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       body.classList.add('museum-horror');
       const Observer = document.defaultView?.MutationObserver;
       if (Observer) observer = new Observer(() => { dirty = true; });
+      const ResizeObserver = document.defaultView?.ResizeObserver;
+      if (ResizeObserver) resizeObserver = new ResizeObserver(entries => {
+        const changed = new Set(entries.map(entry => entry.target));
+        for (const record of textRecords.values()) if (changed.has(record.wrapper)) record.layoutDirty = true;
+      });
+      document.defaultView?.addEventListener('resize', invalidateLayout);
       dirty = true;
       elapsed = 0;
       draw();
@@ -191,6 +257,9 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       enabled = false;
       observer?.disconnect();
       observer = null;
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      document.defaultView?.removeEventListener('resize', invalidateLayout);
       for (const record of textRecords.values()) unwrap(record);
       for (const record of nativeRecords.values()) restoreNative(record);
       for (const record of artRecords.values()) restoreArt(record);

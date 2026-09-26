@@ -6,7 +6,7 @@
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
 <main><div id="art"></div><aside><div id="plaque"></div><div id="name"></div><button id="motion">Freeze / animate</button><output id="stats">Loading textures</output></aside></main>
 <script type="module">
-import { createMuseumHorrorArt } from '../js/museum-horror-art.js';
+import { createMuseumHorrorArt } from '../js/museum-horror-art.js?v=obfuscated-20260926';
 const art = createMuseumHorrorArt();
 document.querySelector('#art').append(art.artTexture.image);
 document.querySelector('#plaque').append(art.plaqueTexture.image);

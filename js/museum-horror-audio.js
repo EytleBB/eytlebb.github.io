@@ -1,7 +1,7 @@
 // Created only after the hidden mode starts; the original music graph stays dry.
 export const MUSEUM_HORROR_PLAYBACK_RATE = .78;
 const PROCESSOR_NAME = 'museum-horror-crusher';
-const PROCESSOR_URL = new URL('./museum-horror-audio-worklet.js?v=horror-20260926', import.meta.url);
+const PROCESSOR_URL = new URL('./museum-horror-audio-worklet.js?v=chiptune-20260926', import.meta.url);
 
 export function createMuseumHorrorAudio({ context }) {
   const nodes = new Set(), oscillators = new Set();
@@ -14,16 +14,26 @@ export function createMuseumHorrorAudio({ context }) {
   };
 
   function makeFallback() {
-    // Quantization still works on browsers which cannot load audio worklets.
-    const crusher = own(context.createWaveShaper());
-    crusher.curve = Float32Array.from({ length: 4097 }, (_, i) => Math.min(127, Math.round((i / 2048 - 1) * 128)) / 128);
-    const pulse = gain(.8), modulation = gain(.17);
+    // Three independently squared bands retain chip-like voices without a
+    // worklet. Zero stays zero, so this path never drones through music pauses.
+    const splitter = gain(1), voices = gain(.68);
+    const curve = Float32Array.from({ length: 32769 }, (_, i) => {
+      const value = i / 16384 - 1;
+      return Math.sign(value) * Math.round(Math.min(1, Math.abs(value) * 28) * 15) / 15 * .12;
+    });
+    for (const [type, frequency, level] of [['lowpass', 230, 1], ['bandpass', 740, .85], ['highpass', 1700, .25]]) {
+      const band = own(context.createBiquadFilter()), square = own(context.createWaveShaper()), balance = gain(level);
+      band.type = type; band.frequency.value = frequency; band.Q.value = .7;
+      square.curve = curve; square.oversample = 'none';
+      splitter.connect(band); band.connect(square); square.connect(balance); balance.connect(voices);
+    }
+    const pulse = gain(.85), modulation = gain(.12);
     const oscillator = own(context.createOscillator());
-    oscillator.frequency.value = 4.1;
+    oscillator.type = 'square'; oscillator.frequency.value = 4.1;
     oscillator.connect(modulation); modulation.connect(pulse.gain);
-    crusher.connect(pulse);
+    voices.connect(pulse);
     oscillators.add(oscillator); oscillator.start();
-    return { input: crusher, output: pulse };
+    return { input: splitter, output: pulse };
   }
 
   async function build() {
@@ -37,7 +47,7 @@ export function createMuseumHorrorAudio({ context }) {
           channelCount: 2, channelCountMode: 'explicit',
         }));
       } catch {
-        // A filtered bitcrushed fallback keeps the mode audible on older browsers.
+        // A multiband pulse fallback keeps the mode audible on older browsers.
       }
     }
     if (disposed) return null;
@@ -45,7 +55,7 @@ export function createMuseumHorrorAudio({ context }) {
     inlet = own(context.createBiquadFilter());
     inlet.type = 'highpass'; inlet.frequency.value = 38; inlet.Q.value = .5;
     const tone = own(context.createBiquadFilter());
-    tone.type = 'lowpass'; tone.frequency.value = 3400; tone.Q.value = .65;
+    tone.type = 'lowpass'; tone.frequency.value = 6800; tone.Q.value = .55;
     let effect = processor ? { input: processor, output: processor } : makeFallback();
     inlet.connect(effect.input); effect.output.connect(tone);
 
@@ -59,7 +69,7 @@ export function createMuseumHorrorAudio({ context }) {
       inlet.connect(effect.input); effect.output.connect(tone);
     };
 
-    const mix = gain(2.6);
+    const mix = gain(1.8);
     tone.connect(mix);
     // Two quiet, finite taps: there is no feedback loop or accumulating tail.
     for (const [seconds, level] of [[.173, .18], [.317, .11]]) {

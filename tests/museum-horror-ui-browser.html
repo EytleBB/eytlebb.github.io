@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Museum horror UI checks</title>
-  <link rel="stylesheet" href="../css/museum-horror.css">
+  <link rel="stylesheet" href="../css/museum-horror.css?v=obfuscated-20260926">
   <style>
     body { margin:24px; background:#15131a; color:#ccc; font:16px/1.6 system-ui; }
     #results { position:relative; z-index:15; white-space:pre-wrap; }
@@ -20,7 +20,7 @@
 <pre id="results" role="status">Ready</pre>
 <div id="fixtures"></div>
 <script type="module">
-import { createMuseumHorrorUI } from '../js/museum-horror-ui.js';
+import { createMuseumHorrorUI } from '../js/museum-horror-ui.js?v=obfuscated-20260926';
 const fixtures = document.getElementById('fixtures');
 const results = document.getElementById('results');
 const assert = (condition, message) => { if (!condition) throw Error(message); };
@@ -51,7 +51,7 @@ document.getElementById('preview').addEventListener('click', () => {
 });
 document.getElementById('restore').addEventListener('click', restorePreview);
 function pass(message) { checks.push(`PASS ${message}`); }
-document.getElementById('run').addEventListener('click', () => {
+document.getElementById('run').addEventListener('click', async () => {
   restorePreview();
   checks.length = 0;
   let ui;
@@ -71,6 +71,9 @@ document.getElementById('run').addEventListener('click', () => {
     assert(fixtures.innerHTML === before, 'Inactive controller touched the page');
     pass('normal visit remains entirely unchanged');
     ui.enable();
+    await document.fonts.load('16px MuseumObfuscated');
+    assert(document.fonts.check('16px MuseumObfuscated'), 'Pixel face did not load');
+    pass('original local pixel font loads for native control labels');
     assert(document.body.classList.contains('museum-horror'), 'Missing opt-in class');
     assert(fixtures.textContent === content, 'Original DOM text was changed');
     assert(originalTextNode.isConnected && originalTextNode.data === '继续参观 Resume visit', 'Original text identity lost');
@@ -80,12 +83,15 @@ document.getElementById('run').addEventListener('click', () => {
     assert(clicks === 1, 'Control event listener was lost');
     pass('visual glyphs preserve real text, accessible names and button actions');
     const glyph = control.querySelector('.museum-horror-visual');
+    assert(glyph.tagName === 'CANVAS', 'Visual glyphs are still a platform text font');
+    const shape = [control.offsetWidth, control.offsetHeight, glyph.width, glyph.height];
     const first = glyph.getAttribute('data-glyphs');
     ui.update(0.05);
     assert(glyph.getAttribute('data-glyphs') === first, 'Corruption updated faster than its cap');
     ui.update(0.08);
     assert(glyph.getAttribute('data-glyphs') !== first, 'Corruption did not animate');
-    pass('updates are capped at eight per second');
+    assert(shape.join() === [control.offsetWidth, control.offsetHeight, glyph.width, glyph.height].join(), 'Characters shifted their fixed cells');
+    pass('pixel glyphs remain in fixed character cells and update at eight per second');
     assert(input.value === 'My original name' && textarea.value === 'Original draft', 'Draft changed');
     assert(option.value === 'Unlimited' && option.textContent === 'Unlimited', 'Implicit select value changed');
     assert(option.label !== 'Unlimited' && option.getAttribute('aria-label') === 'Unlimited', 'Option display/accessibility not separated');
@@ -101,7 +107,7 @@ document.getElementById('run').addEventListener('click', () => {
     assert(late.querySelectorAll('.museum-horror-copy').length === 2, 'New guestbook text not covered');
     pass('dynamically rebuilt status and guestbook content receive the effect');
     const artImage = late.querySelector('img');
-    const artOverlay = late.querySelector('canvas');
+    const artOverlay = late.querySelector('.museum-horror-art');
     const originalSource = artImage.getAttribute('src');
     assert(artOverlay && artOverlay.getAttribute('aria-hidden') === 'true', 'Guestbook artwork overlay missing');
     const pixel = artOverlay.getContext('2d').getImageData(0, 0, 1, 1).data;

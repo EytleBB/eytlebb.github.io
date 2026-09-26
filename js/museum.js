@@ -19,8 +19,8 @@ import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-2026092
 import { createMuseumKnifeController } from './museum-knife.js?v=audio-20260926';
 import { createMuseumSounds } from './museum-sounds.js?v=break-sound-20260926';
 import { createMuseumDestruction } from './museum-destruction.js?v=horror-20260926';
-import { createMuseumHorror } from './museum-horror.js?v=horror-20260926';
-import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=horror-20260926';
+import { createMuseumHorror } from './museum-horror.js?v=obfuscated-20260926';
+import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=chiptune-20260926';
 
 const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
   || new URLSearchParams(location.search).get('controls') === 'touch';
