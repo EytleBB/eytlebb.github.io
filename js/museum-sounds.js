@@ -1,3 +1,5 @@
+import { createMuseumBreakSound } from './museum-break-sound.js?v=break-sound-20260926';
+
 // Original procedural Foley: no downloads, extra audio contexts or autoplay.
 const MAX_VOICES = 16;
 const IMPACT_DISTANCE = 30;
@@ -60,6 +62,7 @@ export function createMuseumSoundSamples(kind, sampleRate, variation = 0) {
 
 export function createMuseumSounds({ context, output, listenerPosition }) {
   const buffers = new Map(), voices = new Set();
+  const breakSound = createMuseumBreakSound({ context, output });
   let enabled = false, disposed = false, bus = null, limiter = null, sequence = 0;
 
   function ensureBus() {
@@ -141,8 +144,10 @@ export function createMuseumSounds({ context, output, listenerPosition }) {
   }
 
   return {
+    breakObject: () => breakSound.breakObject(),
     setEnabled(value) {
       enabled = Boolean(value) && !disposed;
+      breakSound.setEnabled(enabled);
       if (!enabled) stopAll();
     },
     swing(kind) {
@@ -160,6 +165,7 @@ export function createMuseumSounds({ context, output, listenerPosition }) {
     },
     dispose() {
       disposed = true; enabled = false;
+      breakSound.dispose();
       stopAll(); buffers.clear(); bus?.disconnect(); limiter?.disconnect(); bus = null; limiter = null;
     },
   };

@@ -3,7 +3,7 @@ import { createMuseumPhysics } from './museum-physics.js?v=audio-20260926';
 
 const LAMP_PARTS = ['base', 'armA', 'armB', 'knuckle', 'head', 'rim', 'lens', 'glow'];
 
-export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth = 3, onAdd, onRemove, onFloorImpact }) {
+export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth = 3, onAdd, onRemove, onFloorImpact, onBreak }) {
   const physics = createMuseumPhysics({ halfWidth, onFloorImpact });
   const records = [];
   const debris = new Map();
@@ -152,6 +152,7 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
       direction: raycaster.ray.direction, point: hit.point, heavy: kind === 'heavy',
       detachSide: hit.item ? 0 : hit.record.slot.side,
     });
+    if (!hit.item) onBreak?.();
     return true;
   }
 

@@ -17,8 +17,8 @@ import { createMuseumPlaques } from './museum-plaques.js?v=destruction-20260926'
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
 import { createMuseumKnifeController } from './museum-knife.js?v=audio-20260926';
-import { createMuseumSounds } from './museum-sounds.js?v=audio-20260926';
-import { createMuseumDestruction } from './museum-destruction.js?v=audio-20260926';
+import { createMuseumSounds } from './museum-sounds.js?v=break-sound-20260926';
+import { createMuseumDestruction } from './museum-destruction.js?v=break-sound-20260926';
 
 const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
   || new URLSearchParams(location.search).get('controls') === 'touch';
@@ -386,6 +386,7 @@ const destruction = createMuseumDestruction({
   onAdd: root => bloomOcclusion?.addObject(root),
   onRemove: root => bloomOcclusion?.removeObject(root),
   onFloorImpact: impact => museumSounds.floorImpact(impact),
+  onBreak: () => museumSounds.breakObject(),
 });
 
 // One listener follows every camera pose, including artwork focus tweens.
