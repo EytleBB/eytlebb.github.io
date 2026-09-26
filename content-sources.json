@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "repositories": {
+    "patchlog": {
+      "url": "https://github.com/EytleBB/Eytle-Patch-Log.git",
+      "commit": "7410cdaacf2fdf7aecb5ae0e8d5e221907e5f253"
+    },
+    "museum": {
+      "url": "https://github.com/EytleBB/Eytle-Museum.git",
+      "commit": "0532fbbb388536c3b15cea99ebd440f78d211852"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+#!/bin/bash
+# Install only from the release session after seeding the private content repos.
+set -euo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
+BASE=/srv/eytle-site
+BARE="$BASE/site.git"
+REPO="$BASE/repo"
+CONTENT="$BASE/content"
+WEB=/var/www/eytle.cn
+
+while read -r oldrev newrev refname; do
+    [[ "$refname" == refs/heads/main ]] || continue
+    [[ "$newrev" != 0000000000000000000000000000000000000000 ]] || continue
+    # One complete deployment at a time; never publish an older concurrent push.
+    exec 9>"$BASE/deploy.lock"
+    flock 9
+    [[ "$(git --git-dir="$BARE" rev-parse refs/heads/main)" == "$newrev" ]] || continue
+    stage=$(mktemp -d "$BASE/release.XXXXXXXX")
+    trap 'rm -rf -- "$stage"' EXIT
+    mkdir "$stage/source"
+    git --git-dir="$BARE" archive "$newrev" | tar -x -C "$stage/source"
+    if [[ -f "$stage/source/content-sources.json" ]]; then
+        python3 "$stage/source/scripts/assemble-site.py" \
+            --site-root "$stage/source" \
+            --logs-repo "$CONTENT/Eytle-Patch-Log.git" \
+            --museum-repo "$CONTENT/Eytle-Museum.git" \
+            --output "$stage/public"
+    else
+        # Rollback to a pre-split commit that still owns all public content.
+        test -f "$stage/source/logs/index.json"
+        test -f "$stage/source/images/gallery/index.json"
+        mkdir "$stage/public"
+        rsync -a --exclude-from="$stage/source/scripts/deploy-excludes.txt" \
+            "$stage/source/" "$stage/public/"
+    fi
+    # Assembly and validation must finish before touching the deployed checkout/site.
+    git -C "$REPO" fetch origin main
+    git -C "$REPO" reset --hard "$newrev"
+    rsync -ac --delete "$stage/public/" "$WEB/"
+    cp "$stage/source/scripts/deploy-excludes.txt" "$BASE/deploy-excludes.txt"
+    echo "Deployed website $newrev with its pinned content."
+    rm -rf -- "$stage"
+    trap - EXIT
+    flock -u 9
+    exec 9>&-
+done

@@ -17,3 +17,11 @@
 5. 核对本地、GitHub、服务器裸仓库、服务器工作目录和 `eytle.cn` 的版本及关键文件内容。
 
 部署前遵循根目录的 `CODEx_DEPLOY_GUIDE.md`，并保持 `scripts/deploy-excludes.txt` 与服务器排除规则一致。发布记录和备份不进入公开网站目录。
+
+## 内容分仓后的附加发布要求
+
+日志和展馆素材的发布也由发布会话整合。先发布 `content-sources.json` 引用的内容提交，
+再发布网站；首次上线前先导入服务器私有内容仓库并安装新的组装 hook。
+必须遵循 [内容分仓说明](content-repositories.md)，旧的仅同步主仓库流程不再适用。
+主仓库 Node/Python 全量测试不依赖个人内容；图片内容测试在 Eytle-Museum 中运行，
+实际组装会额外校验所锁定的完整内容。
