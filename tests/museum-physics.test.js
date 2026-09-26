@@ -142,3 +142,47 @@ test('different blade contact heights leave a wall painting leaning or flat thro
   assert.ok(heights[0] > .4, 'a lower contact can leave the frame propped against the wall');
   assert.ok(heights[1] < .08, 'a higher contact can topple the frame flat');
 });
+
+
+test('floor impact reports material, contact point and pre-solve speed; resting props are silent', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  for (const fps of [30, 60, 144]) {
+    const impacts = [], physics = createMuseumPhysics({ onFloorImpact: impact => impacts.push(impact) });
+    const entity = prop(physics, { kind: 'lamp', mass: .9, halfExtents: [.1, .1, .1], position: at(1, 2, -3) });
+    step(physics, .2, fps);
+    assert.equal(impacts.length, 0, 'no sound while still in mid-air');
+    step(physics, 6, fps);
+    assert.ok(impacts.length >= 1 && impacts.length <= 4, 'only audible bounces, no contact chatter');
+    assert.equal(impacts[0].kind, 'lamp');
+    assert.equal(impacts[0].mass, .9);
+    assert.ok(impacts[0].speed > 5 && impacts[0].speed < 7);
+    assert.ok(Math.abs(impacts[0].position.y - .006) < 1e-5);
+    const settled = impacts.length;
+    step(physics, 3, fps);
+    assert.equal(impacts.length, settled);
+    physics.hit(entity, { direction: at(0, 0, -1), point: entity.body.position, heavy: true });
+    step(physics, 3, fps);
+    assert.ok(impacts.length > settled, 'a kicked prop sounds on its next landing');
+    physics.dispose();
+  }
+});
+
+test('wall contact stays silent; tipping an already-grounded frame still emits its floor slap', async () => {
+  const { createMuseumPhysics } = await moduleReady;
+  const impacts = [], physics = createMuseumPhysics({ onFloorImpact: impact => impacts.push(impact) });
+  const wall = prop(physics, { position: at(2.7, 3, -4), halfExtents: [.1, .1, .1] });
+  wall.body.velocity.set(8, 0, 0);
+  step(physics, .15);
+  assert.equal(impacts.length, 0);
+  physics.remove(wall);
+  const frame = prop(physics, { position: at(0, .608, 0) });
+  step(physics, 3);
+  impacts.length = 0;
+  physics.hit(frame, { direction: at(0, 0, -1), point: at(0, 1.15, .06), heavy: true });
+  step(physics, 5);
+  assert.ok(impacts.some(impact => impact.speed > 1.5), 'rotation contributes to the floor impact');
+  const count = impacts.length;
+  physics.removeOwner(frame.owner); step(physics, 3);
+  assert.equal(impacts.length, count, 'removed bodies cannot leave delayed sound callbacks');
+  physics.dispose();
+});

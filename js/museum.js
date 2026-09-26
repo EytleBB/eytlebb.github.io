@@ -16,8 +16,9 @@ import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-202609
 import { createMuseumPlaques } from './museum-plaques.js?v=destruction-20260926';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
-import { createMuseumKnifeController } from './museum-knife.js?v=destruction-20260926';
-import { createMuseumDestruction } from './museum-destruction.js?v=destruction-20260926';
+import { createMuseumKnifeController } from './museum-knife.js?v=audio-20260926';
+import { createMuseumSounds } from './museum-sounds.js?v=audio-20260926';
+import { createMuseumDestruction } from './museum-destruction.js?v=audio-20260926';
 
 const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
   || new URLSearchParams(location.search).get('controls') === 'touch';
@@ -329,6 +330,9 @@ const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
 const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'), {
+  onSwing(kind) {
+    if (isLocked() && !focusState && !plaqueSession) museumSounds.swing(kind);
+  },
   onStrike(kind) {
     if (isLocked() && !focusState && !plaqueSession) destruction.strike(kind);
   },
@@ -375,10 +379,13 @@ scene.add(new THREE.HemisphereLight(0xc4d7de, 0x192a2d, 0.75));
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 88);
 camera.position.set(0, EYE_Y, SPAWN_Z);
+const museumSounds = createMuseumSounds({ context: audioListener.context, output: audioListener.getInput(),
+  listenerPosition: camera.position });
 const destruction = createMuseumDestruction({
   scene, camera, reach: ART_INTERACT_DISTANCE, halfWidth: HALL_HALF_WIDTH,
   onAdd: root => bloomOcclusion?.addObject(root),
   onRemove: root => bloomOcclusion?.removeObject(root),
+  onFloorImpact: impact => museumSounds.floorImpact(impact),
 });
 
 // One listener follows every camera pose, including artwork focus tweens.
@@ -607,7 +614,7 @@ const SPEAKER_REF_DISTANCE = 4;
 const SPEAKER_EDGE_GAIN = 0.18;
 const SPEAKER_ROLLOFF = 1 - SPEAKER_EDGE_GAIN;
 const SPEAKER_CROSSFADE_SECONDS = 0.12;
-const MUSEUM_MUSIC_VOLUME = 0.70;
+const MUSEUM_MUSIC_VOLUME = 0.90;
 const MUSEUM_MUSIC_URL = 'audio/museum.mp3';
 const ART_H = 1.52;           // artwork height (width derives from aspect)
 const ART_MAX_W = 2.16;       // clamp very wide images
@@ -1754,6 +1761,7 @@ let jumpQueued = false;
 function syncMuseumAudioState() {
   const audible = entered && (isLocked() || guestbook.isOpen()) && !document.hidden;
   audioListener.setMasterVolume(audible ? 1 : 0);
+  museumSounds.setEnabled(audible);
 }
 
 function clearInput() {

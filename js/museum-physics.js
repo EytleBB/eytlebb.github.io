@@ -5,8 +5,9 @@ const STEP = 1 / 120;
 const MAX_DISTANCE = 88;
 
 // Only detached props become dynamic bodies. Sleeping props still occupy a slot.
-export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6.7 } = {}) {
-  let world = null, rear = null, accumulator = 0;
+export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6.7, onFloorImpact } = {}) {
+  let world = null, rear = null, floor = null, accumulator = 0;
+  const bodyEntities = new Map();
   const entities = [];
   const ribs = new Map();
   let ribStations = [];
@@ -31,7 +32,7 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
     world.defaultContactMaterial.restitution = .12;
     world.defaultContactMaterial.contactEquationStiffness = 1e7;
     world.defaultContactMaterial.contactEquationRelaxation = 4;
-    plane([0, floorY, 0], [-Math.PI / 2, 0, 0]);
+    floor = plane([0, floorY, 0], [-Math.PI / 2, 0, 0]);
     plane([-halfWidth, 0, 0], [0, Math.PI / 2, 0]);
     plane([halfWidth, 0, 0], [0, -Math.PI / 2, 0]);
     plane([0, ceilingY, 0], [Math.PI / 2, 0, 0]);
@@ -60,6 +61,7 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
     if (index < 0) return;
     entities.splice(index, 1);
     world.removeBody(entity.body);
+    bodyEntities.delete(entity.body);
     entity.onRemove?.();
   }
 
@@ -75,7 +77,10 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
       allowSleep: true, sleepSpeedLimit: .12, sleepTimeLimit: .9,
     });
     world.addBody(body);
-    const entity = { owner, kind, body, onRemove };
+    const entity = { owner, kind, body, onRemove, lastImpactAt: -Infinity,
+      impactVelocity: new CANNON.Vec3(), impactRotation: new CANNON.Vec3(), impactSpeed: 0,
+      impactPoint: new CANNON.Vec3() };
+    bodyEntities.set(body, entity);
     entities.push(entity);
     return entity;
   }
@@ -104,6 +109,30 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
     if (velocity > 10) body.velocity.scale(10 / velocity, body.velocity);
   }
 
+  function reportFloorImpacts() {
+    // Read every floor contact, including a new corner of an already touching
+    // frame. Pair-begin events alone miss the slap when that frame tips flat.
+    for (const contact of world.contacts) {
+      const floorFirst = contact.bi === floor;
+      if (!floorFirst && contact.bj !== floor) continue;
+      const entity = bodyEntities.get(floorFirst ? contact.bj : contact.bi);
+      if (!entity) continue;
+      const r = floorFirst ? contact.rj : contact.ri;
+      const v = entity.impactVelocity, w = entity.impactRotation;
+      // Pre-solve velocity at the contact, projected towards the floor.
+      const speed = -(v.y + w.z * r.x - w.x * r.z);
+      if (speed <= entity.impactSpeed) continue;
+      entity.impactSpeed = speed;
+      floor.position.vadd(floorFirst ? contact.ri : contact.rj, entity.impactPoint);
+    }
+    for (const entity of entities) {
+      if (entity.impactSpeed < .7 || world.time - entity.lastImpactAt < .12) continue;
+      entity.lastImpactAt = world.time;
+      onFloorImpact({ kind: entity.kind, mass: entity.body.mass, speed: entity.impactSpeed,
+        position: { x: entity.impactPoint.x, y: entity.impactPoint.y, z: entity.impactPoint.z } });
+    }
+  }
+
   function update(dt, playerZ) {
     for (const entity of [...entities]) {
       const p = entity.body.position;
@@ -113,7 +142,13 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
     if (entities.every(entity => entity.body.sleepState === CANNON.Body.SLEEPING)) { accumulator = 0; return; }
     accumulator += Math.min(dt, .1);
     while (accumulator + 1e-10 >= STEP) {
+      if (onFloorImpact) for (const entity of entities) {
+        entity.impactVelocity.copy(entity.body.velocity);
+        entity.impactRotation.copy(entity.body.angularVelocity);
+        entity.impactSpeed = 0;
+      }
       world.step(STEP);
+      if (onFloorImpact) reportFloorImpacts();
       accumulator -= STEP;
     }
   }
@@ -134,7 +169,7 @@ export function createMuseumPhysics({ halfWidth = 3, floorY = .006, ceilingY = 6
     },
     dispose() {
       for (const entity of [...entities]) remove(entity);
-      world = null; rear = null; accumulator = 0; ribs.clear();
+      world = null; rear = null; floor = null; accumulator = 0; ribs.clear(); bodyEntities.clear();
     },
   };
 }

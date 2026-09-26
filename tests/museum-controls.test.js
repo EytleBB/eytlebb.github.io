@@ -97,6 +97,7 @@ async function createControls(touch = false) {
     runtimeStatus: { textContent: '' }, enterEl: { inert: false },
     enterGo: { ...eventTarget(), blur() {}, textContent: '' },
     artHintEl: { classList: classList() }, artHintCaption: { textContent: '' },
+    museumSounds: { enabled: false, setEnabled(value) { this.enabled = value; } },
     audioListener: { setMasterVolume() {} }, renderer: { setAnimationLoop: value => loops.push(value) },
     T: (zh, en) => en,
     THREE: {
@@ -596,4 +597,23 @@ test('rotating a touch view reframes the focused picture without losing the retu
   assert.ok(h.camera.position.z > landscape, 'portrait view backs away to fit the artwork width');
   h.api.unfocus(); h.tick(40);
   near(h.camera.position.x, 0); near(h.camera.position.z, 0);
+});
+
+
+test('effects follow visit, hidden-tab and resume audio state on desktop and touch', async () => {
+  for (const touch of [false, true]) {
+    const h = await createControls(touch);
+    if (touch) await h.api.enterPlay(); else h.lock(true);
+    assert.equal(h.context.museumSounds.enabled, true);
+    h.document.hidden = true;
+    h.document.emit('visibilitychange');
+    assert.equal(h.context.museumSounds.enabled, false);
+    h.document.hidden = false;
+    h.document.emit('visibilitychange');
+    assert.equal(h.context.museumSounds.enabled, false, 'a visible paused visit remains silent');
+    if (touch) await h.api.enterPlay(); else h.lock(true);
+    assert.equal(h.context.museumSounds.enabled, true);
+    h.api.pauseVisit();
+    assert.equal(h.context.museumSounds.enabled, false);
+  }
 });

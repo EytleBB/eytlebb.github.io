@@ -185,7 +185,7 @@ test('reduced-motion strikes use a small movement and retain separate recovery t
   }
 });
 
-function attackController(onStrike) {
+function attackController(onStrike, onSwing) {
   let demo, resolveFetch;
   const attacks = [];
   const controllerSource = source.slice(source.indexOf('export function createMuseumKnifeController'))
@@ -208,7 +208,7 @@ function attackController(onStrike) {
       }
     },
   });
-  const controller = createController({}, { onStrike });
+  const controller = createController({}, { onStrike, onSwing });
   return {
     controller, attacks, get demo() { return demo; },
     async load() {
@@ -299,4 +299,39 @@ test('pause/focus input clearing cancels an unlanded impact without disabling th
   h.controller.setAttackHeld('heavy', false);
   h.tick(1);
   assert.deepEqual(hits, ['heavy']);
+});
+
+
+test('air swishes fire once during acceleration, ahead of contact, including interrupted inspection', () => {
+  for (const fps of [10, 30, 144]) for (const kind of ['light', 'heavy']) for (const inspecting of [false, true]) {
+    const demo = knife(), sounds = [], hits = [];
+    demo.onSwing = value => sounds.push({ kind: value, time: demo.time });
+    demo.onStrike = value => hits.push({ kind: value, time: demo.time });
+    if (inspecting) { demo.inspect(); advance(demo, .8); }
+    demo.attack(kind);
+    const start = demo.attackSwingAt;
+    advance(demo, 2, fps);
+    assert.equal(sounds.length, 1);
+    assert.equal(sounds[0].kind, kind);
+    assert.ok(sounds[0].time >= start && sounds[0].time < start + 1 / fps + 1e-8);
+    assert.ok(sounds[0].time <= hits[0].time);
+  }
+});
+
+test('stowing and losing control cancel an unplayed swish; the next accepted swing sounds normally', async () => {
+  for (const cancel of ['stow', 'clear', 'hidden']) {
+    const sounds = [], h = attackController(undefined, kind => sounds.push(kind));
+    h.controller.equip(); await h.load(); h.tick(.7);
+    h.controller.setAttackHeld('heavy', true); h.tick(.03);
+    if (cancel === 'stow') h.controller.stow();
+    if (cancel === 'clear') h.controller.clearAttackInput();
+    if (cancel === 'hidden') h.controller.update(.01, false);
+    h.tick(1);
+    assert.deepEqual(sounds, []);
+    h.controller.equip(); h.tick(.7);
+    h.controller.setAttackHeld('light', true);
+    h.controller.setAttackHeld('light', false);
+    h.tick(1);
+    assert.deepEqual(sounds, ['light']);
+  }
 });
