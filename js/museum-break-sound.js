@@ -54,6 +54,7 @@ export function createMuseumBreakSound({ context, output, fetchAudio = () => fet
   }
 
   return {
+    preload,
     async breakObject() {
       if (disposed) return false;
       const play = ++broken > SILENT_BREAKS && enabled && context.state === 'running';

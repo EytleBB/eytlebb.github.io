@@ -1,4 +1,4 @@
-import { createMuseumBreakSound } from './museum-break-sound.js?v=horror-finale-20260926';
+import { createMuseumBreakSound } from './museum-break-sound.js?v=site-horror-20260926';
 
 // Original procedural Foley: no downloads, extra audio contexts or autoplay.
 const MAX_VOICES = 16;
@@ -144,6 +144,7 @@ export function createMuseumSounds({ context, output, listenerPosition }) {
   }
 
   return {
+    prepareHorror: () => breakSound.preload(),
     breakObject: () => breakSound.breakObject(),
     finale: () => breakSound.finale(),
     setEnabled(value) {

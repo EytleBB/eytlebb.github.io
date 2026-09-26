@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createMuseumHorrorArt } from './museum-horror-art.js?v=ending-20260926';
-import { createMuseumHorrorUI } from './museum-horror-ui.js?v=ending-20260926';
+import { createMuseumHorrorUI } from './museum-horror-ui.js?v=site-horror-20260926';
 
 export const HORROR_BREAK_THRESHOLD = 24;
 const fract = value => value - Math.floor(value);
@@ -144,6 +144,14 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
       if (disposed) return;
       breaks++;
       if (breaks === HORROR_BREAK_THRESHOLD) activate();
+    },
+    restore() {
+      if (disposed) return false;
+      // A returning horror visit restores the scene without replaying the
+      // destruction callbacks or manufacturing any new broken props.
+      breaks = Math.max(breaks, HORROR_BREAK_THRESHOLD);
+      activate();
+      return active;
     },
     applySlot, applyDebris, applyMatte, setProgress,
     releaseDebris(root) { root.traverse(mesh => {

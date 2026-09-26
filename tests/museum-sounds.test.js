@@ -132,3 +132,25 @@ test('the public finale trigger forwards the cached supplied clip through the ma
   assert.equal(sounds.finale(), false);
   sounds.dispose();
 });
+
+test('public horror preparation loads silently before entry and permits a later finale without breaking props', async (t) => {
+  const module = await ready, h = contextHarness();
+  const supplied = { duration: 5.43 };
+  let fetches = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    fetches++;
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+  });
+  h.context.decodeAudioData = async () => supplied;
+  h.context.state = 'suspended';
+  const sounds = create(module, h);
+  assert.equal(await sounds.prepareHorror(), supplied);
+  assert.equal(await sounds.prepareHorror(), supplied);
+  assert.equal(fetches, 1);
+  assert.equal(h.nodes.length, 0, 'buffering does not create any audible graph');
+  h.context.state = 'running'; sounds.setEnabled(true);
+  assert.equal(sounds.finale(), true);
+  assert.equal(h.sources[0].buffer, supplied);
+  assert.equal(h.sources[0].starts, 1);
+  sounds.dispose();
+});

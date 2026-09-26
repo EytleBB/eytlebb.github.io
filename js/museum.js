@@ -17,9 +17,9 @@ import { createMuseumPlaques } from './museum-plaques.js?v=destruction-20260926'
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
 import { createMuseumKnifeController } from './museum-knife.js?v=ending-20260926';
-import { createMuseumSounds } from './museum-sounds.js?v=ending-20260926';
+import { createMuseumSounds } from './museum-sounds.js?v=site-horror-20260926';
 import { createMuseumDestruction } from './museum-destruction.js?v=ending-20260926';
-import { createMuseumHorror } from './museum-horror.js?v=ending-20260926';
+import { createMuseumHorror } from './museum-horror.js?v=site-horror-20260926';
 import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=ending-20260926';
 import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=chiptune-20260926';
 
@@ -719,6 +719,8 @@ museumHorror = createMuseumHorror({ scene, renderer, architecture, atmosphere, f
   forEachDebris: callback => destruction.forEachDebris(callback),
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   onActivate() {
+    window.eytleHorror?.activate();
+    void museumSounds.prepareHorror();
     // Stop queueing original paintings; all horror surfaces share three small textures.
     streamBatchQueue.length = 0;
     queuedBatchStarts.clear();
@@ -2285,6 +2287,7 @@ async function boot() {
   fixtureBatch = createMuseumFixtureBatch({ scene, fixtures: pictureLightFixtures, camera });
   bloomOcclusion = createMuseumBloomOcclusion(scene);
   try { connectMuseumTrack(); } catch (error) { reportMuseumTrackFailure(error); }
+  if (window.eytleHorror?.isActive()) museumHorror.restore();
   await prewarmScene();
   if (contextLost) return;
   startLoop();        // render the hall behind the translucent start overlay

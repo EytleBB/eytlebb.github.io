@@ -1,15 +1,19 @@
 /* A visual corruption layer: the exhibition's original text and input values remain intact. */
 import { PIXEL_ROWS, randomPixelGlyph, drawPixelGlyph, scrambleMuseumText } from './museum-horror-glyphs.js?v=pixel-20260926';
 export { scrambleMuseumText };
-const IGNORED = 'script,style,noscript,template,canvas,svg,math,input,textarea,select,option,[contenteditable]:not([contenteditable="false"]),.guestbook-sr,.guestbook-honeypot,.museum-horror-copy';
+const IGNORED = 'script,style,noscript,template,canvas,svg,math,input,textarea,select,option,[contenteditable]:not([contenteditable="false"]),.guestbook-sr,.guestbook-honeypot,.hp-field,.sr-only,.museum-horror-copy';
 const UPDATE_INTERVAL = 1 / 24;
 
-export function createMuseumHorrorUI({ root = document.body, reducedMotion = false, artCanvas = null } = {}) {
+export function createMuseumHorrorUI({ root = document.body, reducedMotion = false, artCanvas = null,
+  visibleOnly = false, nativeLabels = true } = {}) {
   const document = root.ownerDocument;
   const body = document.body;
   const textRecords = new Map();
   const nativeRecords = new Map();
   const artRecords = new Map();
+  const visibilityRecords = new Map();
+  const visibleRecords = new Set();
+  let intersectionObserver = null;
   let observer = null;
   let resizeObserver = null;
   const invalidateLayout = () => { for (const record of textRecords.values()) record.layoutDirty = true; };
@@ -30,6 +34,9 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
   function unwrap(record) {
     const { wrapper, original, visual } = record;
     resizeObserver?.unobserve(wrapper);
+    intersectionObserver?.unobserve(wrapper);
+    visibilityRecords.delete(wrapper);
+    visibleRecords.delete(record);
     visual.width = visual.height = 0;
     // Preserve any application update to the real text; only remove our presentation nodes.
     if (wrapper.parentNode && original.parentNode === wrapper) {
@@ -49,7 +56,7 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
   }
 
   function nativeRecord(node, attribute, accessible) {
-    if (nativeRecords.has(node)) return;
+    if (!nativeLabels || nativeRecords.has(node) || node.closest('.guestbook-honeypot,.hp-field,.sr-only')) return;
     const original = node.getAttribute(attribute);
     const text = original ?? node.textContent;
     if (!text?.trim()) return;
@@ -115,12 +122,19 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       const visual = document.createElement('canvas');
       visual.className = 'museum-horror-visual';
       visual.setAttribute('aria-hidden', 'true');
+      // Offscreen text needs no canvas backing store until it first enters view.
+      if (intersectionObserver) visual.width = visual.height = 0;
       const context = visual.getContext('2d');
       node.replaceWith(wrapper);
       original.append(node);
       wrapper.append(original, visual);
-      textRecords.set(node, { node, wrapper, original, visual, context, cells: [], text: '', layoutDirty: true });
+      const record = { node, wrapper, original, visual, context, cells: [], text: '', layoutDirty: true };
+      textRecords.set(node, record);
       resizeObserver?.observe(wrapper);
+      if (intersectionObserver) {
+        visibilityRecords.set(wrapper, record);
+        intersectionObserver.observe(wrapper);
+      }
     }
     // Native controls cannot contain spans. Their display labels can change without touching values.
     for (const option of root.querySelectorAll('option')) nativeRecord(option, 'label', 'aria-label');
@@ -198,7 +212,7 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
     // Disconnect only for these synchronous presentation writes, avoiding observer feedback.
     observer?.disconnect();
     if (dirty) synchronize();
-    for (const record of textRecords.values()) {
+    for (const record of intersectionObserver ? visibleRecords : textRecords.values()) {
       drawText(record);
     }
     for (const record of nativeRecords.values()) {
@@ -237,6 +251,18 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
         const changed = new Set(entries.map(entry => entry.target));
         for (const record of textRecords.values()) if (changed.has(record.wrapper)) record.layoutDirty = true;
       });
+      const IntersectionObserver = document.defaultView?.IntersectionObserver;
+      if (visibleOnly && IntersectionObserver) intersectionObserver = new IntersectionObserver(entries => {
+        if (!enabled) return;
+        for (const entry of entries) {
+          const record = visibilityRecords.get(entry.target);
+          if (!record) continue;
+          if (entry.isIntersecting) {
+            record.layoutDirty = true;
+            visibleRecords.add(record);
+          } else visibleRecords.delete(record);
+        }
+      });
       document.defaultView?.addEventListener('resize', invalidateLayout);
       dirty = true;
       elapsed = 0;
@@ -259,6 +285,10 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       observer = null;
       resizeObserver?.disconnect();
       resizeObserver = null;
+      intersectionObserver?.disconnect();
+      intersectionObserver = null;
+      visibilityRecords.clear();
+      visibleRecords.clear();
       document.defaultView?.removeEventListener('resize', invalidateLayout);
       for (const record of textRecords.values()) unwrap(record);
       for (const record of nativeRecords.values()) restoreNative(record);

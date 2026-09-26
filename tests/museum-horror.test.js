@@ -332,3 +332,38 @@ test('progress darkens monotonically, clamps at a readable positive floor, and d
   assert.equal(h.renderer.toneMappingExposure, 1.12);
   assert.deepEqual(h.lights.map(light => light.intensity), [.3, .75, 4]);
 });
+
+test('a returning horror visit restores the scene once without replaying break events', () => {
+  const h = harness();
+  assert.equal(h.controller.brokenCount, 0);
+  assert.equal(h.controller.restore(), true);
+  assert.equal(h.controller.active, true);
+  assert.equal(h.controller.brokenCount, 24);
+  assert.equal(h.activations(), 1);
+  assert.equal(h.made.art.length, 1);
+  assert.equal(h.made.ui.length, 1);
+  assert.equal(h.slots[0].pic.material.map, h.made.art[0].artTexture);
+  assert.deepEqual(h.architecture.calls, [true]);
+  for (let i = 0; i < 3; i++) h.controller.restore();
+  assert.equal(h.activations(), 1);
+  assert.equal(h.controller.brokenCount, 24);
+  assert.equal(h.made.materials.length, 3);
+  h.controller.recordBreak();
+  h.controller.restore();
+  assert.equal(h.controller.brokenCount, 25, 'restoration never rolls back later real destruction counts');
+  assert.equal(h.activations(), 1);
+  h.controller.dispose();
+  assert.equal(h.controller.restore(), false);
+  assert.equal(h.controller.active, false);
+  assert.equal(h.controller.brokenCount, 25);
+  assert.equal(h.made.art.length, 1, 'disposed controllers cannot recreate horror resources');
+});
+
+test('restoring a partially completed destruction count raises it directly to the trigger', () => {
+  const h = harness();
+  for (let i = 0; i < 9; i++) h.controller.recordBreak();
+  h.controller.restore();
+  assert.equal(h.controller.brokenCount, 24);
+  assert.equal(h.activations(), 1);
+  h.controller.dispose();
+});

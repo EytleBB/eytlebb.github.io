@@ -1186,8 +1186,12 @@ function escapeHtml(s) {
 /* ============================================================
    MOTION — forest ambience, content reveals, interactive light
    ============================================================ */
+function siteMotionSuppressed() {
+  return document.documentElement.classList.contains('site-horror');
+}
+
 function enhanceMotion(root = stage) {
-  if (!root) return;
+  if (!root || siteMotionSuppressed()) return;
 
   const revealSelector = [
     '.hero', '.col-left > .panel', '.col-right', '.list > .list-item', '.dl-item',
@@ -1210,14 +1214,20 @@ function enhanceMotion(root = stage) {
 function initSurfaceLight() {
   let frame = 0;
   let pending = null;
+  window.addEventListener('eytle:horror', () => {
+    if (!siteMotionSuppressed()) return;
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0; pending = null;
+  });
   stage.addEventListener('pointermove', (event) => {
+    if (siteMotionSuppressed()) return;
     const surface = event.target.closest?.('.motion-surface');
     if (!surface || !stage.contains(surface)) return;
     pending = { surface, x: event.clientX, y: event.clientY };
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (!pending) return;
+      if (!pending || siteMotionSuppressed()) { pending = null; return; }
       const rect = pending.surface.getBoundingClientRect();
       pending.surface.style.setProperty('--surface-x', `${pending.x - rect.left}px`);
       pending.surface.style.setProperty('--surface-y', `${pending.y - rect.top}px`);
@@ -1240,7 +1250,7 @@ function initAmbientMotion() {
   let heroVisible = false;
   const pointer = { x: -1000, y: -1000, active: false };
   const finePointer = window.matchMedia('(pointer: fine)');
-  const canAnimate = () => heroVisible && activeSection === 'about' && !REDUCED_MOTION.matches && !document.hidden;
+  const canAnimate = () => !siteMotionSuppressed() && heroVisible && activeSection === 'about' && !REDUCED_MOTION.matches && !document.hidden;
   const makeMote = () => ({
     x: Math.random() * width, y: Math.random() * height,
     radius: .5 + Math.random(), speed: .1 + Math.random() * .18,
@@ -1257,7 +1267,7 @@ function initAmbientMotion() {
   }
   function drawAmbient(now) {
     animationFrame = 0;
-    if (!canAnimate()) return;
+    if (!canAnimate()) { syncAmbient(); return; }
     if (lastTime && now - lastTime < 32) {
       animationFrame = requestAnimationFrame(drawAmbient);
       return;
@@ -1320,15 +1330,23 @@ function initAmbientMotion() {
   document.addEventListener('pointerleave', () => { pointer.active = false; });
   window.addEventListener('resize', resizeAmbient, { passive: true });
   document.addEventListener('visibilitychange', syncAmbient);
+  window.addEventListener('eytle:horror', syncAmbient);
+  window.addEventListener('pageshow', syncAmbient);
+  window.addEventListener('pagehide', () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0; lastTime = 0; canvas.hidden = true;
+  });
   REDUCED_MOTION.addEventListener?.('change', syncAmbient);
   new MutationObserver(trackHero).observe(stage, { childList: true });
   resizeAmbient();
   trackHero();
+  syncAmbient();
 }
 
 function preloadThemeArtwork() {
-  if (!window.matchMedia('(pointer: fine)').matches) return;
+  if (siteMotionSuppressed() || !window.matchMedia('(pointer: fine)').matches) return;
   const preload = () => {
+    if (siteMotionSuppressed()) return;
     ['images/forest-night.webp', 'images/forest-day.webp'].forEach((src) => {
       const image = new Image();
       image.decoding = 'async';

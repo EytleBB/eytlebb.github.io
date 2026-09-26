@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <script src="js/site-horror-state.js?v=site-horror-20260926"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>This is Eytle</title>
@@ -93,7 +94,7 @@
   </div>
 
   <script type="module">
-    import('./js/museum.js?v=museum-ending-20260926').catch(() => {
+    import('./js/museum.js?v=museum-site-horror-20260926').catch(() => {
       let lang = 'zh';
       try { lang = localStorage.getItem('lang') || 'zh'; } catch {}
       const copy = lang === 'en'

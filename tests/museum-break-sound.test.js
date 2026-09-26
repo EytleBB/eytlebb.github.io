@@ -144,3 +144,23 @@ test('an ending during decode cancels waiting break requests and never starts a 
   assert.equal(sound.finale(), true, 'an explicit later call may use the now-cached buffer');
   sound.dispose();
 });
+
+test('pure preparation caches the finale while paused without starting audio or advancing real break counts', async () => {
+  const { createMuseumBreakSound } = await ready, h = harness();
+  const sound = createMuseumBreakSound(h);
+  h.context.state = 'suspended';
+  const prepared = await Promise.all([sound.preload(), sound.preload()]);
+  assert.ok(prepared.every(buffer => buffer === h.buffer));
+  assert.equal(h.fetches, 1); assert.equal(h.decodes, 1);
+  assert.equal(h.sources.length, 0); assert.equal(h.gains.length, 0);
+  assert.equal(sound.finale(), false);
+  h.context.state = 'running'; sound.setEnabled(true);
+  assert.equal(sound.finale(), true, 'a restored horror visit can play the finale without any fresh destruction');
+  for (let n = 0; n < 12; n++) assert.equal(await sound.breakObject(), false);
+  assert.equal(h.sources.length, 1, 'preparation did not fabricate destroyed objects');
+  assert.equal(await sound.breakObject(), true);
+  assert.equal(h.sources.length, 2);
+  sound.dispose();
+  assert.equal(await sound.preload(), null);
+  assert.equal(h.fetches, 1, 'disposed sound owners never restart loading');
+});
