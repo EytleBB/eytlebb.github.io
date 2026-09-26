@@ -15,7 +15,7 @@ import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-202609
 import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r3';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
-import { createMuseumKnifeController } from './museum-knife.js?v=20260924';
+import { createMuseumKnifeController } from './museum-knife.js?v=inspect-20260926';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -1706,12 +1706,13 @@ function onKey(e, down) {
     if (down && !e.repeat) inspectArtwork();
     return;
   }
-  if (e.code === 'KeyQ' || e.code === 'Digit3' || e.code === 'Digit1' ||
+  if (e.code === 'KeyF' || e.code === 'KeyQ' || e.code === 'Digit3' || e.code === 'Digit1' ||
       e.code === 'Numpad3' || e.code === 'Numpad1') {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     e.preventDefault();
     if (!focusState && down && !e.repeat) {
-      if (e.code === 'KeyQ') museumKnife.toggle();
+      if (e.code === 'KeyF') museumKnife.inspect();
+      else if (e.code === 'KeyQ') museumKnife.toggle();
       else if (e.code === 'Digit3' || e.code === 'Numpad3') museumKnife.equip();
       else museumKnife.stow();
     }

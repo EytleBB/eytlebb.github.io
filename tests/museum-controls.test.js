@@ -59,6 +59,8 @@ async function createControls() {
   const loops = [];
   const museumKnife = {
     equipped: false,
+    inspections: 0,
+    inspect() { if (this.equipped) this.inspections++; },
     equip() { this.equipped = true; },
     stow() { this.equipped = false; },
     toggle() { this.equipped = !this.equipped; },
@@ -95,8 +97,8 @@ async function createControls() {
   const api = vm.runInContext(`({ player, keys, clearInput, focusOn, unfocus, closeGuestPlaque, lockPointer, enterPlay,
     get focusState() { return focusState; }, get zoomHeld() { return zoomHeld; },
     get yaw() { return yaw; }, get pitch() { return pitch; } })`, context);
-  function key(code, down, repeat = false) {
-    const event = { code, repeat, prevented: false, preventDefault() { this.prevented = true; } };
+  function key(code, down, repeat = false, modifiers = {}) {
+    const event = { code, repeat, ...modifiers, prevented: false, preventDefault() { this.prevented = true; } };
     document.emit(down ? 'keydown' : 'keyup', event);
     return event;
   }
@@ -157,6 +159,33 @@ test('Q toggles the knife, 3 equips and 1 stows only during free roaming', async
   });
   h.key('Digit1', true);
   assert.equal(h.museumKnife.equipped, true, 'inspecting artwork must not switch the knife');
+});
+
+test('F inspects an equipped knife once without stealing modified keys or plaque input', async () => {
+  const h = await createControls();
+  h.key('KeyF', true);
+  assert.equal(h.museumKnife.inspections, 0);
+  h.key('Digit3', true);
+  assert.equal(h.key('KeyF', true).prevented, true);
+  h.key('KeyF', false);
+  h.key('KeyF', true, true);
+  assert.equal(h.museumKnife.inspections, 1);
+  for (const modifier of ['ctrlKey', 'altKey', 'metaKey']) {
+    assert.equal(h.key('KeyF', true, false, { [modifier]: true }).prevented, false);
+  }
+  h.lock(false);
+  assert.equal(h.key('KeyF', true).prevented, false);
+  h.lock(true);
+  h.api.focusOn({
+    userData: {},
+    getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+    getWorldQuaternion(out) { return out; },
+  });
+  h.key('KeyF', true);
+  assert.equal(h.museumKnife.inspections, 1);
+  h.context.plaqueSession = { id: 'test' };
+  assert.equal(h.key('KeyF', true).prevented, false);
+  assert.equal(h.museumKnife.inspections, 1);
 });
 
 test('Space press and release between rendered frames still jumps once', async () => {
