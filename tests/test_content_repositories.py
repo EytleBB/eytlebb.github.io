@@ -180,7 +180,12 @@ class ContentRepositoriesTest(unittest.TestCase):
 
     def test_deploy_hook_assembles_and_publishes_from_local_bare_repos(self):
         base, sha = self.setup_deployment()
+        legacy_excludes = base / 'deploy-excludes.txt'
+        legacy_excludes.write_text('legacy root-managed exclusions\n')
+        legacy_excludes.chmod(0o444)
         subprocess.run(['bash', str(base / 'post-receive')], input=f'{"0" * 40} {sha} refs/heads/main\n', text=True, check=True, stdout=subprocess.DEVNULL)
+        self.assertEqual(legacy_excludes.read_text(), 'legacy root-managed exclusions\n')
+        self.assertEqual(legacy_excludes.stat().st_mode & 0o777, 0o444)
         self.assertTrue((self.output / 'logs/index.json').is_file())
         self.assertTrue((self.output / 'audio/museum.mp3').is_file())
         self.assertFalse((self.output / 'sentinel').exists())

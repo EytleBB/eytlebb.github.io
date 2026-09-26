@@ -87,7 +87,8 @@ python3 scripts/preview.py --root /tmp/eytle-preview-unique --port 8000
    bash -n /srv/eytle-site/site.git/hooks/post-receive
    ```
 
-   保留服务器目录所有权，确认接收 push 的用户能写 `repo/`、web root 和 `deploy-excludes.txt`。
+   保留服务器目录所有权，确认接收 push 的用户能写 `repo/` 和 web root。排除规则直接读取待发布提交中的
+   `scripts/deploy-excludes.txt`；旧的 root 所有配置保留，不需要回写或改变所有权。
    新 hook 只处理 `main`，串行部署，从主站提交导出代码，先组装校验，再更新服务器工作区和网站。
    它也支持仍包含内容的旧主站提交，供迁移前版本回滚。
 6. 确认工作区干净，先 `git push origin main`，成功后再 `git push tencent main`。

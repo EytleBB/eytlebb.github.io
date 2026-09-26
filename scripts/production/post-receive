@@ -38,7 +38,7 @@ while read -r oldrev newrev refname; do
     git -C "$REPO" fetch origin main
     git -C "$REPO" reset --hard "$newrev"
     rsync -ac --delete "$stage/public/" "$WEB/"
-    cp "$stage/source/scripts/deploy-excludes.txt" "$BASE/deploy-excludes.txt"
+    # Assembly uses the versioned exclusion rules; leave legacy root-owned config untouched.
     echo "Deployed website $newrev with its pinned content."
     rm -rf -- "$stage"
     trap - EXIT
