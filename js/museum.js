@@ -6,16 +6,17 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=lighting-20260922-r6';
+import { createMuseumArchitecture } from './museum-architecture.js?v=destruction-20260926';
 import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
-import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=lighting-20260912-r3';
+import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=destruction-20260926';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
 import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-20260922-r6';
-import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r3';
+import { createMuseumPlaques } from './museum-plaques.js?v=destruction-20260926';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
-import { createMuseumKnifeController } from './museum-knife.js?v=20260924';
+import { createMuseumKnifeController } from './museum-knife.js?v=destruction-20260926';
+import { createMuseumDestruction } from './museum-destruction.js?v=destruction-20260926';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -306,7 +307,11 @@ const ART_INTERACT_DISTANCE = 3.5;
 const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
-const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'));
+const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'), {
+  onStrike(kind) {
+    if (isLocked() && !focusState && !plaqueSession) destruction.strike(kind);
+  },
+});
 const audioListener = new THREE.AudioListener();
 audioListener.setMasterVolume(0);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -346,12 +351,18 @@ scene.add(new THREE.HemisphereLight(0xc4d7de, 0x192a2d, 0.75));
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 88);
 camera.position.set(0, EYE_Y, SPAWN_Z);
+const destruction = createMuseumDestruction({
+  scene, camera, reach: ART_INTERACT_DISTANCE, halfWidth: HALL_HALF_WIDTH,
+  onAdd: root => bloomOcclusion?.addObject(root),
+  onRemove: root => bloomOcclusion?.removeObject(root),
+});
 
 // One listener follows every camera pose, including artwork focus tweens.
 camera.add(audioListener);
 
 const updaters = [];
 updaters.push(dt => museumKnife.update(dt, isLocked() && !focusState));
+updaters.push(dt => destruction.update(dt));
 const frameScheduler = createMuseumFrameScheduler({ fps: settings.fps });
 let lastRenderedAt = null;
 let lastMaintenanceAt = 0;
@@ -1110,6 +1121,7 @@ function showArtworkPlaceholder(slot) {
 }
 
 function setArtTexture(slot, imageIndex) {
+  destruction.resetSlot(slot);
   const cacheIndex = imageIndex % IMAGES.length;
   slot.imageIndex = cacheIndex;
   plaques.bind(slot, decodeURIComponent(IMAGES[cacheIndex].split('/').pop()));
@@ -1151,6 +1163,7 @@ function makeArtwork(parent, side, localZ, imageIndex) {
   slot.artScale = 0.5;
   resizePictureLight(slot, 2, ART_H);
   setArtTexture(slot, imageIndex);
+  destruction.registerSlot(slot);
   return slot;
 }
 
@@ -1334,6 +1347,7 @@ function configurePictureSpot(fixture, count, active) {
 }
 
 function positionPictureLightFixture(slot, fixture, artH, zOffset, count, active) {
+  if (fixture.broken) return;
   const y = pictureLightY(artH) + (count > 1 ? LARGE_ART_LAMP_Y_OFFSET : 0);
   const x = slot.frame.position.x;
   const targetX = slot.pic.position.x;
@@ -1412,10 +1426,12 @@ function buildRearWall() {
 function positionRearWall() {
   if (!rearWall || chunks.length === 0) return;
   rearWall.position.z = Math.max(...chunks.map(chunk => chunk.group.position.z));
+  destruction.syncHall(chunks, rearWall.position.z);
 }
 
 function reserveChunkRetarget(chunk) {
   if (chunk.pendingRetarget) return chunk.pendingRetarget;
+  destruction.resetChunk(chunk);
   const plan = {
     indices: chunk.slots.map(() => nextImageIndex++),
     cursor: 0,
@@ -1541,6 +1557,7 @@ function refreshArtworkSlots(indices) {
 
 function protectedTextureIndices() {
   const protectedIndices = new Set();
+  destruction.protectTextures(protectedIndices);
   for (const chunk of chunks) {
     for (const slot of chunk.slots) {
       slot.pic.getWorldPosition(artWorldPos);
@@ -1677,6 +1694,7 @@ const MAX_LOOK_SPIKE = 4096; // reject driver/lock glitches, never clip a normal
 let yaw = 0, pitch = 0;
 let roamEnabled = true;
 let zoomHeld = false;
+let knifePrimaryPress = false;
 let ignoreNextLook = true;
 const isLocked = () => document.pointerLockElement === canvas;
 const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6 });
@@ -1692,6 +1710,8 @@ function syncMuseumAudioState() {
 }
 
 function clearInput() {
+  museumKnife.clearAttackInput();
+  knifePrimaryPress = false;
   heldCodes.clear();
   for (const key of Object.keys(keys)) keys[key] = false;
   jumpQueued = false;
@@ -1706,14 +1726,16 @@ function onKey(e, down) {
     if (down && !e.repeat) inspectArtwork();
     return;
   }
-  if (e.code === 'KeyQ' || e.code === 'Digit3' || e.code === 'Digit1' ||
+  if (e.code === 'KeyF' || e.code === 'KeyQ' || e.code === 'Digit3' || e.code === 'Digit1' ||
       e.code === 'Numpad3' || e.code === 'Numpad1') {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     e.preventDefault();
     if (!focusState && down && !e.repeat) {
-      if (e.code === 'KeyQ') museumKnife.toggle();
+      if (e.code === 'KeyF') museumKnife.inspect();
+      else if (e.code === 'KeyQ') museumKnife.toggle();
       else if (e.code === 'Digit3' || e.code === 'Numpad3') museumKnife.equip();
       else museumKnife.stow();
+      if (museumKnife.equipped) { setZoomHeld(false); setArtHintVisible(false); }
     }
     return;
   }
@@ -1796,11 +1818,11 @@ raycaster.far = ART_INTERACT_DISTANCE;
 
 function getAimedArtworkHit() {
   raycaster.setFromCamera(_center, camera);
-  return raycaster.intersectObjects(artMeshes, false)[0] || null;
+  return raycaster.intersectObjects(artMeshes.filter(mesh => mesh.visible && mesh.parent.visible), false)[0] || null;
 }
 
 function setArtHintVisible(visible) {
-  artHintEl.classList.toggle('show', Boolean(visible));
+  artHintEl.classList.toggle('show', Boolean(visible && !museumKnife.equipped));
 }
 
 function focusOn(mesh) {
@@ -1902,7 +1924,7 @@ updaters.push((dt) => {
 updaters.push(updateSpeakerPool);
 
 updaters.push(() => {
-  if (!isLocked() || focusState) {
+  if (!isLocked() || focusState || museumKnife.equipped) {
     setArtHintVisible(false);
     return;
   }
@@ -1940,12 +1962,23 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 document.addEventListener('mousedown', (e) => {
-  if (e.button !== 2 || !isLocked()) return;
-  e.preventDefault();
-  setZoomHeld(true);
+  if (e.button === 0) knifePrimaryPress = false;
+  if (!isLocked() || plaqueSession) return;
+  if (!focusState && museumKnife.equipped && (e.button === 0 || e.button === 2)) {
+    e.preventDefault();
+    knifePrimaryPress = e.button === 0 || knifePrimaryPress;
+    setZoomHeld(false);
+    museumKnife.setAttackHeld(e.button === 0 ? 'light' : 'heavy', true);
+    return;
+  }
+  if (e.button === 2) {
+    e.preventDefault();
+    setZoomHeld(true);
+  }
 });
 
 document.addEventListener('mouseup', (e) => {
+  if (e.button === 0 || e.button === 2) museumKnife.setAttackHeld(e.button === 0 ? 'light' : 'heavy', false);
   if (e.button === 2) setZoomHeld(false);
 });
 
@@ -1966,7 +1999,14 @@ document.addEventListener('visibilitychange', () => {
 });
 
 canvas.addEventListener('click', (e) => {
-  if (e.button === 0) inspectArtwork();
+  if (e.button !== 0) return;
+  // Consume the click even if the player stowed the knife before releasing it.
+  if (knifePrimaryPress || (!focusState && museumKnife.equipped)) {
+    knifePrimaryPress = false;
+    e.preventDefault();
+    return;
+  }
+  inspectArtwork();
 });
 
 function inspectArtwork() {

@@ -117,3 +117,23 @@ test('rib emitters clear their metal housing and stay inside the collision margi
   assert.ok(channel.emitterInset - housingInnerEdge < 0.003, 'keep a small mounting clearance');
   assert.ok(channel.emitterInset + channel.emitterThickness < 0.4);
 });
+
+test('new debris participates in bloom occlusion and removed debris releases its registration', () => {
+  const code = fs.readFileSync(path.join(__dirname, '../js/museum-bloom-occlusion.js'), 'utf8')
+    .replace("import * as THREE from 'three';", '').replace('export function', 'function');
+  class Layers { set(layer) { this.mask = 1 << layer; } test(other) { return Boolean(this.mask & other.mask); } }
+  const create = vm.runInNewContext(code + '\ncreateMuseumBloomOcclusion;', {
+    THREE: { Layers, MeshBasicMaterial: class { constructor(values) { Object.assign(this, values); } dispose() {} } },
+  });
+  const layer = new Layers(); layer.set(0);
+  const material = { side: 0 };
+  const mesh = { isMesh: true, visible: true, layers: layer, material };
+  const root = { traverse(fn) { fn(mesh); } };
+  const occlusion = create({ traverse() {} });
+  occlusion.addObject(root);
+  occlusion.render(() => assert.notEqual(mesh.material, material));
+  assert.equal(mesh.material, material);
+  occlusion.removeObject(root);
+  occlusion.render(() => assert.equal(mesh.material, material));
+  occlusion.dispose();
+});

@@ -59,6 +59,15 @@ async function createControls() {
   const loops = [];
   const museumKnife = {
     equipped: false,
+    inspections: 0,
+    attacks: [],
+    heldAttacks: new Set(),
+    clearAttackInput() { this.heldAttacks.clear(); },
+    setAttackHeld(kind, held) {
+      if (!held) { this.heldAttacks.delete(kind); return; }
+      if (this.equipped) { this.heldAttacks.add(kind); this.attacks.push(kind); }
+    },
+    inspect() { if (this.equipped) this.inspections++; },
     equip() { this.equipped = true; },
     stow() { this.equipped = false; },
     toggle() { this.equipped = !this.equipped; },
@@ -95,8 +104,8 @@ async function createControls() {
   const api = vm.runInContext(`({ player, keys, clearInput, focusOn, unfocus, closeGuestPlaque, lockPointer, enterPlay,
     get focusState() { return focusState; }, get zoomHeld() { return zoomHeld; },
     get yaw() { return yaw; }, get pitch() { return pitch; } })`, context);
-  function key(code, down, repeat = false) {
-    const event = { code, repeat, prevented: false, preventDefault() { this.prevented = true; } };
+  function key(code, down, repeat = false, modifiers = {}) {
+    const event = { code, repeat, ...modifiers, prevented: false, preventDefault() { this.prevented = true; } };
     document.emit(down ? 'keydown' : 'keyup', event);
     return event;
   }
@@ -151,12 +160,39 @@ test('Q toggles the knife, 3 equips and 1 stows only during free roaming', async
   assert.equal(h.museumKnife.equipped, true);
   h.lock(true);
   h.api.focusOn({
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
   h.key('Digit1', true);
   assert.equal(h.museumKnife.equipped, true, 'inspecting artwork must not switch the knife');
+});
+
+test('F inspects an equipped knife once without stealing modified keys or plaque input', async () => {
+  const h = await createControls();
+  h.key('KeyF', true);
+  assert.equal(h.museumKnife.inspections, 0);
+  h.key('Digit3', true);
+  assert.equal(h.key('KeyF', true).prevented, true);
+  h.key('KeyF', false);
+  h.key('KeyF', true, true);
+  assert.equal(h.museumKnife.inspections, 1);
+  for (const modifier of ['ctrlKey', 'altKey', 'metaKey']) {
+    assert.equal(h.key('KeyF', true, false, { [modifier]: true }).prevented, false);
+  }
+  h.lock(false);
+  assert.equal(h.key('KeyF', true).prevented, false);
+  h.lock(true);
+  h.api.focusOn({
+    userData: {}, visible: true, parent: { visible: true },
+    getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+    getWorldQuaternion(out) { return out; },
+  });
+  h.key('KeyF', true);
+  assert.equal(h.museumKnife.inspections, 1);
+  h.context.plaqueSession = { id: 'test' };
+  assert.equal(h.key('KeyF', true).prevented, false);
+  assert.equal(h.museumKnife.inspections, 1);
 });
 
 test('Space press and release between rendered frames still jumps once', async () => {
@@ -238,7 +274,7 @@ test('artwork focus preserves a crouched position and returns control without st
   near(h.camera.position.y, 1.08);
   const before = h.camera.position.clone();
   const mesh = {
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   };
@@ -306,7 +342,7 @@ test('pausing while focused restores both the saved position and look orientatio
   h.tick();
   const before = h.camera.position.clone();
   h.api.focusOn({
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
@@ -348,6 +384,7 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
   h.key('KeyW', true);
   h.tick(30);
   h.api.focusOn({
+    visible: true, parent: { visible: true },
     userData: { kind: 'plaque', artworkId: '0x0000.jpg', slot: { imageIndex: 0 } },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.37, z: -3 }); },
     getWorldQuaternion(out) { return out; },
@@ -374,4 +411,104 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
   assert.equal(h.document.body.classList.contains('plaque-active'), false);
   assert.deepEqual(h.camera.position, before);
   assert.match(h.context.runtimeStatus.textContent, /Mouse look is unavailable/);
+});
+
+const artwork = () => ({
+  userData: {}, visible: true, parent: { visible: true },
+  getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+  getWorldQuaternion(out) { return out; },
+});
+function mouse(h, type, button) {
+  const event = { button, prevented: false, preventDefault() { this.prevented = true; } };
+  (type === 'click' ? h.canvas : h.document).emit(type, event);
+  return event;
+}
+
+test('equipped mouse buttons attack without focusing art or zooming, including stow before mouseup', async () => {
+  const h = await createControls();
+  h.context.artMeshes.push(artwork());
+  mouse(h, 'mousedown', 2);
+  assert.equal(h.api.zoomHeld, true);
+  h.key('Digit3', true);
+  assert.equal(h.api.zoomHeld, false, 'equipping clears an already held zoom');
+  mouse(h, 'mouseup', 2);
+  assert.equal(mouse(h, 'mousedown', 0).prevented, true);
+  h.key('Digit1', true);
+  mouse(h, 'mouseup', 0);
+  assert.equal(mouse(h, 'click', 0).prevented, true);
+  assert.equal(h.api.focusState, null, 'an attack release must not focus a painting after stowing');
+  h.key('Digit3', true);
+  mouse(h, 'mousedown', 2);
+  mouse(h, 'mouseup', 2);
+  assert.equal(h.api.zoomHeld, false);
+  assert.deepEqual(h.museumKnife.attacks, ['light', 'heavy']);
+  assert.equal(h.museumKnife.heldAttacks.size, 0);
+  mouse(h, 'mousedown', 1);
+  assert.equal(h.museumKnife.attacks.length, 2, 'middle button has no knife action');
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'mouseup', 0);
+  mouse(h, 'click', 0);
+  assert.equal(h.api.focusState, null);
+  h.key('KeyE', true);
+  assert.ok(h.api.focusState, 'E still opens a painting while equipped');
+  assert.equal(h.museumKnife.heldAttacks.size, 0);
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'click', 0);
+  assert.equal(h.api.focusState.phase, 'returning', 'click can still leave a focused painting');
+});
+
+test('empty-hand controls stay available and attacks clear on pause, focus, blur and hidden tabs', async () => {
+  const h = await createControls();
+  h.context.artMeshes.push(artwork());
+  mouse(h, 'mousedown', 2);
+  assert.equal(h.api.zoomHeld, true);
+  mouse(h, 'mouseup', 2);
+  assert.equal(h.api.zoomHeld, false);
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'click', 0);
+  assert.ok(h.api.focusState);
+  h.lock(false);
+  h.lock(true);
+  h.key('Digit3', true);
+  for (const interrupt of [
+    () => h.lock(false),
+    () => h.api.focusOn(artwork()),
+    () => h.window.emit('blur'),
+    () => { h.document.hidden = true; h.document.emit('visibilitychange'); },
+  ]) {
+    mouse(h, 'mousedown', 0);
+    assert.equal(h.museumKnife.heldAttacks.size, 1);
+    interrupt();
+    assert.equal(h.museumKnife.heldAttacks.size, 0);
+    const count = h.museumKnife.attacks.length;
+    mouse(h, 'mousedown', 2);
+    assert.equal(h.museumKnife.attacks.length, count);
+    h.document.hidden = false;
+    h.lock(false);
+    h.lock(true);
+  }
+  h.context.plaqueSession = { id: 'reading' };
+  const count = h.museumKnife.attacks.length;
+  assert.equal(mouse(h, 'mousedown', 0).prevented, false);
+  assert.equal(h.museumKnife.attacks.length, count);
+});
+
+test('equipping hides the painting hint immediately, and intact art remains discoverable after stowing', async () => {
+  const h = await createControls();
+  const mesh = artwork();
+  h.context.artMeshes.push(mesh);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), true);
+  h.key('Digit3', true);
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.key('Digit1', true);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), true);
+  mesh.visible = false;
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.key('KeyE', true);
+  assert.equal(h.api.focusState, null, 'destroyed paintings cannot open a ghost focus target');
 });

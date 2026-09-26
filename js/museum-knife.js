@@ -106,7 +106,7 @@ class KnifeDemo {
   Object.assign(this,parseGLB(buffer));this.textures=[];this.draws=[];this.handR=[];
   this.state='hidden';this.time=0;this.speed=1;this.paused=false;this.count=0;this.scale=1;this.idleTime=0;
   this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  this.pendingDraw=false;
+  this.pendingDraw=false;this.pendingInspect=false;
   this.program=this.programFrom(VERT,FRAG);this.loc={};
   for(const n of ['uMVP','uModel','uBase','uMetal','uRough','uNormalScale','uBaseMap','uMRMap','uNormalMap','uHasBase','uHasMR','uHasNormal','uSurface'])this.loc[n]=this.gl.getUniformLocation(this.program,n);
   const gl=this.gl;gl.useProgram(this.program);gl.uniform1i(this.loc.uBaseMap,0);gl.uniform1i(this.loc.uMRMap,1);gl.uniform1i(this.loc.uNormalMap,2);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
@@ -140,12 +140,38 @@ class KnifeDemo {
  }
  drawMesh(d,matrix,vp){const gl=this.gl;this.setMaterial(d.mat);gl.uniformMatrix4fv(this.loc.uModel,false,matrix);gl.uniformMatrix4fv(this.loc.uMVP,false,mul(vp,matrix));gl.bindVertexArray(d.vao);gl.drawElements(gl.TRIANGLES,d.count,gl.UNSIGNED_INT,0);}
  resize(){const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.75),cap=Math.sqrt(2500000/Math.max(1,r.width*r.height));this.canvas.width=Math.max(1,Math.round(r.width*Math.min(dpr,cap)));this.canvas.height=Math.max(1,Math.round(r.height*Math.min(dpr,cap)));}
- sample(t){const k=this.clip.keys;t=clamp(t,0,this.clip.duration);let i=0;while(i<k.length-2&&t>k[i+1].t)i++;const a=k[i],b=k[i+1],u=(t-a.t)/(b.t-a.t),u2=u*u,u3=u2*u;
-  const interpolate=prop=>a[prop].map((v,j)=>{const prev=k[Math.max(0,i-1)],next=k[Math.min(k.length-1,i+2)];const s0=i===0?0:(b[prop][j]-prev[prop][j])/(b.t-prev.t),s1=i+1===k.length-1?0:(next[prop][j]-a[prop][j])/(next.t-a.t),dt=b.t-a.t;return (2*u3-3*u2+1)*v+(u3-2*u2+u)*dt*s0+(-2*u3+3*u2)*b[prop][j]+(u3-u2)*dt*s1;});
-  return {p:interpolate('p'),r:interpolate('r'),grip:lerp(a.grip,b.grip,smooth(u))};
+ sample(t, clip = this.clip) {
+  const k = clip.keys;
+  t = clamp(t, 0, clip.duration);
+  let i = 0;
+  while (i < k.length - 2 && t > k[i + 1].t) i++;
+  const a = k[i], b = k[i + 1], u = (t - a.t) / (b.t - a.t);
+  const u2 = u * u, u3 = u2 * u;
+  const interpolate = prop => a[prop].map((v, j) => {
+    // Held poses settle completely before the next movement.
+    if (clip.settle) return lerp(v, b[prop][j], u3 * (u * (u * 6 - 15) + 10));
+    const prev = k[Math.max(0, i - 1)], next = k[Math.min(k.length - 1, i + 2)];
+    const s0 = i === 0 ? 0 : (b[prop][j] - prev[prop][j]) / (b.t - prev.t);
+    const s1 = i + 1 === k.length - 1 ? 0 : (next[prop][j] - a[prop][j]) / (next.t - a.t);
+    const dt = b.t - a.t;
+    return (2*u3 - 3*u2 + 1)*v + (u3 - 2*u2 + u)*dt*s0 + (-2*u3 + 3*u2)*b[prop][j] + (u3 - u2)*dt*s1;
+  });
+  return { p: interpolate('p'), r: interpolate('r'), grip: lerp(a.grip, b.grip, smooth(u)) };
  }
- pose(){let pose;if(this.state==='drawing')pose=this.sample(this.time);else if(this.state==='holstering'){const t=smooth(this.time/.18),s=this.lowerFrom||this.sample(this.clip.duration);pose={p:s.p.map((v,i)=>lerp(v,[.54,-.90,-.42][i],t)),r:s.r.map((v,i)=>v+[-18,-16,28][i]*t),grip:1};}else pose=this.sample(this.clip.duration);
-  if(this.state==='idle'&&!this.paused&&!this.reduceMotion){pose.p[1]+=Math.sin(this.idleTime*1.7)*.0016;pose.p[0]+=Math.sin(this.idleTime*.8)*.0008;}
+ pose() {
+  let pose;
+  if (this.state === 'drawing') pose = this.sample(this.time);
+  else if (this.state === 'inspecting') pose = this.sample(this.time, this.inspectClip);
+  else if (this.state === 'attacking') pose = this.sample(this.time, this.attackClip);
+  else if (this.state === 'holstering') {
+    const t = smooth(this.time / .18), s = this.lowerFrom || this.sample(this.clip.duration);
+    pose = { p: s.p.map((v, i) => lerp(v, [.54, -.90, -.42][i], t)),
+      r: s.r.map((v, i) => v + [-18, -16, 28][i] * t), grip: 1 };
+  } else pose = this.sample(this.clip.duration);
+  if (this.state === 'idle' && !this.paused && !this.reduceMotion) {
+    pose.p[1] += Math.sin(this.idleTime * 1.7) * .0016;
+    pose.p[0] += Math.sin(this.idleTime * .8) * .0008;
+  }
   return pose;
  }
 
@@ -182,16 +208,65 @@ class KnifeDemo {
   gl.bindVertexArray(null);
  }
  setState(s){this.state=s;this.time=0;}
- beginDraw(){this.pendingDraw=false;this.count++;this.setState('drawing');this.idleTime=0;}
+ beginDraw(){this.pendingInspect=false;this.pendingDraw=false;this.count++;this.setState('drawing');this.idleTime=0;}
  triggerDraw(){if(!this.loaded)return;this.paused=false;if(this.state==='hidden'){this.beginDraw();return;}if(this.state==='holstering'){this.pendingDraw=true;return;}this.lowerFrom=this.pose();this.pendingDraw=true;this.setState('holstering');}
- holster(){if(!this.loaded||this.state==='hidden')return;this.paused=false;this.pendingDraw=false;this.lowerFrom=this.pose();this.setState('holstering');}
+ holster(){this.pendingInspect=false;if(!this.loaded||this.state==='hidden')return;this.paused=false;this.pendingDraw=false;this.lowerFrom=this.pose();this.setState('holstering');}
  setSpeed(v){this.speed=clamp(Number(v)||1,.1,2);}
  setPaused(v){this.paused=!!v;}
  scrub(t){this.paused=true;this.state='drawing';this.time=clamp(Number(t)||0,0,this.clip.duration);this.render();}
- show(){this.paused=false;this.pendingDraw=false;this.setState('idle');this.idleTime=0;this.render();}
- update(dt){if(this.paused)return;this.time+=dt*this.speed;this.idleTime+=dt;
-  if(this.state==='drawing'&&this.time>=this.clip.duration){this.setState('idle');this.idleTime=0;}
-  else if(this.state==='holstering'&&this.time>=.18){if(this.pendingDraw)this.beginDraw();else this.setState('hidden');}
+ show(){this.paused=false;this.pendingInspect=false;this.pendingDraw=false;this.setState('idle');this.idleTime=0;this.render();}
+ inspect() {
+  if (!this.loaded) return;
+  if (this.state === 'drawing') { this.pendingInspect = true; return; }
+  if (this.state !== 'idle') return;
+  const clip = this.reduceMotion ? REDUCED_INSPECT_ANIMATION : INSPECT_ANIMATION;
+  this.inspectClip = { ...clip, keys: [{ t: 0, ...this.pose() }, ...clip.keys.slice(1)] };
+  this.pendingInspect = false;
+  this.paused = false;
+  this.setState('inspecting');
+ }
+ attack(kind) {
+  const clip = ATTACK_ANIMATIONS[kind];
+  if (!this.loaded || !clip || (this.state !== 'idle' && this.state !== 'inspecting')) return false;
+  // Give an interrupted inspection time to turn the wrist back into the swing.
+  const leadIn = this.state === 'inspecting' ? .16 : 0;
+  const amount = this.reduceMotion ? .12 : 1;
+  this.attackClip = {
+    ...clip, duration: clip.duration + leadIn,
+    keys: [{ t: 0, ...this.pose() }, ...clip.keys.slice(1).map(key => ({
+      ...key, t: key.t + leadIn,
+      p: key.p.map((v, i) => lerp(REST_POSE.p[i], v, amount)),
+      r: key.r.map((v, i) => lerp(REST_POSE.r[i], v, amount)),
+    }))],
+  };
+  this.pendingInspect = false;
+  this.paused = false;
+  this.attackKind = kind;
+  this.attackImpactAt = leadIn + (kind === 'heavy' ? .35 : .21);
+  this.attackImpactFired = false;
+  this.setState('attacking');
+  return true;
+ }
+ update(dt) {
+  if (this.paused) return;
+  this.time += dt * this.speed;
+  this.idleTime += dt;
+  if (this.state === 'attacking' && !this.attackImpactFired && this.time >= this.attackImpactAt) {
+    this.attackImpactFired = true;
+    this.onStrike?.(this.attackKind);
+  }
+  if (this.state === 'drawing' && this.time >= this.clip.duration) {
+    this.setState('idle');
+    this.idleTime = 0;
+    if (this.pendingInspect) this.inspect();
+  } else if ((this.state === 'inspecting' && this.time >= this.inspectClip.duration) ||
+             (this.state === 'attacking' && this.time >= this.attackClip.duration)) {
+    this.setState('idle');
+    this.idleTime = 0;
+  } else if (this.state === 'holstering' && this.time >= .18) {
+    if (this.pendingDraw) this.beginDraw();
+    else this.setState('hidden');
+  }
  }
  destroy(){this.resizeObserver.disconnect();for(const d of this.resources){this.gl.deleteVertexArray(d.vao);for(const b of d.buffs)this.gl.deleteBuffer(b);}for(const t of this.textures)this.gl.deleteTexture(t);this.gl.deleteProgram(this.program);this.loaded=false;}
 }
@@ -331,17 +406,86 @@ const DRAW_ANIMATION = {
   }
 };
 
+// Authored wrist motion: raise, show the blade face, roll to its reverse, return.
+const REST_POSE = DRAW_ANIMATION.keys.at(-1);
+const INSPECT_ANIMATION = {
+  duration: 3.5,
+  settle: true,
+  keys: [
+    { ...REST_POSE, t: 0 },
+    { t: .55, p: [.245, -.15, -.65], r: [10, -12, -214], grip: 1 },
+    { t: 1.35, p: [.245, -.15, -.65], r: [10, -12, -214], grip: 1 },
+    { t: 2.05, p: [.25, -.14, -.65], r: [154, -10, -218], grip: 1 },
+    { t: 2.8, p: [.25, -.14, -.65], r: [154, -10, -218], grip: 1 },
+    { ...REST_POSE, t: 3.5 },
+  ],
+};
+const REDUCED_INSPECT_ANIMATION = {
+  duration: 1.5,
+  settle: true,
+  keys: [
+    { ...REST_POSE, t: 0 },
+    { t: .45, p: [.28, -.19, -.63], r: [18, 14, -251], grip: 1 },
+    { t: 1.05, p: [.28, -.19, -.63], r: [18, 14, -251], grip: 1 },
+    { ...REST_POSE, t: 1.5 },
+  ],
+};
+
+// Short cross-body slash and a heavier forward thrust, each with its own recovery.
+const ATTACK_ANIMATIONS = {
+  light: {
+    duration: .54, settle: true,
+    keys: [
+      { ...REST_POSE, t: 0 },
+      { t: .09, p: [.32, -.19, -.60], r: [12, 24, -279], grip: 1 },
+      { t: .21, p: [.075, -.20, -.73], r: [0, -28, -186], grip: 1 },
+      { t: .29, p: [.085, -.25, -.69], r: [-6, -20, -181], grip: 1 },
+      { ...REST_POSE, t: .54 },
+    ],
+  },
+  heavy: {
+    duration: .96, settle: true,
+    keys: [
+      { ...REST_POSE, t: 0 },
+      { t: .23, p: [.315, -.225, -.54], r: [18, 58, -230], grip: 1 },
+      { t: .35, p: [.10, -.06, -.80], r: [12, 52, -220], grip: 1 },
+      { t: .46, p: [.11, -.065, -.79], r: [12, 52, -220], grip: 1 },
+      { t: .68, p: [.285, -.215, -.60], r: [18, 35, -243], grip: 1 },
+      { ...REST_POSE, t: .96 },
+    ],
+  },
+};
+
 const KNIFE_MODEL_URL = new URL('../models/classic-knife-v6-right-hand.glb', import.meta.url);
 
-export function createMuseumKnifeController(canvas) {
+export function createMuseumKnifeController(canvas, { onStrike } = {}) {
   let demo = null;
   let loading = null;
   let equipped = false;
+  let inspectRequested = false;
+  const heldAttacks = new Set();
+  let queuedAttack = null;
+
+  function clearAttackInput() {
+    heldAttacks.clear();
+    queuedAttack = null;
+    if (demo) demo.attackImpactFired = true;
+  }
+
+  function attackIfReady() {
+    if (!equipped || !demo) return;
+    const kind = heldAttacks.has('heavy') ? 'heavy' : heldAttacks.has('light') ? 'light' : queuedAttack;
+    if (kind && demo.attack(kind)) {
+      queuedAttack = null;
+      inspectRequested = false;
+    }
+  }
 
   function draw() {
     if (!demo) return;
     if (demo.reduceMotion) demo.show();
     else demo.triggerDraw();
+    if (inspectRequested) { demo.inspect(); inspectRequested = false; }
   }
 
   function load() {
@@ -354,6 +498,7 @@ export function createMuseumKnifeController(canvas) {
       .then(buffer => new KnifeDemo(canvas, buffer, DRAW_ANIMATION).ready)
       .then(loaded => {
         demo = loaded;
+        demo.onStrike = onStrike;
         if (equipped) draw();
       })
       .catch(error => { console.warn('Museum knife unavailable', error); })
@@ -372,6 +517,8 @@ export function createMuseumKnifeController(canvas) {
   function stow() {
     if (!equipped) return;
     equipped = false;
+    inspectRequested = false;
+    clearAttackInput();
     if (!demo) return;
     if (demo.reduceMotion) {
       demo.setState('hidden');
@@ -383,10 +530,27 @@ export function createMuseumKnifeController(canvas) {
     get equipped() { return equipped; },
     equip,
     stow,
+    clearAttackInput,
+    setAttackHeld(kind, held) {
+      if (kind !== 'light' && kind !== 'heavy') return;
+      if (!held) { heldAttacks.delete(kind); return; }
+      if (!equipped || heldAttacks.has(kind)) return;
+      heldAttacks.add(kind);
+      // Buffer one click during the initial load/draw, never a backlog of swings.
+      if (!demo || demo.state !== 'attacking') queuedAttack = kind;
+      attackIfReady();
+    },
+    inspect() {
+      if (!equipped) return;
+      if (demo) demo.inspect();
+      else inspectRequested = true;
+    },
     toggle() { if (equipped) stow(); else equip(); },
     update(dt, visible) {
-      if (!visible || !demo || demo.state === 'hidden') return;
+      if (!visible) { clearAttackInput(); return; }
+      if (!demo || demo.state === 'hidden') return;
       demo.update(dt);
+      attackIfReady();
       demo.render();
     },
     destroy() { demo?.destroy(); },

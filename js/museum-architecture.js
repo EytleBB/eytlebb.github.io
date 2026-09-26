@@ -113,8 +113,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         box(0.025, 2.84, 4.18, side * (halfWidth + 0.006), 1.78, z, materials.dark);
         box(0.023, 2.76, 4.10, side * (halfWidth - 0.008), 1.78, z, materials.panel);
         box(0.027, 0.011, 4.10, side * (halfWidth - 0.012), 3.165, z, materials.bronze);
-        // Visitor-selected titles are drawn on these bronze supports by museum-plaques.
-        box(0.028, 0.13, 0.74, side * (halfWidth - 0.025), 0.61, z, materials.bronze);
+        // Detachable title plates (including their bronze body) belong to museum-plaques.
       }
     }
     for (const z of [0, -7]) {
