@@ -206,3 +206,16 @@ test('explicit jump edges survive a release and repress between rendered frames'
   assert.equal(player.state.grounded, true);
   near(player.state.position.y, 1.65);
 });
+
+test('analog movement scales speed, respects yaw and cannot exceed keyboard diagonals', async () => {
+  const { createMuseumPlayer } = await import('../js/museum-player.js');
+  const advance = (input, yaw = 0) => {
+    const player = createMuseumPlayer({ halfWidth: 100 });
+    for (let i = 0; i < 120; i++) player.advance(1 / 60, input, yaw);
+    return player.state;
+  };
+  assert.ok(Math.abs(advance({ moveForward: 0.5 }).speed - 2.25) < 1e-6);
+  assert.ok(Math.abs(advance({ moveForward: 1, moveRight: 1 }).speed - 4.5) < 1e-6);
+  assert.equal(advance({ moveRight: NaN, moveForward: Infinity }).speed, 0);
+  assert.ok(advance({ moveForward: 1 }, Math.PI).position.z > 0);
+});

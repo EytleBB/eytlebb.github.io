@@ -120,7 +120,8 @@ async function museumLoopHarness() {
     processTextureUploadQueue: () => { state.uploads++; },
     renderGalleryFrame: () => { state.renders++; },
     updatePictureSpotPool() {}, fixtureBatch: null, recordPerformanceFrame() {},
-    clearInput() {}, syncMuseumAudioState() {}, fail() {},
+    clearInput() {}, cancelFocus() {}, syncMuseumAudioState() {}, fail() {}, enterEl: {},
+    pauseVisit() { document.exitPointerLock(); },
     audioListener: { setMasterVolume() {} },
   };
   vm.runInNewContext(`${loopSource}\n${visibilitySource}\n${lostSource}\n${uploadSource}

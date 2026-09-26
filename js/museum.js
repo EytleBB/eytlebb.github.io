@@ -6,8 +6,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=destruction-20260926';
-import { createMuseumPlayer } from './museum-player.js?v=museum-source-20260922-r2';
+import { createMuseumArchitecture } from './museum-architecture.js?v=museum-mobile-20260926';
+import { createMuseumPlayer } from './museum-player.js?v=museum-mobile-20260926';
+import { createMuseumTouchControls, museumPixelRatio, museumTextureSize, museumFocusDistance } from './museum-touch.js?v=museum-mobile-20260926';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=destruction-20260926';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
@@ -18,9 +19,15 @@ import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-2026092
 import { createMuseumKnifeController } from './museum-knife.js?v=destruction-20260926';
 import { createMuseumDestruction } from './museum-destruction.js?v=destruction-20260926';
 
+const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
+  || new URLSearchParams(location.search).get('controls') === 'touch';
+document.body.classList.toggle('touch-mode', TOUCH_MODE);
+let touchControls = null;
+
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
-  const v = localStorage.getItem('lang');
+  let v;
+  try { v = localStorage.getItem('lang'); } catch {}
   return v === 'en' || v === 'ko' ? v : 'zh';
 })();
 document.documentElement.lang = lang;
@@ -63,8 +70,17 @@ const exitBtn = document.getElementById('exit-btn');
 const exhibitionName = T('图画展览会', 'Pictures At An Exhibition', '전람회의 그림');
 document.title = `${exhibitionName} · This is Eytle`;
 exhibitionTitle.textContent = exhibitionName;
-enterSub.textContent = T('WASD 移动，鼠标调整视角。E 或左键查看画作、打开铭牌。按住右键放大。', 'Use WASD to move and the mouse to look around. Press E or left-click to inspect artworks or open labels. Hold the right mouse button to zoom in.', 'WASD로 이동하고 마우스로 시점을 조절하세요. E 또는 왼쪽 클릭으로 작품을 보거나 안내판을 엽니다. 오른쪽 버튼을 누르고 있으면 확대됩니다.');
+enterSub.textContent = TOUCH_MODE
+  ? T('左侧摇杆移动，滑动画面调整视角。对准画作或铭牌后点「查看」。横屏参观视野更宽。',
+      'Move with the left joystick and drag the view to look around. Aim at an artwork or label, then tap View. Landscape gives you a wider view.',
+      '왼쪽 조이스틱으로 이동하고 화면을 드래그하여 둘러보세요. 작품이나 안내판을 조준한 뒤 보기를 누르세요. 가로 화면에서 더 넓게 볼 수 있습니다.')
+  : T('WASD 移动，鼠标调整视角。E 或左键查看画作、打开铭牌。按住右键放大。', 'Use WASD to move and the mouse to look around. Press E or left-click to inspect artworks or open labels. Hold the right mouse button to zoom in.', 'WASD로 이동하고 마우스로 시점을 조절하세요. E 또는 왼쪽 클릭으로 작품을 보거나 안내판을 엽니다. 오른쪽 버튼을 누르고 있으면 확대됩니다.');
 function controlGuideMarkup() {
+  if (TOUCH_MODE) return `<div class="touch-guide">
+    <span><b>${T('左手', 'Left thumb', '왼손')}</b>${T('摇杆移动', 'Joystick to move', '조이스틱으로 이동')}</span>
+    <span><b>${T('右手', 'Right thumb', '오른손')}</b>${T('滑动看四周', 'Drag to look', '드래그하여 둘러보기')}</span>
+    <span><b>${T('靠近画作', 'Get closer', '작품에 가까이')}</b>${T('对准后点查看', 'Aim, then tap View', '조준 후 보기 누르기')}</span>
+  </div>`;
   const movement = T('移动', 'Move', '이동');
   const inspect = T('查看', 'View', '보기');
   const zoom = T('放大', 'Zoom', '확대');
@@ -106,6 +122,9 @@ enterKeys.innerHTML = controlGuide;
 enterKeys.setAttribute('aria-label', T('操作说明：WASD 跑动，Shift 慢走，Ctrl 蹲下，空格跳跃，E 或左键查看和返回，右键放大，Esc 暂停',
   'Controls: WASD run, Shift walk, Ctrl crouch, Space jump, E or left click inspect and return, hold right click zoom, Esc pause',
   '조작 안내: WASD 달리기, Shift 걷기, Ctrl 앉기, Space 점프, E 또는 왼쪽 클릭 감상 및 돌아가기, 오른쪽 클릭 확대, Esc 일시정지'));
+if (TOUCH_MODE) enterKeys.setAttribute('aria-label', T('触屏操作说明', 'Touch control guide', '터치 조작 안내'));
+const galleryFallback = document.getElementById('gallery-fallback');
+galleryFallback.textContent = T('浏览图片', 'Browse pictures', '그림 둘러보기');
 enterBack.textContent = T('返回首页', 'Back to home', '홈으로');
 exitBtn.title = T('返回首页', 'Back to home', '홈으로');
 titleEl.textContent = `${exhibitionName} — This is Eytle`;
@@ -119,7 +138,9 @@ const sensitivityInput = document.getElementById('look-sensitivity');
 const sensitivityValue = document.getElementById('sensitivity-value');
 const frameLimitInput = document.getElementById('frame-limit');
 document.getElementById('settings-title').textContent = T('操作设置', 'Controls', '조작 설정');
-document.getElementById('sensitivity-label').textContent = T('鼠标灵敏度', 'Mouse sensitivity', '마우스 감도');
+document.getElementById('sensitivity-label').textContent = TOUCH_MODE
+  ? T('触摸灵敏度', 'Touch sensitivity', '터치 감도')
+  : T('鼠标灵敏度', 'Mouse sensitivity', '마우스 감도');
 document.getElementById('frame-limit-label').textContent = T('帧率上限', 'Frame limit', '최대 프레임');
 sensitivityInput.value = settings.sensitivity;
 sensitivityValue.value = `${settings.sensitivity.toFixed(1)}×`;
@@ -315,7 +336,7 @@ const museumKnife = createMuseumKnifeController(document.getElementById('knife-c
 const audioListener = new THREE.AudioListener();
 audioListener.setMasterVolume(0);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(museumPixelRatio(TOUCH_MODE, window.devicePixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.info.autoReset = false;
@@ -333,7 +354,10 @@ canvas.addEventListener('webglcontextlost', (e) => {
   while (textureUploadQueue.length) textureUploadQueue.shift().resolve(false);
   audioListener.setMasterVolume(0);
   if (document.pointerLockElement === canvas) document.exitPointerLock();
+  cancelFocus();
+  pauseVisit();
   document.body.classList.remove('locked', 'focused');
+  enterEl.inert = false;
   fail('展馆显示异常，请刷新页面。', 'The exhibition could not be displayed. Please reload.', '전시를 표시하지 못했습니다. 새로고침하세요.');
 }, false);
 
@@ -432,7 +456,7 @@ bloomComposer.addPass(bloom);
 const sceneTarget = new THREE.WebGLRenderTarget(
   Math.round(window.innerWidth * renderer.getPixelRatio()),
   Math.round(window.innerHeight * renderer.getPixelRatio()), {
-  type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples),
+  type: THREE.HalfFloatType, samples: TOUCH_MODE ? 0 : Math.min(4, renderer.capabilities.maxSamples),
 });
 const finalComposer = new EffectComposer(renderer);
 // Allocate every post target at drawing-buffer resolution on the very first frame.
@@ -502,9 +526,11 @@ function renderGalleryFrame() {
 }
 
 window.addEventListener('resize', () => {
+  if (touchControls) clearInput();
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  if (TOUCH_MODE) resizeTouchFocus();
+  renderer.setPixelRatio(museumPixelRatio(TOUCH_MODE, window.devicePixelRatio));
   renderer.setSize(window.innerWidth, window.innerHeight);
   sceneTarget.setSize(Math.round(window.innerWidth * renderer.getPixelRatio()),
     Math.round(window.innerHeight * renderer.getPixelRatio()));
@@ -520,6 +546,7 @@ window.addEventListener('resize', () => {
    no external files, keeping the no-build constraint)
    ============================================================ */
 const architecture = createMuseumArchitecture({
+  mobile: TOUCH_MODE,
   scene, renderer, camera, halfWidth: HALL_HALF_WIDTH, ceilingY: CEIL_Y,
   springY: VAULT_SPRING_Y, chunkLength: CHUNK_LEN,
 });
@@ -955,13 +982,20 @@ async function galleryImageSource(url, imageIndex) {
   }
 }
 
-async function decodeGalleryTexture(source) {
+async function decodeGalleryTexture(source, meta) {
   if (source.blob && typeof createImageBitmap === 'function') {
     try {
-      const bitmap = await createImageBitmap(source.blob, {
+      let bitmap = await createImageBitmap(source.blob, {
         imageOrientation: 'flipY',
         premultiplyAlpha: 'none',
+        ...(TOUCH_MODE ? museumTextureSize(meta?.width, meta?.height) : {}),
       });
+      // Missing preview metadata must not leave a full-size original resident.
+      if (TOUCH_MODE && Math.max(bitmap.width, bitmap.height) > 1024) {
+        const original = bitmap;
+        try { bitmap = await createImageBitmap(original, museumTextureSize(original.width, original.height)); }
+        finally { original.close(); }
+      }
       const texture = new THREE.Texture(bitmap);
       texture.flipY = false;
       texture.needsUpdate = true;
@@ -979,6 +1013,17 @@ async function decodeGalleryTexture(source) {
   return new Promise(resolve => {
     const finish = texture => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (TOUCH_MODE && texture?.image) {
+        const { width, height } = texture.image;
+        if (Math.max(width, height) > 1024) {
+          const size = museumTextureSize(width, height);
+          const reduced = document.createElement('canvas');
+          reduced.width = size.resizeWidth; reduced.height = size.resizeHeight;
+          reduced.getContext('2d').drawImage(texture.image, 0, 0, reduced.width, reduced.height);
+          texture.image = reduced;
+          texture.needsUpdate = true;
+        }
+      }
       resolve(texture);
     };
     texLoader.load(loadUrl, finish, undefined, () => finish(null));
@@ -1030,14 +1075,14 @@ function loadTexture(i) {
   if (texCache[i]) return Promise.resolve(texCache[i]);
   if (textureLoads[i]) return textureLoads[i];
   const promise = galleryImageSource(TEXTURE_IMAGES[i] || IMAGES[i], i)
-    .then(decodeGalleryTexture)
+    .then(source => decodeGalleryTexture(source, IMAGE_META[i]))
     .then(async (tex) => {
       if (!tex) {
         texCache[i] = null;
         return null;
       }
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tex.anisotropy = Math.min(TOUCH_MODE ? 4 : Infinity, renderer.capabilities.getMaxAnisotropy());
       const uploaded = await scheduleTextureUpload(i, tex);
       if (!uploaded) {
         disposeGalleryTexture(tex);
@@ -1696,7 +1741,9 @@ let roamEnabled = true;
 let zoomHeld = false;
 let knifePrimaryPress = false;
 let ignoreNextLook = true;
-const isLocked = () => document.pointerLockElement === canvas;
+let touchPlaying = false;
+// This predicate means active visitor control on either input surface.
+const isLocked = () => TOUCH_MODE ? touchPlaying : document.pointerLockElement === canvas;
 const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6 });
 const heldCodes = new Set();
 const keys = { forward: false, back: false, left: false, right: false, walk: false, crouch: false, jump: false, jumpPressed: false };
@@ -1710,6 +1757,7 @@ function syncMuseumAudioState() {
 }
 
 function clearInput() {
+  touchControls?.reset();
   museumKnife.clearAttackInput();
   knifePrimaryPress = false;
   heldCodes.clear();
@@ -1721,6 +1769,7 @@ function clearInput() {
 
 function onKey(e, down) {
   if (plaqueSession || !isLocked()) return;
+  if (TOUCH_MODE && e.code === 'Escape') { if (down) pauseVisit(); return; }
   if (e.code === 'KeyE') {
     e.preventDefault();
     if (down && !e.repeat) inspectArtwork();
@@ -1757,10 +1806,12 @@ document.addEventListener('keydown', e => onKey(e, true));
 document.addEventListener('keyup', e => onKey(e, false));
 
 document.addEventListener('mousemove', (e) => {
-  if (!isLocked() || focusState) return;
+  if (TOUCH_MODE || !isLocked() || focusState) return;
   if (ignoreNextLook) { ignoreNextLook = false; return; }
-  const dx = e.movementX || 0;
-  const dy = e.movementY || 0;
+  applyLook(e.movementX || 0, e.movementY || 0);
+});
+
+function applyLook(dx, dy) {
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > MAX_LOOK_SPIKE || Math.abs(dy) > MAX_LOOK_SPIKE) return;
   // Scale by the visible field of view so zoom stays precise without smoothing latency.
   const zoomScale = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
@@ -1768,7 +1819,7 @@ document.addEventListener('mousemove', (e) => {
   yaw -= dx * sensitivity;
   pitch = Math.max(-Math.PI / 2 + 0.015, Math.min(Math.PI / 2 - 0.015, pitch - dy * sensitivity));
   yaw = THREE.MathUtils.euclideanModulo(yaw + Math.PI, Math.PI * 2) - Math.PI;
-});
+}
 
 function approachScalar(current, target, maxDelta) {
   if (current < target) return Math.min(target, current + maxDelta);
@@ -1825,6 +1876,28 @@ function setArtHintVisible(visible) {
   artHintEl.classList.toggle('show', Boolean(visible && !museumKnife.equipped));
 }
 
+function focusPose(mesh) {
+  const isPlaque = mesh.userData.kind === 'plaque';
+  const worldPos = new THREE.Vector3();
+  mesh.getWorldPosition(worldPos);
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  const artDistance = TOUCH_MODE ? museumFocusDistance(mesh.geometry?.parameters, camera.aspect, CAMERA_FOV) : 1.7;
+  const toPos = worldPos.clone().addScaledVector(normal, isPlaque ? PLAQUE_FOCUS_DISTANCE : artDistance);
+  toPos.y = worldPos.y;
+
+  const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
+  const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+
+  return { toPos, toQuat };
+}
+
+function resizeTouchFocus() {
+  if (!focusState || focusState.kind !== 'art' || focusState.phase !== 'toArt') return;
+  Object.assign(focusState, focusPose(focusState.mesh), {
+    t: 0, fromPos: camera.position.clone(), fromQuat: camera.quaternion.clone(),
+  });
+}
+
 function focusOn(mesh) {
   const isPlaque = mesh.userData.kind === 'plaque';
   if (isPlaque) {
@@ -1832,14 +1905,7 @@ function focusOn(mesh) {
     plaqueSession = { id: mesh.userData.artworkId, imageUrl: TEXTURE_IMAGES[slot.imageIndex] || IMAGES[slot.imageIndex] };
     document.body.classList.add('plaque-active');
   }
-  const worldPos = new THREE.Vector3();
-  mesh.getWorldPosition(worldPos);
-  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-  const toPos = worldPos.clone().addScaledVector(normal, isPlaque ? PLAQUE_FOCUS_DISTANCE : 1.7);
-  toPos.y = worldPos.y;
-
-  const m = new THREE.Matrix4().lookAt(toPos, worldPos, camera.up);
-  const toQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+  const { toPos, toQuat } = focusPose(mesh);
 
   clearInput();
   camera.position.copy(player.state.position);
@@ -1850,7 +1916,7 @@ function focusOn(mesh) {
   document.body.classList.add('focused', 'knife-hidden');
   focusState = {
     phase: 'toArt', t: 0,
-    kind: isPlaque ? 'plaque' : 'art',
+    kind: isPlaque ? 'plaque' : 'art', mesh,
     fromPos: camera.position.clone(),
     fromQuat: camera.quaternion.clone(),
     toPos, toQuat,
@@ -1906,7 +1972,7 @@ updaters.push((dt) => {
   if (focusState.t >= 1 && focusState.phase === 'toArt' && focusState.kind === 'plaque') {
     focusState.phase = 'readingPlaque';
     guestbook.open(plaqueSession);
-    document.exitPointerLock();
+    if (!TOUCH_MODE) document.exitPointerLock();
     syncMuseumAudioState();
   }
   if (focusState.t >= 1 && focusState.phase === 'returning') {
@@ -1935,7 +2001,14 @@ updaters.push(() => {
 });
 
 /* ---- pointer-lock lifecycle: the #enter overlay IS the pause menu ---- */
-document.addEventListener('pointerlockchange', () => {
+function syncTouchControls() {
+  touchControls?.update({
+    playing: isLocked(), focus: Boolean(focusState), plaque: Boolean(plaqueSession),
+    canInspect: artHintEl.classList.contains('show'),
+  });
+}
+
+function updateVisitState() {
   const locked = isLocked();
   clearInput();
   ignoreNextLook = true;
@@ -1949,19 +2022,28 @@ document.addEventListener('pointerlockchange', () => {
   }
   if (!locked) {
     // A plaque deliberately releases the mouse so its text fields can be used.
-    if (plaqueSession && focusState?.phase === 'readingPlaque') return;
+    if (plaqueSession && focusState?.phase === 'readingPlaque') { syncTouchControls(); return; }
     cancelFocus();                       // resume cleanly next time
     camera.fov = CAMERA_FOV;
     camera.updateProjectionMatrix();
     if (entered) enterGo.textContent = T('继续参观', 'Resume visit', '관람 계속');
   }
-});
+  syncTouchControls();
+}
+document.addEventListener('pointerlockchange', () => { if (!TOUCH_MODE) updateVisitState(); });
+
+function pauseVisit() {
+  if (TOUCH_MODE) { touchPlaying = false; updateVisitState(); }
+  else if (isLocked()) document.exitPointerLock();
+  else clearInput();
+}
 
 document.addEventListener('contextmenu', (e) => {
   if (isLocked()) e.preventDefault();
 });
 
 document.addEventListener('mousedown', (e) => {
+  if (TOUCH_MODE) return;
   if (e.button === 0) knifePrimaryPress = false;
   if (!isLocked() || plaqueSession) return;
   if (!focusState && museumKnife.equipped && (e.button === 0 || e.button === 2)) {
@@ -1983,15 +2065,16 @@ document.addEventListener('mouseup', (e) => {
 });
 
 window.addEventListener('blur', () => {
-  clearInput();
-  if (isLocked()) document.exitPointerLock();
+  // Focusing an input in the visitor dialog must not dismiss that dialog.
+  if (plaqueSession) { clearInput(); return; }
+  pauseVisit();
 });
 document.addEventListener('visibilitychange', () => {
   clearInput();
   syncMuseumAudioState();
   if (document.hidden) {
     renderer.setAnimationLoop(null);
-    if (isLocked()) document.exitPointerLock();
+    pauseVisit();
   } else if (looping) {
     resetFrameTiming();
     renderer.setAnimationLoop(frame);
@@ -1999,7 +2082,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 canvas.addEventListener('click', (e) => {
-  if (e.button !== 0) return;
+  if (TOUCH_MODE || e.button !== 0) return;
   // Consume the click even if the player stowed the knife before releasing it.
   if (knifePrimaryPress || (!focusState && museumKnife.equipped)) {
     knifePrimaryPress = false;
@@ -2026,6 +2109,10 @@ function reportPointerLockFailure() {
     '마우스 시점 조절을 사용할 수 없습니다. 전시장 입장을 다시 누르거나 데스크톱 브라우저를 사용하세요.');
 }
 async function lockPointer() {
+  if (TOUCH_MODE) {
+    if (!touchPlaying) { touchPlaying = true; updateVisitState(); }
+    return;
+  }
   if (lockPending || isLocked()) return;
   lockPending = true;
   runtimeStatus.textContent = '';
@@ -2055,6 +2142,20 @@ function enterPlay() {
   lockPointer();
 }
 enterGo.addEventListener('click', enterPlay);
+
+if (TOUCH_MODE) {
+  touchControls = createMuseumTouchControls({
+    canvas, T,
+    onMove(right, forward) { keys.moveRight = right; keys.moveForward = forward; },
+    onLook(dx, dy) { if (isLocked() && !focusState) applyLook(dx * 3, dy * 3); },
+    onJump(held) { if (held && !keys.jump) jumpQueued = true; keys.jump = held; },
+    onCrouch(held) { keys.crouch = held; },
+    onZoom: setZoomHeld,
+    onInspect: inspectArtwork,
+    onPause: pauseVisit,
+  });
+  updaters.push(syncTouchControls);
+}
 
 /* ---- boot ---- */
 async function boot() {
@@ -2105,4 +2206,9 @@ async function boot() {
     resetFrameTiming();
   }
 }
-boot();
+boot().catch(() => {
+  pauseVisit();
+  fail('展馆加载失败，请刷新或选择浏览图片。',
+    'The exhibition could not load. Reload or choose Browse pictures.',
+    '전시를 불러오지 못했습니다. 새로고침하거나 그림 둘러보기를 선택하세요.');
+});

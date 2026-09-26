@@ -135,14 +135,16 @@ const sectionPaths = Object.freeze({
   patchlog: '/patchlog', gallery: '/gallery', downloads: '/downloads'
 });
 
-/* Desktop capability gate for the 3D museum (mobile/unsupported → grid). */
+/* Touch devices use the mobile controls; unsupported browsers keep the grid. */
 function isMuseumCapable() {
   try {
-    if (!window.matchMedia('(pointer: fine)').matches) return false;
-    if (window.innerWidth < 900) return false;
-    if (!('requestPointerLock' in Element.prototype)) return false;
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    if (!touch && !('requestPointerLock' in Element.prototype)) return false;
     const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2'));
+    const gl = c.getContext('webgl2');
+    const supported = Boolean(gl);
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return supported;
   } catch { return false; }
 }
 

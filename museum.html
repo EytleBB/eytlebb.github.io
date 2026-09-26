@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>This is Eytle</title>
   <link rel="icon" href="images/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/museum.css?v=museum-knife-20260924" />
   <link rel="stylesheet" href="css/museum-guestbook.css?v=guestbook-20260922-r3" />
+  <link rel="stylesheet" href="css/museum-touch.css?v=museum-mobile-20260926" />
   <script type="importmap">
   {
     "imports": {
@@ -63,6 +64,7 @@
         <button class="go" id="enter-go" disabled></button>
         <div class="prog" id="enter-prog" role="status" aria-live="polite"></div>
       </div>
+      <a class="gallery-fallback" id="gallery-fallback" href="/gallery">浏览图片</a>
       <p id="runtime-status" role="status" aria-live="polite"></p>
     </div>
     <details id="museum-settings">
@@ -89,6 +91,22 @@
     <button class="back" id="enter-back"></button>
   </div>
 
-  <script type="module" src="js/museum.js?v=museum-destruction-20260926"></script>
+  <script type="module">
+    import('./js/museum.js?v=museum-mobile-20260926').catch(() => {
+      let lang = 'zh';
+      try { lang = localStorage.getItem('lang') || 'zh'; } catch {}
+      const copy = lang === 'en'
+        ? ['Pictures At An Exhibition', 'The exhibition could not load. Reload or browse the pictures below.', 'Browse pictures']
+        : lang === 'ko'
+        ? ['전람회의 그림', '전시를 불러오지 못했습니다. 새로고침하거나 아래에서 그림을 둘러보세요.', '그림 둘러보기']
+        : ['图画展览会', '展馆加载失败，请刷新或选择浏览图片。', '浏览图片'];
+      document.documentElement.lang = ['en', 'ko'].includes(lang) ? lang : 'zh';
+      document.getElementById('exhibition-title').textContent = copy[0];
+      document.getElementById('enter-sub').textContent = copy[1];
+      document.getElementById('gallery-fallback').textContent = copy[2];
+      document.getElementById('enter-prog').textContent = '';
+      document.getElementById('enter-go').hidden = true;
+    });
+  </script>
 </body>
 </html>

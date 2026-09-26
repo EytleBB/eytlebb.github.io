@@ -26,6 +26,7 @@ export const MUSEUM_PLAYER_DEFAULTS = Object.freeze({
 
 /**
  * Input: { forward, back, left, right, walk, crouch, jump } (booleans).
+ * Optional moveForward/moveRight add analog joystick axes in [-1, 1].
  * Optional jumpPressed preserves keydown edges when release/repress occurs between frames.
  * rearLimitZ may be a number or a function for the hall's moving rear wall.
  * Returned state and its position/velocity objects are reused; no per-frame GC.
@@ -105,8 +106,10 @@ export function createMuseumPlayer(options = {}) {
     accumulator += Math.min(dt, maxFrameTime);
 
     // Normalize in local space first: W+D must never run faster than W.
-    let forward = Number(Boolean(input.forward)) - Number(Boolean(input.back));
-    let right = Number(Boolean(input.right)) - Number(Boolean(input.left));
+    let forward = Number(Boolean(input.forward)) - Number(Boolean(input.back))
+      + (Number.isFinite(input.moveForward) ? input.moveForward : 0);
+    let right = Number(Boolean(input.right)) - Number(Boolean(input.left))
+      + (Number.isFinite(input.moveRight) ? input.moveRight : 0);
     const intentLength = Math.hypot(forward, right);
     if (intentLength > 0) {
       forward /= intentLength;
@@ -118,7 +121,8 @@ export function createMuseumPlayer(options = {}) {
     const wishX = -sin * forward + cos * right;
     const wishZ = -cos * forward - sin * right;
     const crouched = Boolean(input.crouch);
-    const desiredSpeed = crouched ? config.crouchSpeed : input.walk ? config.walkSpeed : config.runSpeed;
+    const desiredSpeed = (crouched ? config.crouchSpeed : input.walk ? config.walkSpeed : config.runSpeed)
+      * Math.min(1, intentLength);
 
     while (accumulator + 1e-10 >= step) {
       accumulator = Math.max(0, accumulator - step);
