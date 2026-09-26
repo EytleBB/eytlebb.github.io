@@ -20,7 +20,16 @@ body.museum-horror .museum-horror-copy {
   position:relative; display:inline-block; max-width:100%; vertical-align:baseline;
 }
 body.museum-horror .museum-horror-original {
-  color:transparent !important; text-shadow:none !important;
+  opacity:0; color:transparent !important; text-shadow:none !important;
+}
+body.museum-horror :is(.museum-horror-copy,.museum-horror-original) {
+  -webkit-user-select:none; user-select:none; -webkit-user-drag:none; -webkit-touch-callout:none;
+}
+body.museum-horror :is(.museum-horror-copy,.museum-horror-original)::selection {
+  color:transparent!important; background:transparent!important; text-shadow:none!important;
+}
+body.museum-horror img {
+  -webkit-user-drag:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
 body.museum-horror .museum-horror-visual {
   position:absolute; inset:0; overflow:hidden; pointer-events:none; user-select:none;
@@ -50,6 +59,7 @@ body.museum-horror .museum-guestbook::backdrop { background:rgba(5,0,3,.6); }
 body.museum-horror .guestbook-sheet { background:linear-gradient(125deg,rgba(88,23,32,.09),transparent 65%),var(--paper); }
 body.museum-horror .guestbook-art-frame { border-color:#51312e; background:#10090c; box-shadow:inset 0 0 0 4px rgba(80,33,37,.16); }
 body.museum-horror .guestbook-art { grid-area:1 / 1; filter:grayscale(1) sepia(.65) hue-rotate(316deg) brightness(.5); }
+body.museum-horror .guestbook-art { opacity:0!important; }
 body.museum-horror .guestbook-art.museum-horror-art-covered { opacity:0; }
 body.museum-horror .museum-horror-art {
   grid-area:1 / 1; z-index:1; display:block; width:100%; height:100%; min-height:0;

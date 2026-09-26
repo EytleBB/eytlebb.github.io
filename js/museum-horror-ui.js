@@ -245,7 +245,13 @@ export function createMuseumHorrorUI({ root = document.body, reducedMotion = fal
       previousTonePriority = body.style.getPropertyPriority('--horror-text');
       body.classList.add('museum-horror');
       const Observer = document.defaultView?.MutationObserver;
-      if (Observer) observer = new Observer(() => { dirty = true; });
+      if (Observer) observer = new Observer(() => {
+        if (!enabled) return;
+        // Mutation delivery precedes painting: cover application-inserted text
+        // and art now, while pixel redraws keep their independent cadence.
+        observer.disconnect();
+        try { synchronize(); } finally { observe(); }
+      });
       const ResizeObserver = document.defaultView?.ResizeObserver;
       if (ResizeObserver) resizeObserver = new ResizeObserver(entries => {
         const changed = new Set(entries.map(entry => entry.target));

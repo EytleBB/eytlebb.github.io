@@ -131,6 +131,19 @@ html.site-horror .lightbox-developer-line::before,
 html.site-horror .lightbox-developer-line::after { background:none; animation:none; }
 html.site-horror .lightbox-status { color:#bd8c8d; }
 
+/* Hide public artwork immediately, including before the lazy overlay is mounted. */
+html.site-horror[data-horror-surface="site"] :is(.gal-item,.gallery-grid,.gallery-masonry,.lightbox-photo) img {
+  opacity:0!important;
+}
+/* The loading cover hides text paint without changing currentColor used by SVG icons. */
+html.site-horror.site-horror-covering[data-horror-surface="site"] body,
+html.site-horror.site-horror-covering[data-horror-surface="site"] body :not(input):not(textarea):not(canvas):not(svg):not(svg *) {
+  -webkit-text-fill-color:transparent!important; text-shadow:none!important;
+}
+html.site-horror.site-horror-covering[data-horror-surface="site"] :is(input,textarea,svg) {
+  -webkit-text-fill-color:currentColor!important;
+}
+
 /* The image remains the layout/click target; its canvas is a visual-only sibling. */
 html.site-horror .site-horror-image-host { position:relative; isolation:isolate; }
 html.site-horror .site-horror-image-covered { opacity:0!important; }
@@ -153,15 +166,36 @@ html.site-horror .lightbox-photo > .site-horror-image { z-index:5; object-fit:co
 html.site-horror .museum-horror-copy {
   position:relative; display:inline-block; max-width:100%; vertical-align:baseline;
 }
-html.site-horror .museum-horror-original { color:transparent!important; text-shadow:none!important; }
+html.site-horror .museum-horror-original { opacity:0; color:transparent!important; text-shadow:none!important; }
 html.site-horror .museum-horror-visual {
   position:absolute; inset:0; display:block; width:100%; height:100%; overflow:hidden;
   image-rendering:pixelated; pointer-events:none; user-select:none;
 }
 html.site-horror body.museum-horror :is(select,option) { font-family:MuseumObfuscated,monospace; }
 html.site-horror body.museum-horror :is(input,textarea)::placeholder { font-family:MuseumObfuscated,monospace; }
-html.site-horror :is(button,a):is(:hover,:focus-within) .museum-horror-original { color:var(--parchment)!important; }
-html.site-horror :is(button,a):is(:hover,:focus-within) .museum-horror-visual { opacity:0; }
+/* Selection, hover, and native dragging must not uncover the original artwork or labels. */
+html.site-horror :is(.museum-horror-copy,.museum-horror-original) {
+  -webkit-user-select:none; user-select:none; -webkit-user-drag:none; -webkit-touch-callout:none;
+}
+html.site-horror :is(.museum-horror-copy,.museum-horror-original)::selection {
+  color:transparent!important; background:transparent!important; text-shadow:none!important;
+}
+html.site-horror body.museum-horror img {
+  -webkit-user-drag:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+
+/* Only the public horror surface opts in; admin controls and typed input stay intact. */
+html.site-horror body.site-horror-locked .site-horror-denied {
+  outline:1px solid #a74d5c; outline-offset:2px;
+  box-shadow:inset 0 0 0 1px rgba(116,32,49,.22);
+  animation:site-horror-denied-jolt 180ms steps(1,end) both;
+}
+@keyframes site-horror-denied-jolt {
+  0%,100% { translate:0 0; }
+  20%,60% { translate:-1px 0; }
+  40% { translate:2px 0; }
+  80% { translate:1px 0; }
+}
 
 /* Standalone tools and administration keep their native layout and real labels. */
 html.site-horror body:has(> .container),
@@ -213,6 +247,7 @@ html.site-horror #edit-dialog::backdrop { background:rgba(12,1,8,.78); }
   }
 }
 @media (prefers-reduced-motion:reduce) {
+  html.site-horror body.site-horror-locked .site-horror-denied { animation:none; }
   html.site-horror body::before { background:radial-gradient(ellipse at 70% 57%,rgba(100,16,32,.07),transparent 65%); }
   html.site-horror #site-horror-field { opacity:.34; }
   html.site-horror :is(.motion-reveal,.hero-copy h1,.hero-description,.hero-link),

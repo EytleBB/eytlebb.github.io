@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createMuseumHorrorArt } from './museum-horror-art.js?v=ending-20260926';
-import { createMuseumHorrorUI } from './museum-horror-ui.js?v=site-horror-20260926';
+import { createMuseumHorrorUI } from './museum-horror-ui.js?v=horror-immersion-20260926';
 
 export const HORROR_BREAK_THRESHOLD = 24;
 const fract = value => value - Math.floor(value);

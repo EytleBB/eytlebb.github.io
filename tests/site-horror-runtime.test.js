@@ -116,7 +116,7 @@ function presentationClock({ reducedMotion = false, admin = false } = {}) {
   let nextId = 1, uiFactories = 0;
   const noop = () => {};
   const document = {
-    hidden: false, documentElement: { clientWidth: 1280 },
+    hidden: false, documentElement: { clientWidth: 1280, classList: { remove() {} } },
     getElementById: () => admin ? {} : null,
     querySelector: () => null, querySelectorAll: () => [],
     body: { prepend: noop },

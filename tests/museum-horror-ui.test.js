@@ -63,6 +63,13 @@ function uiDocument() {
       this.parentNode = null;
       for (const node of nodes) node.parentNode = parent;
     }
+    after(node) {
+      const parent = this.parentNode;
+      if (!parent) return;
+      node.remove();
+      parent.childNodes.splice(parent.childNodes.indexOf(this) + 1, 0, node);
+      node.parentNode = parent;
+    }
     contains(node) { for (let current = node; current; current = current.parentNode) if (current === this) return true; return false; }
     setAttribute(name, value) { this.attributes.set(name, value); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
@@ -70,6 +77,10 @@ function uiDocument() {
     removeAttribute(name) { this.attributes.delete(name); }
     matches(selector) {
       if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+      if (/^[a-z]+\.[\w-]+$/.test(selector)) {
+        const [tag, className] = selector.split('.');
+        return this.tagName === tag && this.classList.contains(className);
+      }
       if (selector.startsWith('[contenteditable]')) return this.hasAttribute('contenteditable') && this.getAttribute('contenteditable') !== 'false';
       if (selector === '[hidden]') return this.hasAttribute('hidden');
       if (selector.includes('[placeholder]')) return this.tagName === selector.split('[')[0] && this.hasAttribute('placeholder');
@@ -99,7 +110,8 @@ function uiDocument() {
     const node = new Node(tagName);
     if (tagName === 'canvas') {
       node.width = 300; node.height = 150;
-      const context = { draws: 0, pixels: 0, clearRect() { this.draws++; }, fillRect() { this.pixels++; } };
+      const context = { draws: 0, pixels: 0, imageDraws: 0,
+        clearRect() { this.draws++; }, fillRect() { this.pixels++; }, drawImage() { this.imageDraws++; } };
       node.getContext = () => context;
       canvases.push(node);
     }
@@ -257,4 +269,43 @@ test('default museum native labels still animate and restore without changing ty
   assert.equal(option.getAttribute('label'), null);
   assert.equal(option.textContent, 'English');
   assert.equal(input.value, 'Actual draft'); assert.equal(option.value, 'en');
+});
+
+test('application mutations cover new text and guestbook pictures before the next pixel-animation frame', async () => {
+  const { createMuseumHorrorUI } = await modulePromise;
+  const h = uiDocument();
+  const existing = h.element('p', 'Existing label');
+  const ui = createMuseumHorrorUI({ root: h.root, artCanvas: { width: 256, height: 256 } });
+  ui.enable();
+  const existingWrapper = existing.childNodes[0], existingCanvas = existingWrapper.childNodes[1];
+  assert.equal(existingCanvas.getContext().draws, 1);
+  const added = h.element('p', 'A freshly loaded log');
+  const picture = h.element('img'); picture.className = 'guestbook-art';
+  h.mutate();
+  const addedWrapper = added.childNodes[0], addedCanvas = addedWrapper.childNodes[1];
+  assert.equal(addedWrapper.className, 'museum-horror-copy', 'new application text is covered during mutation delivery');
+  assert.equal(addedWrapper.childNodes[0].className, 'museum-horror-original');
+  assert.equal(picture.classList.contains('museum-horror-art-covered'), true);
+  const artCanvas = h.canvases.find(canvas => canvas.className === 'museum-horror-art');
+  assert.ok(artCanvas);
+  assert.equal(artCanvas.parentNode, picture.parentNode);
+  assert.equal(addedCanvas.getContext().draws, 0, 'covering does not draw new glyphs early');
+  assert.equal(existingCanvas.getContext().draws, 1, 'covering does not redraw the rest of the page');
+  assert.equal(artCanvas.getContext().imageDraws, 0, 'art painting also stays on the existing animation cadence');
+  ui.update(1 / 48);
+  assert.equal(addedCanvas.getContext().draws, 0);
+  ui.update(1 / 48);
+  assert.equal(addedCanvas.getContext().draws, 1);
+  assert.equal(existingCanvas.getContext().draws, 2);
+  assert.equal(artCanvas.getContext().imageDraws, 1);
+  addedWrapper.childNodes[0].childNodes[0].data = 'Application updated text';
+  h.mutate();
+  assert.equal(added.childNodes[0], addedWrapper);
+  assert.equal(addedCanvas.getContext().draws, 1, 'a text update only invalidates the next glyph frame');
+  ui.dispose();
+  assert.equal(added.textContent, 'Application updated text');
+  assert.equal(picture.classList.contains('museum-horror-art-covered'), false);
+  const after = h.element('p', 'After disposal');
+  h.mutate();
+  assert.equal(after.childNodes[0].nodeType, 3, 'late queued observer callbacks leave normal content alone');
 });

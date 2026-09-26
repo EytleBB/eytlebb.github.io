@@ -19,7 +19,7 @@ import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-2026092
 import { createMuseumKnifeController } from './museum-knife.js?v=ending-20260926';
 import { createMuseumSounds } from './museum-sounds.js?v=site-horror-20260926';
 import { createMuseumDestruction } from './museum-destruction.js?v=ending-20260926';
-import { createMuseumHorror } from './museum-horror.js?v=site-horror-20260926';
+import { createMuseumHorror } from './museum-horror.js?v=horror-immersion-20260926';
 import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=ending-20260926';
 import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=chiptune-20260926';
 

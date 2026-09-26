@@ -7,7 +7,7 @@ async function activateSiteHorror() {
   if (!window.eytleHorror?.isActive() || presentation || starting) return;
   starting = Promise.all([
     import('./museum-horror-glyphs.js?v=pixel-20260926'),
-    import('./museum-horror-ui.js?v=site-horror-20260926'),
+    import('./museum-horror-ui.js?v=horror-immersion-20260926'),
   ]).then(([{ createPixelGlyphPainter }, { createMuseumHorrorUI }]) => {
     presentation = createSiteHorrorPresentation({ createPixelGlyphPainter, createMuseumHorrorUI });
     if (!away) presentation.resume();
@@ -166,6 +166,7 @@ function createSiteHorrorPresentation({ createPixelGlyphPainter, createMuseumHor
     if (admin) return;
     ui = createMuseumHorrorUI({ reducedMotion: preference.matches, visibleOnly: true, nativeLabels: false });
     ui.enable();
+    document.documentElement.classList.remove('site-horror-covering');
   }
 
   function draw(dt) {

@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-horror-surface="museum">
 <head>
   <script src="js/site-horror-state.js?v=site-horror-20260926"></script>
+  <script src="js/site-horror-interaction.js?v=horror-immersion-20260926"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>This is Eytle</title>
@@ -12,7 +13,7 @@
   <link rel="stylesheet" href="css/museum.css?v=museum-knife-20260924" />
   <link rel="stylesheet" href="css/museum-guestbook.css?v=guestbook-20260922-r3" />
   <link rel="stylesheet" href="css/museum-touch.css?v=museum-mobile-20260926" />
-  <link rel="stylesheet" href="css/museum-horror.css?v=ending-20260926" />
+  <link rel="stylesheet" href="css/museum-horror.css?v=horror-immersion-20260926" />
   <script type="importmap">
   {
     "imports": {
@@ -94,7 +95,7 @@
   </div>
 
   <script type="module">
-    import('./js/museum.js?v=museum-site-horror-20260926').catch(() => {
+    import('./js/museum.js?v=museum-horror-immersion-20260926').catch(() => {
       let lang = 'zh';
       try { lang = localStorage.getItem('lang') || 'zh'; } catch {}
       const copy = lang === 'en'
