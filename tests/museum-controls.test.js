@@ -80,10 +80,12 @@ async function createControls(touch = false) {
   const context = vm.createContext({
     createMuseumPlayer, document, window, canvas, camera, museumKnife,
     TOUCH_MODE: touch, touchControls: null,
+    museumFullscreen: touch ? { enter() { context.fullscreenRequests++; }, toggle() {}, state: () => ({}) } : null,
+    fullscreenRequests: 0,
     museumFocusDistance: (await import('../js/museum-touch.js')).museumFocusDistance,
     createMuseumTouchControls(options) {
       context.touchOptions = options;
-      return { reset() {}, update(state) { context.touchState = state; } };
+      return { reset() {}, setFullscreen() {}, update(state) { context.touchState = state; } };
     },
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
@@ -673,4 +675,22 @@ test('an active ending also blocks touch movement, drag rotation and the View ac
   assert.equal(h.api.focusState, null);
   assert.equal(h.context.guestbook.isOpen(), false);
   assert.equal(ending.updates, 60);
+});
+
+test('the first touch entry requests fullscreen once; resuming respects a visitor who exited it', async () => {
+  const h = await createControls(true);
+  h.context.entered = false;
+  h.context.preloaded = false;
+  h.api.enterPlay();
+  assert.equal(h.context.fullscreenRequests, 0);
+  h.context.preloaded = true;
+  h.api.enterPlay();
+  assert.equal(h.context.fullscreenRequests, 1);
+  assert.equal(h.api.isLocked(), true);
+  h.api.pauseVisit(); h.api.enterPlay();
+  assert.equal(h.context.fullscreenRequests, 1);
+  const desktop = await createControls();
+  desktop.context.entered = false;
+  desktop.api.enterPlay();
+  assert.equal(desktop.context.fullscreenRequests, 0);
 });

@@ -1,14 +1,4 @@
 // Pointer Events keep the two thumbs independent, including cancelled gestures.
-export function museumPixelRatio(touch, ratio = 1) {
-  return Math.min(Number.isFinite(ratio) && ratio > 0 ? ratio : 1, touch ? 1.25 : 2);
-}
-
-export function museumTextureSize(width, height, limit = 1024) {
-  if (!(width > 0 && height > 0)) return {};
-  const scale = Math.min(1, limit / Math.max(width, height));
-  return { resizeWidth: Math.max(1, Math.round(width * scale)), resizeHeight: Math.max(1, Math.round(height * scale)) };
-}
-
 // Fit portrait views without passing through the opposite wall of the 6 m hall.
 export function museumFocusDistance(size = {}, aspect = 1, fov = 74) {
   const halfHeight = Math.tan(fov * Math.PI / 360);
@@ -16,14 +6,18 @@ export function museumFocusDistance(size = {}, aspect = 1, fov = 74) {
   return Math.max(1.7, Math.min(5, fit * 1.12));
 }
 
-export function createMuseumTouchControls({ canvas, T, onMove, onLook, onJump, onCrouch, onZoom, onInspect, onPause }) {
+export function createMuseumTouchControls({ canvas, T, onMove, onLook, onJump, onCrouch, onZoom, onInspect, onPause, onFullscreen }) {
   const root = document.createElement('div');
   root.id = 'touch-controls';
   root.hidden = true;
   root.setAttribute('role', 'group');
   root.setAttribute('aria-label', T('触屏操作', 'Touch controls', '터치 조작'));
   root.innerHTML = `
-    <button type="button" class="touch-button touch-pause" data-touch="pause">${T('暂停', 'Pause', '일시정지')}</button>
+    <div class="touch-top-actions">
+      <button type="button" class="touch-button" data-touch="fullscreen" aria-pressed="false">${T('全屏', 'Fullscreen', '전체 화면')}</button>
+      <button type="button" class="touch-button" data-touch="pause">${T('暂停', 'Pause', '일시정지')}</button>
+    </div>
+    <p class="touch-fullscreen-status" data-touch="fullscreen-status" role="status" aria-live="polite" hidden></p>
     <div class="touch-movement">
       <span class="touch-caption">${T('移动', 'Move', '이동')}</span>
       <div class="touch-stick" data-touch="stick" role="group" aria-label="${T('拖动摇杆移动', 'Drag the joystick to move', '조이스틱을 드래그하여 이동')}">
@@ -143,6 +137,7 @@ export function createMuseumTouchControls({ canvas, T, onMove, onLook, onJump, o
   });
   inspect.addEventListener('click', () => { if (active) onInspect(); });
   button('pause').addEventListener('click', () => { if (active) onPause(); });
+  button('fullscreen').addEventListener('click', () => { if (active) onFullscreen(); });
 
   function reset() {
     stopMove(); stopLook();
@@ -157,6 +152,15 @@ export function createMuseumTouchControls({ canvas, T, onMove, onLook, onJump, o
   }
   return {
     reset,
+    setFullscreen({ active: fullscreen, pending, message, label }) {
+      const control = button('fullscreen');
+      control.textContent = label;
+      control.disabled = pending;
+      control.setAttribute('aria-pressed', String(fullscreen));
+      const status = button('fullscreen-status');
+      status.textContent = message;
+      status.hidden = !message;
+    },
     update({ playing, focus = false, canInspect = false, plaque = false }) {
       const nextActive = playing && !plaque;
       if (active !== nextActive || focused !== focus) reset();

@@ -5,7 +5,7 @@ import { LIGHTING_LAYOUT, RIB_LIGHT_CHANNEL, projectorStationsInChunk } from './
 
 /* Nocturne: all surfaces and architectural profiles are generated locally.
    Shared, merged geometry keeps the endless hall's cost independent of distance. */
-export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, ceilingY, springY, chunkLength, mobile = false }) {
+export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, ceilingY, springY, chunkLength }) {
   const width = halfWidth * 2;
   const materials = {};
   let reflection, floorGroup, matteFloor;
@@ -253,7 +253,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     floorGroup = group;
     reflection = new Reflector(new THREE.PlaneGeometry(width, length), {
       clipBias: 0.003, textureWidth: 1, textureHeight: 1,
-      multisample: mobile ? 0 : Math.min(4, renderer.capabilities.maxSamples),
+      multisample: Math.min(4, renderer.capabilities.maxSamples),
       shader: floorShader, color: 0xffffff,
     });
     reflection.name = 'Obsidian planar reflection';
@@ -284,7 +284,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     if (!reflection || !reflectionsEnabled) return;
     // Give enlarged floor details enough samples, while bounding the secondary
     // view instead of allocating another native 4K/HiDPI scene.
-    const ratio = Math.min(renderer.getPixelRatio(), (mobile ? 768 : 1536) / Math.max(window.innerWidth, window.innerHeight));
+    const ratio = Math.min(renderer.getPixelRatio(), 1536 / Math.max(window.innerWidth, window.innerHeight));
     const w = Math.max(320, Math.round(window.innerWidth * ratio));
     const h = Math.max(240, Math.round(window.innerHeight * ratio));
     reflection.getRenderTarget().setSize(w, h);

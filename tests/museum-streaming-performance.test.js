@@ -58,10 +58,10 @@ test('picture light positions avoid redundant scene-graph walks without changing
   assert.match(museum, /while \(pictureSpotPool\.length < MAX_REAL_SPOT_LIGHTS\)/);
 });
 
-test('entry prewarms audio and uses the device rendering budget', () => {
+test('entry prewarms audio and shares desktop rendering quality on touch devices', () => {
   assert.match(museum, /museumTrack\.preload = 'auto'/);
   assert.match(museum, /connectMuseumTrack\(\)/);
   assert.match(museum, /url\.split\('\?'\)\[0\]/);
-  assert.match(museum, /renderer\.setPixelRatio\(museumPixelRatio\(TOUCH_MODE, window\.devicePixelRatio\)\)/);
+  assert.match(museum, /renderer\.setPixelRatio\(Math\.min\(window\.devicePixelRatio, 2\)\)/);
   assert.match(html, /js\/museum\.js\?v=museum-[a-z0-9-]+/);
 });
