@@ -7,7 +7,10 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
   const records = new Map();
   const summaries = new Map();
   const plaqueGeometry = new THREE.PlaneGeometry(PLAQUE_WIDTH, PLAQUE_HEIGHT);
-  const titleGeometry = new THREE.PlaneGeometry(0.72, 0.115);
+  const titleGeometry = new THREE.BoxGeometry(0.74, 0.13, 0.028);
+  // Keep the title on the front; side/back faces sample the bronze canvas margin.
+  const titleUV = titleGeometry.attributes.uv;
+  for (let i = 0; i < titleUV.count; i++) if (i < 16 || i >= 20) titleUV.setXY(i, 0, 0);
   const serif = '"Noto Serif CJK SC", "Songti SC", "Batang", Georgia, serif';
   const sans = '"Noto Sans CJK SC", "PingFang SC", system-ui, sans-serif';
 
@@ -128,7 +131,7 @@ export function createMuseumPlaques({ lang, halfWidth = 3 }) {
     const p = plaquePlacement(slot.side, width, frameBorder, slot.frame.position.z, halfWidth);
     slot.plaque.position.set(p.x, p.y, p.z);
     slot.plaque.rotation.y = p.rotationY;
-    slot.titlePlaque.position.set(slot.side * (halfWidth - 0.044), 0.61, slot.frame.position.z);
+    slot.titlePlaque.position.set(slot.side * (halfWidth - 0.03), 0.61, slot.frame.position.z);
     slot.titlePlaque.rotation.y = p.rotationY;
   }
   function update(summary) {

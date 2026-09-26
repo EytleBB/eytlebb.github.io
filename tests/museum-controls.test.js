@@ -160,7 +160,7 @@ test('Q toggles the knife, 3 equips and 1 stows only during free roaming', async
   assert.equal(h.museumKnife.equipped, true);
   h.lock(true);
   h.api.focusOn({
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
@@ -184,7 +184,7 @@ test('F inspects an equipped knife once without stealing modified keys or plaque
   assert.equal(h.key('KeyF', true).prevented, false);
   h.lock(true);
   h.api.focusOn({
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
@@ -274,7 +274,7 @@ test('artwork focus preserves a crouched position and returns control without st
   near(h.camera.position.y, 1.08);
   const before = h.camera.position.clone();
   const mesh = {
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   };
@@ -342,7 +342,7 @@ test('pausing while focused restores both the saved position and look orientatio
   h.tick();
   const before = h.camera.position.clone();
   h.api.focusOn({
-    userData: {},
+    userData: {}, visible: true, parent: { visible: true },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
     getWorldQuaternion(out) { return out; },
   });
@@ -384,6 +384,7 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
   h.key('KeyW', true);
   h.tick(30);
   h.api.focusOn({
+    visible: true, parent: { visible: true },
     userData: { kind: 'plaque', artworkId: '0x0000.jpg', slot: { imageIndex: 0 } },
     getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.37, z: -3 }); },
     getWorldQuaternion(out) { return out; },
@@ -413,7 +414,7 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
 });
 
 const artwork = () => ({
-  userData: {},
+  userData: {}, visible: true, parent: { visible: true },
   getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
   getWorldQuaternion(out) { return out; },
 });
@@ -490,4 +491,24 @@ test('empty-hand controls stay available and attacks clear on pause, focus, blur
   const count = h.museumKnife.attacks.length;
   assert.equal(mouse(h, 'mousedown', 0).prevented, false);
   assert.equal(h.museumKnife.attacks.length, count);
+});
+
+test('equipping hides the painting hint immediately, and intact art remains discoverable after stowing', async () => {
+  const h = await createControls();
+  const mesh = artwork();
+  h.context.artMeshes.push(mesh);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), true);
+  h.key('Digit3', true);
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.key('Digit1', true);
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), true);
+  mesh.visible = false;
+  h.tick();
+  assert.equal(h.context.artHintEl.classList.contains('show'), false);
+  h.key('KeyE', true);
+  assert.equal(h.api.focusState, null, 'destroyed paintings cannot open a ghost focus target');
 });

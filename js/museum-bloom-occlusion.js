@@ -10,15 +10,19 @@ export function createMuseumBloomOcclusion(scene, { bloomLayer = 1 } = {}) {
   bloom.set(bloomLayer);
   const main = new THREE.Layers();
   main.set(0);
-  const renderables = [];
+  const renderables = new Set();
   const blackMaterials = new Map();
   const noReflection = () => {};
 
-  scene.traverse(object => {
-    if (object.isMesh || object.isPoints || object.isLine || object.isSprite) {
-      renderables.push(object);
-    }
-  });
+  function addObject(root) {
+    root.traverse(object => {
+      if (object.isMesh || object.isPoints || object.isLine || object.isSprite) renderables.add(object);
+    });
+  }
+  function removeObject(root) {
+    root.traverse(object => renderables.delete(object));
+  }
+  addObject(scene);
 
   function blackFor(material) {
     const side = material.side;
@@ -31,6 +35,7 @@ export function createMuseumBloomOcclusion(scene, { bloomLayer = 1 } = {}) {
   }
 
   return {
+    addObject, removeObject,
     // The callback is synchronous, like EffectComposer.render(). Save the
     // current materials on every pass: streaming may have replaced them since
     // the previous frame, even though the renderable pool is stable.
@@ -71,6 +76,7 @@ export function createMuseumBloomOcclusion(scene, { bloomLayer = 1 } = {}) {
     dispose() {
       for (const material of blackMaterials.values()) material.dispose();
       blackMaterials.clear();
+      renderables.clear();
     },
   };
 }

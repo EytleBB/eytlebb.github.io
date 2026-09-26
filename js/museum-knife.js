@@ -241,6 +241,9 @@ class KnifeDemo {
   };
   this.pendingInspect = false;
   this.paused = false;
+  this.attackKind = kind;
+  this.attackImpactAt = leadIn + (kind === 'heavy' ? .35 : .21);
+  this.attackImpactFired = false;
   this.setState('attacking');
   return true;
  }
@@ -248,6 +251,10 @@ class KnifeDemo {
   if (this.paused) return;
   this.time += dt * this.speed;
   this.idleTime += dt;
+  if (this.state === 'attacking' && !this.attackImpactFired && this.time >= this.attackImpactAt) {
+    this.attackImpactFired = true;
+    this.onStrike?.(this.attackKind);
+  }
   if (this.state === 'drawing' && this.time >= this.clip.duration) {
     this.setState('idle');
     this.idleTime = 0;
@@ -451,7 +458,7 @@ const ATTACK_ANIMATIONS = {
 
 const KNIFE_MODEL_URL = new URL('../models/classic-knife-v6-right-hand.glb', import.meta.url);
 
-export function createMuseumKnifeController(canvas) {
+export function createMuseumKnifeController(canvas, { onStrike } = {}) {
   let demo = null;
   let loading = null;
   let equipped = false;
@@ -462,6 +469,7 @@ export function createMuseumKnifeController(canvas) {
   function clearAttackInput() {
     heldAttacks.clear();
     queuedAttack = null;
+    if (demo) demo.attackImpactFired = true;
   }
 
   function attackIfReady() {
@@ -490,6 +498,7 @@ export function createMuseumKnifeController(canvas) {
       .then(buffer => new KnifeDemo(canvas, buffer, DRAW_ANIMATION).ready)
       .then(loaded => {
         demo = loaded;
+        demo.onStrike = onStrike;
         if (equipped) draw();
       })
       .catch(error => { console.warn('Museum knife unavailable', error); })

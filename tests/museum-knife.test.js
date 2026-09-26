@@ -185,7 +185,7 @@ test('reduced-motion strikes use a small movement and retain separate recovery t
   }
 });
 
-function attackController() {
+function attackController(onStrike) {
   let demo, resolveFetch;
   const attacks = [];
   const controllerSource = source.slice(source.indexOf('export function createMuseumKnifeController'))
@@ -208,7 +208,7 @@ function attackController() {
       }
     },
   });
-  const controller = createController({});
+  const controller = createController({}, { onStrike });
   return {
     controller, attacks, get demo() { return demo; },
     async load() {
@@ -264,4 +264,39 @@ test('held attacks repeat at their own cadence, release stops them, and clicks n
     assert.equal(h.attacks.length, counts[kind] + 1);
   }
   assert.ok(counts.light > counts.heavy && counts.heavy >= 2);
+});
+
+test('each accepted swing strikes at contact time once, including low frame rates; early stow cancels it', () => {
+  for (const kind of ['light', 'heavy']) for (const fps of [10, 30, 144]) {
+    const demo = knife(), hits = [];
+    demo.onStrike = value => hits.push({ kind: value, time: demo.time });
+    demo.attack(kind);
+    const contact = demo.attackImpactAt;
+    while (demo.state === 'attacking') demo.update(1 / fps);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].kind, kind);
+    assert.ok(hits[0].time >= contact && hits[0].time < contact + 1 / fps + 1e-8);
+    demo.attack(kind);
+    demo.update(.04);
+    demo.holster();
+    advance(demo, 2);
+    assert.equal(hits.length, 1);
+  }
+});
+
+
+test('pause/focus input clearing cancels an unlanded impact without disabling the next swing', async () => {
+  const hits = [], h = attackController(kind => hits.push(kind));
+  h.controller.equip();
+  await h.load();
+  h.tick(.7);
+  h.controller.setAttackHeld('light', true);
+  h.tick(.05);
+  h.controller.clearAttackInput();
+  h.tick(1);
+  assert.deepEqual(hits, []);
+  h.controller.setAttackHeld('heavy', true);
+  h.controller.setAttackHeld('heavy', false);
+  h.tick(1);
+  assert.deepEqual(hits, ['heavy']);
 });

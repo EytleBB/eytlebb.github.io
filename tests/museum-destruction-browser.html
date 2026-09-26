@@ -1,0 +1,78 @@
+<!doctype html><meta charset="utf-8"><title>Museum destruction checks</title>
+<style>body{margin:0;background:#142127;color:#eee;font:14px system-ui}canvas{display:block}nav{position:fixed;left:12px;top:12px;right:12px}button{padding:9px;margin:0 5px 8px 0}pre{white-space:pre-wrap;background:#102027dd;padding:10px;max-width:800px}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
+<nav><button id="drop">Drop four props</button><button id="settle">Settle</button><button id="kick">Kick rubble</button><button id="checks">Run lifecycle checks</button><button id="reset">Reset</button><pre id="status">Loading</pre></nav>
+<script type="module">
+import * as THREE from 'three';
+import { createMuseumDestruction } from '../js/museum-destruction.js?v=destruction-20260926';
+import { createMuseumFixtureBatch } from '../js/museum-fixture-batch.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x142127);
+scene.add(new THREE.HemisphereLight(0xffffff,0x35404a,3));
+const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.05,500);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(1);document.body.append(renderer.domElement);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(8,20),new THREE.MeshStandardMaterial({color:0x394148}));floor.rotation.x=-Math.PI/2;scene.add(floor);
+const wall=new THREE.Mesh(new THREE.BoxGeometry(.1,4,10),new THREE.MeshStandardMaterial({color:0x788383}));wall.position.set(3.05,2,0);scene.add(wall);
+const physics=createMuseumDestruction({scene,camera,reach:3.5});
+const status=document.querySelector('#status');
+function assert(ok,label){if(!ok)throw Error(label);}
+const gold=new THREE.MeshStandardMaterial({color:0xa38853,roughness:.5});
+const art=new THREE.MeshStandardMaterial({color:0xa1bfd0,roughness:.8});
+const label=new THREE.MeshStandardMaterial({color:0xe1d5b4,roughness:.8});
+function makeSlot(z){
+ const parent=new THREE.Group();parent.position.z=z;scene.add(parent);
+ const frame=new THREE.Group();frame.position.set(2.86,1.65,0);frame.rotation.y=-Math.PI/2;
+ frame.add(new THREE.Mesh(new THREE.BoxGeometry(1.5,1.2,.12),gold));parent.add(frame);
+ const pic=new THREE.Mesh(new THREE.PlaneGeometry(1.4,1.1),art);pic.position.set(2.79,1.65,0);pic.rotation.y=-Math.PI/2;parent.add(pic);
+ const plaque=new THREE.Mesh(new THREE.PlaneGeometry(.38,.24),label);plaque.position.set(2.98,1.37,1.4);plaque.rotation.y=-Math.PI/2;parent.add(plaque);
+ const titlePlaque=new THREE.Mesh(new THREE.PlaneGeometry(.72,.115),label);titlePlaque.position.set(2.95,.61,0);titlePlaque.rotation.y=-Math.PI/2;parent.add(titlePlaque);
+ const group=new THREE.Group();parent.add(group);
+ const fixture={group,parent,side:1,lightActive:true,lightLocalPosition:new THREE.Vector3(2.65,2.6,0)};
+ for(const [i,part] of ['base','armA','armB','knuckle','head','rim','lens','glow','wash'].entries()){
+  const mesh=new THREE.Mesh(part==='wash'?new THREE.PlaneGeometry(.5,.7):new THREE.BoxGeometry(.09,.09,.09),gold);
+  mesh.position.set(2.97-i*.04,2.65-i*.01,0);group.add(mesh);fixture[part]=mesh;
+ }
+ fixture.wash.visible=false;
+ const slot={parent,frame,pic,plaque,titlePlaque,fixtures:[fixture],side:1,imageIndex:7};pic.userData.slot=slot; // Cyclic metadata must not be copied with Object3D.clone.
+ physics.registerSlot(slot);return slot;
+}
+const slot=makeSlot(0);
+const batch=createMuseumFixtureBatch({scene,fixtures:slot.fixtures,camera,maxDistance:500});
+function view(){camera.position.set(-2.5,2.7,5);camera.lookAt(1.5,1.05,0);camera.updateMatrixWorld();}
+function render(){batch.update();renderer.render(scene,camera);}
+function aim(target,distance=2){const p=target.getWorldPosition(new THREE.Vector3());camera.position.copy(p).add(new THREE.Vector3(-distance,0,0));camera.lookAt(p);camera.updateMatrixWorld();}
+function drop(){
+ physics.resetSlot(slot);
+ for(const [kind,target] of [['artwork',slot.pic],['lamp',slot.fixtures[0].head],['plaque',slot.plaque],['title',slot.titlePlaque]]){
+  aim(target);assert(physics.strike(kind==='lamp'?'heavy':'light'),'missed '+kind);
+  assert(physics.bodies.at(-1).kind===kind,'wrong kind '+kind);
+ }
+ assert(physics.count===4,'four separate bodies');assert(!slot.fixtures[0].lightActive,'lamp still illuminates wall');
+ const pinned=new Set();physics.protectTextures(pinned);assert(pinned.has(7),'live artwork texture unprotected');
+ view();render();status.textContent='Four types detached; original lamp disabled; picture texture pinned. Bodies: '+physics.count;
+}
+let raf=0,previous=0;
+function animate(t){physics.update(Math.min((t-previous)/1000,.05));previous=t;render();if(physics.bodies.some(e=>e.body.sleepState!==2))raf=requestAnimationFrame(animate);else{raf=0;status.textContent+='\nSettled / sleeping: '+physics.count;}}
+function run(){cancelAnimationFrame(raf);previous=performance.now();raf=requestAnimationFrame(animate);}
+function settle(){cancelAnimationFrame(raf);for(let i=0;i<1440;i++)physics.update(1/120);view();render();status.textContent='Resting bodies: '+physics.bodies.map(e=>e.kind+' y='+e.body.position.y.toFixed(3)).join(', ');}
+function kick(){
+ const entity=physics.bodies.find(e=>e.kind==='artwork');if(!entity)return;
+ const p=new THREE.Vector3().copy(entity.body.position);camera.position.copy(p).add(new THREE.Vector3(-1,1,1));camera.lookAt(p);camera.updateMatrixWorld();
+ const count=physics.count;assert(physics.strike('heavy'),'rubble not hittable');assert(physics.count===count,'rehit allocated body');view();render();status.textContent='Rubble struck again; body count unchanged: '+count;run();
+}
+function checks(){
+ cancelAnimationFrame(raf);physics.resetSlot(slot);aim(slot.pic,4);assert(!physics.strike('light'),'attack exceeded reach');aim(slot.pic,3.4);assert(physics.strike('light'),'in-range attack missed');
+ physics.resetSlot(slot);assert(slot.pic.visible&&slot.frame.visible,'art not restored');assert(slot.fixtures[0].lightActive,'lamp not restored');
+ const baseline=scene.children.length,slots=[];
+ for(let i=0;i<65;i++){const item=makeSlot(-5-i*4);slots.push(item);aim(item.pic);assert(physics.strike('light'),'cap setup '+i);}
+ assert(physics.count===64,'capacity not 64');assert(!physics.bodies.some(e=>e.owner===slots[0]),'oldest body survived');assert(!slots[0].pic.visible,'evicted original reappeared');
+ for(const item of slots){physics.resetChunk({slots:[item]});scene.remove(item.parent);}
+ assert(physics.count===0,'chunk retained rubble');assert(scene.children.length===baseline,'debris scene nodes leaked');
+ const pinned=new Set();physics.protectTextures(pinned);assert(pinned.size===0,'texture pins leaked');
+ view();render();status.textContent='PASS: reach, all four types, source restoration, lamp state, 64-body FIFO, chunk cleanup, scene nodes, texture pins. Bodies: 0';
+}
+function act(fn){return()=>{try{fn();}catch(error){status.textContent='FAIL: '+error.stack;throw error;}};}
+document.querySelector('#drop').onclick=act(()=>{drop();run();});document.querySelector('#settle').onclick=act(settle);
+document.querySelector('#kick').onclick=act(kick);document.querySelector('#checks').onclick=act(checks);
+document.querySelector('#reset').onclick=act(()=>{cancelAnimationFrame(raf);physics.resetSlot(slot);view();render();status.textContent='Reset: 0 bodies';});
+view();render();status.textContent='Ready: no dynamic bodies';
+</script>
