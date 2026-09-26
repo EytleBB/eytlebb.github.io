@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Horror texture visual check</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#0d0c0c;color:#be888b;font:14px monospace;padding:40px}main{display:flex;align-items:center;gap:44px;flex-wrap:wrap}canvas{display:block;image-rendering:pixelated}#art canvas{width:512px;height:512px;border:12px solid #211c1b;box-shadow:0 0 0 1px #635046}aside{display:flex;flex-direction:column;gap:28px}button{background:#241519;color:#c6888b;border:1px solid #64313b;padding:10px;cursor:pointer}p{max-width:640px;line-height:1.6}output{display:block;margin-top:20px}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
+<main><div id="art"></div><aside><div id="plaque"></div><div id="name"></div><button id="motion">Freeze / animate</button><output id="stats">Loading textures</output></aside></main>
+<script type="module">
+import { createMuseumHorrorArt } from '../js/museum-horror-art.js';
+const art = createMuseumHorrorArt();
+document.querySelector('#art').append(art.artTexture.image);
+document.querySelector('#plaque').append(art.plaqueTexture.image);
+document.querySelector('#name').append(art.nameTexture.image);
+let animate = true;
+let last = performance.now();
+let elapsed = 0;
+let frames = 0;
+let drawMs = 0;
+document.querySelector('#motion').onclick = () => { animate = !animate; };
+function tick(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (animate && !document.hidden) {
+    const start = performance.now();
+    if (art.update(dt)) { frames++; drawMs += performance.now() - start; }
+    elapsed += dt;
+  }
+  if (frames) document.querySelector('#stats').textContent = `${frames} redraws / ${elapsed.toFixed(1)} s · ${(drawMs / frames).toFixed(2)} ms per redraw · 3 shared textures`;
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script></html>

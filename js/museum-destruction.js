@@ -56,6 +56,8 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
         const copy = new THREE.Mesh(source.geometry, Array.isArray(source.material) ? materials : materials[0]);
         matrix.multiplyMatrices(inverse, source.matrixWorld);
         matrix.decompose(copy.position, copy.quaternion, copy.scale);
+        copy.userData.museumSurface = source === record.slot.pic ? 'artwork'
+          : record.kind === 'plaque' ? 'plaque' : record.kind === 'title' ? 'name' : null;
         copy.castShadow = true; copy.receiveShadow = true;
         // Lamp source layers are disabled by instancing; detached meshes render normally.
         copy.layers.set(0);
@@ -182,6 +184,7 @@ export function createMuseumDestruction({ scene, camera, reach = 3.5, halfWidth 
         root.quaternion.copy(entity.body.quaternion);
       }
     },
+    forEachDebris(callback) { for (const item of debris.values()) callback(item.root); },
     get count() { return debris.size; },
     get bodies() { return physics.entities; },
     dispose() { physics.dispose(); records.length = 0; },

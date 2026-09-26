@@ -248,6 +248,7 @@ export function createMuseumAtmosphere({ THREE, scene, renderer, camera, width =
   root.add(dust);
 
   function update(dt = 0) {
+    if (!root.visible) return;
     shared.uTime.value += Math.min(Math.max(dt, 0), 0.1);
     shared.uEyeZ.value = camera.position.z;
     dustUniforms.uPixelScale.value = renderer.domElement.height

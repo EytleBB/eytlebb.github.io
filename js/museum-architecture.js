@@ -9,6 +9,7 @@ export function createMuseumArchitecture({ scene, renderer, camera, halfWidth, c
   const width = halfWidth * 2;
   const materials = {};
   let reflection;
+  let blackout = false, normalEmitters = null;
   const chunkMeshes = new Map();
   const luminous = new Set();
 
@@ -195,13 +196,14 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
       sourceX: {value: LIGHTING_LAYOUT.sourceX},
       poolRadius: {value: LIGHTING_LAYOUT.poolRadius},
       lightHeight: {value: LIGHTING_LAYOUT.lensY - LIGHTING_LAYOUT.floorY},
+      poolStrength: {value: 1},
     },
     vertexShader: `uniform mat4 textureMatrix; varying vec4 vReflection; varying vec3 vWorld;
       void main() { vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
         vReflection = textureMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `uniform sampler2D tDiffuse;
-      uniform float stationSpacing, stationOffset, sourceX, poolRadius, lightHeight;
+      uniform float stationSpacing, stationOffset, sourceX, poolRadius, lightHeight, poolStrength;
       varying vec4 vReflection; varying vec3 vWorld;
       float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       // Box-filter thin inlays/seams: subpixel lines lose coverage instead of
@@ -238,7 +240,7 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
         float softPool = exp(-3.5*normalizedRadius*normalizedRadius)
           * (1.0-smoothstep(0.8,1.0,normalizedRadius));
         float incidence = lightHeight/sqrt(lightHeight*lightHeight+radialDistance*radialDistance);
-        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0);
+        result += vec3(1.0,0.86,0.68)*0.035*softPool*pow(incidence,3.0)*poolStrength;
         float distanceFade = smoothstep(32.0,95.0,distance(cameraPosition,vWorld));
         result = mix(result,vec3(0.007,0.014,0.019),distanceFade);
         gl_FragColor = vec4(result,1.0);
@@ -285,5 +287,15 @@ diffuseColor.rgb *= mix(0.48, 1.0, footShade);
     const h = Math.max(240, Math.round(window.innerHeight * ratio));
     reflection.getRenderTarget().setSize(w, h);
   }
-  return { materials, attachChunk, makeFloor, makeRearWall, resize };
+  function setBlackout(value) {
+    blackout = Boolean(value);
+    if (!normalEmitters) normalEmitters = [materials.light.color.clone(), materials.coolLight.color.clone()];
+    for (const [index, material] of [materials.light, materials.coolLight].entries()) {
+      if (blackout) material.color.setRGB(0, 0, 0);
+      else material.color.copy(normalEmitters[index]);
+    }
+    floorShader.uniforms.poolStrength.value = blackout ? 0 : 1;
+    if (reflection) reflection.material.uniforms.poolStrength.value = blackout ? 0 : 1;
+  }
+  return { materials, attachChunk, makeFloor, makeRearWall, resize, setBlackout };
 }
