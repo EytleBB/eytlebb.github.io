@@ -18,7 +18,7 @@ test('museum spreads GPU texture uploads across frames with a soft budget', () =
 
 test('the entrance preloads the complete initially reachable texture range', () => {
   assert.match(museum, /const INITIAL_TEXTURE_START = 0/);
-  assert.match(museum, /const INITIAL_TEXTURE_COUNT = 48/);
+  assert.match(museum, /const INITIAL_TEXTURE_COUNT = 56/);
   assert.match(museum, /const HOMEPAGE_TEXTURE_INSERTION_INDEX = 16/);
 });
 

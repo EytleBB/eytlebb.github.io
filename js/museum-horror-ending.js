@@ -9,7 +9,10 @@ export const HORROR_FINALE_SECONDS = 6.1;
 export function createMuseumHorrorEnding({ scene, camera, chunks, architecture, rearWall,
   sectionLength = 7, chunkLength = 14, onBounds, onProgress, onStart, onImpact, onComplete,
   onAdd, onRemove, removeSlotDebris }) {
-  const frontZ = Math.min(...chunks.map(chunk => chunk.group.position.z)) - chunkLength;
+  const residentFrontZ = Math.min(...chunks.map(chunk => chunk.group.position.z)) - chunkLength;
+  // Seal halfway from the activation position to the currently resident edge.
+  // The wall stays fixed after this instant, independently of further walking.
+  const frontZ = camera.position.z + (residentFrontZ - camera.position.z) / 2;
   const corridor = createHorrorCorridor({ frontZ, rearZ: rearWall.position.z,
     sectionLength, startZ: camera.position.z });
   const frontWall = architecture.makeRearWall();
@@ -19,7 +22,9 @@ export function createMuseumHorrorEnding({ scene, camera, chunks, architecture, 
   onAdd?.(frontWall);
   const finalSlots = chunks.flatMap(chunk => chunk.slots).filter(slot => {
     const z = slot.parent.position.z + slot.pic.position.z;
-    return z > frontZ && z < frontZ + sectionLength * 2;
+    // A half-open interval always keeps two complete pairs, even when the
+    // exact midpoint lands on a painting row rather than an architectural rib.
+    return z > frontZ && z <= frontZ + sectionLength * 2;
   }).sort((a, b) => a.pic.position.z + a.parent.position.z - b.pic.position.z - b.parent.position.z || a.side - b.side).slice(0, 4);
   let lastRear = NaN, lastSteps = -1, started = false, finished = false, disposed = false, elapsed = 0, impactPlayed = false;
   let faceMaterial = null;
@@ -31,7 +36,10 @@ export function createMuseumHorrorEnding({ scene, camera, chunks, architecture, 
     rearWall.position.z = corridor.state.rearZ;
     // Whole architectural chunks behind the wall become dormant. A chunk
     // straddling it stays intact; the opaque barrier occludes its rear half.
-    for (const chunk of chunks) chunk.group.visible = chunk.group.position.z - chunkLength < corridor.state.rearZ;
+    for (const chunk of chunks) {
+      chunk.group.visible = chunk.group.position.z > frontZ
+        && chunk.group.position.z - chunkLength < corridor.state.rearZ;
+    }
     onBounds?.(corridor.state);
     lastRear = corridor.state.rearZ;
   }

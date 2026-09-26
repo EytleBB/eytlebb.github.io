@@ -20,7 +20,7 @@ import { createMuseumKnifeController } from './museum-knife.js?v=ending-20260926
 import { createMuseumSounds } from './museum-sounds.js?v=site-horror-20260926';
 import { createMuseumDestruction } from './museum-destruction.js?v=ending-20260926';
 import { createMuseumHorror } from './museum-horror.js?v=horror-immersion-20260926';
-import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=ending-20260926';
+import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=hall-distances-20260926';
 import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=chiptune-20260926';
 
 const TOUCH_MODE = window.matchMedia('(pointer: coarse)').matches
@@ -184,15 +184,15 @@ const SMALL_IMAGE_BYTES = 1024 * 1024;
 const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_KEY = 'eytle-gallery-preview-v2';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
-// Keep every artwork from the rear wall through the first 100 m resident before
+// Keep every artwork from the rear wall through the first 150 m resident before
 // the entrance becomes interactive. This makes the loading screen truthful:
 // walking can begin without decode/upload work competing with the first frames.
 const INITIAL_TEXTURE_START = 0;
-const INITIAL_TEXTURE_COUNT = 48;
+const INITIAL_TEXTURE_COUNT = 56;
 const HOMEPAGE_TEXTURE_INSERTION_INDEX = 16;
 const STREAM_BATCH_SIZE = 20;
 const TEXTURE_LOAD_CONCURRENCY = 4;
-const PREFETCH_AHEAD_DISTANCE = 100;
+const PREFETCH_AHEAD_DISTANCE = 100 * (3 / 2);
 const KEEP_BEHIND_DISTANCE = 42;
 const MAX_RESIDENT_TEXTURES = 60;
 const STREAM_UPDATE_INTERVAL_MS = 400;
@@ -600,16 +600,20 @@ const mats = {
    Textures stream in batches and are released from GPU memory behind the player.
    ============================================================ */
 
-const POOL = 20;
-const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const RECYCLE_BACK_BUFFER = 112;
-const REAR_WALL_OFFSET = 72;
-const FORWARD_VIEW_BUFFER = 170;
+// The old first chunk (and actual rear wall) was at 72 - 14 = 58 m.
+const INITIAL_REAR_WALL_DISTANCE = 58 * (2 / 3);
+const REAR_WALL_OFFSET = SPAWN_Z + INITIAL_REAR_WALL_DISTANCE + CHUNK_LEN;
+const FORWARD_VIEW_BUFFER = 170 * (3 / 2);
 // Prepare a recycled chunk only after it is fully hidden behind the fog. Each
 // artwork is retargeted on a separate frame so crossing a chunk boundary never
 // rebuilds four picture layouts in one visible frame.
 const CHUNK_RETARGET_PREPARE_DISTANCE = 88;
 const CHUNK_RETARGET_FRAME_BUDGET_MS = 11.5;
+// Extending the front needs six more resident chunks. Keep the same hidden
+// rear preparation and cleanup distances instead of taking visible rear chunks.
+const POOL = Math.ceil((FORWARD_VIEW_BUFFER + CHUNK_RETARGET_PREPARE_DISTANCE) / CHUNK_LEN) + 1;
+const FLOOR_LEN = CHUNK_LEN * (POOL + 1);
 const ART_PER_SIDE = 2;
 const ART_SPACING = CHUNK_LEN / ART_PER_SIDE;
 const PILLAR_SPACING = CHUNK_LEN; // one left/right pilaster pair per chunk

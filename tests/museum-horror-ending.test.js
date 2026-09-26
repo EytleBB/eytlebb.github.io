@@ -103,28 +103,28 @@ function harness({ startZ = 0, yaw = 0 } = {}) {
     onAdd: root => calls.added.push(root), onRemove: root => calls.removed.push(root),
     removeSlotDebris: slot => calls.debris.push(slot) });
   return { scene, camera, chunks, rearWall, frontWall, texture, calls, ending, finaleSeconds: context.finaleSeconds,
-    finalSlots: chunks.at(-1).slots, flyers: () => calls.added.filter(root => root !== frontWall),
+    finalSlots: [...chunks[2].slots.slice(0, 2), ...chunks[1].slots.slice(2, 4)], flyers: () => calls.added.filter(root => root !== frontWall),
     tick(seconds) { for (let n = 0; n < seconds * 60; n++) ending.update(1 / 60); } };
 }
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
 
-test('front barrier stays at the resident front edge and rear only follows a forward gaze', () => {
+test('front barrier halves the activation distance and rear only follows a forward gaze', () => {
   const h = harness();
-  assert.equal(h.ending.state.frontZ, -42);
-  near(h.ending.frontLimitZ, -41.4);
-  assert.equal(h.frontWall.position.z, -42);
+  assert.equal(h.ending.state.frontZ, -21);
+  near(h.ending.frontLimitZ, -20.4);
+  assert.equal(h.frontWall.position.z, -21);
   assert.equal(h.frontWall.rotation.y, Math.PI);
   h.camera.direction.z = 1;
-  h.camera.position.z = -17;
+  h.camera.position.z = -6;
   h.ending.advance();
   assert.equal(h.rearWall.position.z, 14);
   h.camera.direction.z = -1;
   h.ending.advance();
-  assert.equal(h.rearWall.position.z, -14);
+  assert.equal(h.rearWall.position.z, 0);
   assert.equal(h.chunks[0].group.visible, false);
-  assert.equal(h.chunks[1].group.visible, false);
+  assert.equal(h.chunks[1].group.visible, true);
   assert.equal(h.chunks[2].group.visible, true);
-  assert.equal(h.chunks[3].group.visible, true);
+  assert.equal(h.chunks[3].group.visible, false);
   assert.deepEqual(h.chunks.map(chunk => chunk.group.position.z), [14, 0, -14, -28]);
   h.ending.dispose();
 });
@@ -133,7 +133,7 @@ test('all four final-section paintings, including already broken ones, fly witho
   const h = harness();
   h.finalSlots[0].pic.visible = false;
   h.finalSlots[0].frame.visible = false;
-  h.camera.position.z = -29;
+  h.camera.position.z = -8;
   assert.doesNotThrow(() => h.ending.advance());
   assert.equal(h.ending.active, true);
   assert.equal(h.ending.state.remainingSections, 2);
@@ -153,7 +153,7 @@ test('all four final-section paintings, including already broken ones, fly witho
 
 test('flyers end facing the captured camera pose and sounds/completion fire exactly once', () => {
   const h = harness({ yaw: Math.PI / 3 });
-  h.camera.position.z = -29;
+  h.camera.position.z = -8;
   h.ending.advance();
   for (const dt of [0, -1, NaN, Infinity]) h.ending.update(dt);
   assert.equal(h.calls.impacts, 0);
@@ -181,7 +181,7 @@ test('flyers end facing the captured camera pose and sounds/completion fire exac
 
 test('dispose cancels pending finale work without disposing shared original artwork geometry', () => {
   const h = harness();
-  h.camera.position.z = -29; h.ending.advance(); h.tick(.2);
+  h.camera.position.z = -8; h.ending.advance(); h.tick(.2);
   const faceMaterial = h.flyers()[0].children[1].material;
   h.ending.dispose(); h.ending.dispose(); h.tick(4); h.ending.advance();
   assert.equal(h.calls.impacts, 0);
@@ -194,7 +194,7 @@ test('dispose cancels pending finale work without disposing shared original artw
 
 test('a delayed resumed frame cannot skip straight past the attack or completion', () => {
   const h = harness();
-  h.camera.position.z = -29; h.ending.advance();
+  h.camera.position.z = -8; h.ending.advance();
   h.tick(.2);
   h.ending.update(1000);
   assert.equal(h.calls.impacts, 0);
@@ -202,5 +202,36 @@ test('a delayed resumed frame cannot skip straight past the attack or completion
   h.tick(.15);
   assert.equal(h.calls.impacts, 1);
   assert.equal(h.calls.completes, 0);
+  h.ending.dispose();
+});
+
+test('halving uses the activation position and keeps four paintings when the midpoint lands exactly on a row', () => {
+  const h = harness({ startZ: -7 });
+  // Resident front is -42: the visitor is 35 m from it, so seal 17.5 m ahead.
+  near(h.ending.state.frontZ, -24.5);
+  near(h.ending.frontLimitZ, -23.9);
+  const front = h.frontWall.position.z;
+  h.camera.position.z = -9;
+  h.ending.advance();
+  assert.equal(h.frontWall.position.z, front, 'walking never moves the sealed front');
+  h.camera.position.z = -12;
+  h.ending.advance();
+  assert.equal(h.ending.active, true);
+  assert.equal(h.flyers().length, 4, 'the painting pair on the half-open rear boundary is retained');
+  assert.deepEqual(new Set(h.calls.debris), new Set(h.finalSlots));
+  assert.equal(h.ending.state.remainingSections, 2);
+  h.ending.dispose();
+});
+
+test('fractional activation coordinates still produce an exact half-distance collision barrier', () => {
+  const h = harness({ startZ: -12.25 });
+  const expected = -12.25 + (-42 + 12.25) / 2;
+  near(h.frontWall.position.z, expected);
+  near(-12.25 - h.frontWall.position.z, (-12.25 + 42) / 2);
+  near(h.ending.frontLimitZ, expected + .6);
+  h.camera.position.z = expected + 12;
+  h.ending.advance();
+  assert.equal(h.flyers().length, 4);
+  assert.equal(h.chunks.at(-1).group.visible, false, 'architecture entirely past the closer front wall is dormant');
   h.ending.dispose();
 });
