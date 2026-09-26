@@ -2,6 +2,19 @@
 
 > 给本地 Codex / AI 助手使用的项目说明。执行网站维护、修改、部署前，先阅读本文件。
 
+## 2026-09-26：内容分仓发布（当前流程）
+
+日志、展览图片/预览和背景音乐由 `Eytle-Patch-Log`、`Eytle-Museum` 两个仓库提供。
+主仓库只记录 `content-sources.json` 中的固定内容提交。首次发布必须先由发布会话上传
+内容到服务器私有 bare repo 并安装 `scripts/production/post-receive`，再推送主站。
+完整的准备、校验、安装、发布与回滚步骤以 [内容分仓说明](docs/maintenance/content-repositories.md) 为准。
+
+**下文旧版“只 rsync 主仓库到 web root”的 hook 和手动同步命令仅供历史查阅，不能用于分仓后的版本，
+否则会删除线上日志和素材。** 新 hook 先组装校验全部内容，再同步完整产物。
+公开 URL、Nginx 路由和留言服务数据库均保持原样。
+本地完整预览先运行 `python3 scripts/assemble-site.py --output /tmp/NEW-PREVIEW`，
+再运行 `python3 scripts/preview.py --root /tmp/NEW-PREVIEW`。内容生成脚本已迁入各内容仓库。
+
 ## 2026-09-22：当前发布入口
 
 简洁网址使用 `/`、`/projects`、`/tools`、`/patchlog`、`/gallery`、`/downloads`、`/museum`、`/mc-calc` 和 `/museum-admin`。前六个由同一个首页脚本解析，后三个为独立 HTML 页面。`index.html`、`museum.html`、`mc-calc.html`、`museum-admin.html` 及路径末尾斜杠会重定向；旧 `#分区` 链接由前端转换，并保留查询参数。管理员页面的登录、数据库升级与发布步骤见 [管理后台说明](docs/maintenance/museum-admin-platform.md)。

@@ -32,8 +32,11 @@ class Preview(SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8000)
+    parser.add_argument('--root', type=Path, help='Assembled website directory (see scripts/assemble-site.py)')
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
+    root = args.root.resolve() if args.root else Path(__file__).resolve().parents[1]
+    if not (root / 'logs/index.json').is_file() or not (root / 'images/gallery/index.json').is_file():
+        print('Content is stored separately. For a full preview, assemble the site and pass --root OUTPUT.', flush=True)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), partial(Preview, directory=str(root)))
     print(f'Preview: http://127.0.0.1:{args.port}/', flush=True)
     try:
