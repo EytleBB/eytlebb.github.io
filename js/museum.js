@@ -15,7 +15,7 @@ import { createMuseumAtmosphere } from './museum-atmosphere.js?v=lighting-202609
 import { createMuseumPlaques } from './museum-plaques.js?v=guestbook-20260922-r3';
 import { PLAQUE_FOCUS_DISTANCE } from './museum-plaque-layout.js?v=guestbook-20260922-r2';
 import { createMuseumGuestbook } from './museum-guestbook.js?v=guestbook-20260922-r3';
-import { createMuseumKnifeController } from './museum-knife.js?v=inspect-20260926';
+import { createMuseumKnifeController } from './museum-knife.js?v=attacks-20260926';
 
 /* ---- language (mirror main.js: localStorage 'lang', default zh) ---- */
 const lang = (() => {
@@ -1677,6 +1677,7 @@ const MAX_LOOK_SPIKE = 4096; // reject driver/lock glitches, never clip a normal
 let yaw = 0, pitch = 0;
 let roamEnabled = true;
 let zoomHeld = false;
+let knifePrimaryPress = false;
 let ignoreNextLook = true;
 const isLocked = () => document.pointerLockElement === canvas;
 const player = createMuseumPlayer({ eyeHeight: EYE_Y, rearLimitZ: () => getRearWallZ() - 0.6 });
@@ -1692,6 +1693,8 @@ function syncMuseumAudioState() {
 }
 
 function clearInput() {
+  museumKnife.clearAttackInput();
+  knifePrimaryPress = false;
   heldCodes.clear();
   for (const key of Object.keys(keys)) keys[key] = false;
   jumpQueued = false;
@@ -1715,6 +1718,7 @@ function onKey(e, down) {
       else if (e.code === 'KeyQ') museumKnife.toggle();
       else if (e.code === 'Digit3' || e.code === 'Numpad3') museumKnife.equip();
       else museumKnife.stow();
+      if (museumKnife.equipped) setZoomHeld(false);
     }
     return;
   }
@@ -1941,12 +1945,23 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 document.addEventListener('mousedown', (e) => {
-  if (e.button !== 2 || !isLocked()) return;
-  e.preventDefault();
-  setZoomHeld(true);
+  if (e.button === 0) knifePrimaryPress = false;
+  if (!isLocked() || plaqueSession) return;
+  if (!focusState && museumKnife.equipped && (e.button === 0 || e.button === 2)) {
+    e.preventDefault();
+    knifePrimaryPress = e.button === 0 || knifePrimaryPress;
+    setZoomHeld(false);
+    museumKnife.setAttackHeld(e.button === 0 ? 'light' : 'heavy', true);
+    return;
+  }
+  if (e.button === 2) {
+    e.preventDefault();
+    setZoomHeld(true);
+  }
 });
 
 document.addEventListener('mouseup', (e) => {
+  if (e.button === 0 || e.button === 2) museumKnife.setAttackHeld(e.button === 0 ? 'light' : 'heavy', false);
   if (e.button === 2) setZoomHeld(false);
 });
 
@@ -1967,7 +1982,14 @@ document.addEventListener('visibilitychange', () => {
 });
 
 canvas.addEventListener('click', (e) => {
-  if (e.button === 0) inspectArtwork();
+  if (e.button !== 0) return;
+  // Consume the click even if the player stowed the knife before releasing it.
+  if (knifePrimaryPress || (!focusState && museumKnife.equipped)) {
+    knifePrimaryPress = false;
+    e.preventDefault();
+    return;
+  }
+  inspectArtwork();
 });
 
 function inspectArtwork() {

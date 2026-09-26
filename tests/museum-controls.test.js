@@ -60,6 +60,13 @@ async function createControls() {
   const museumKnife = {
     equipped: false,
     inspections: 0,
+    attacks: [],
+    heldAttacks: new Set(),
+    clearAttackInput() { this.heldAttacks.clear(); },
+    setAttackHeld(kind, held) {
+      if (!held) { this.heldAttacks.delete(kind); return; }
+      if (this.equipped) { this.heldAttacks.add(kind); this.attacks.push(kind); }
+    },
     inspect() { if (this.equipped) this.inspections++; },
     equip() { this.equipped = true; },
     stow() { this.equipped = false; },
@@ -403,4 +410,84 @@ test('reading a plaque releases the mouse, blocks movement and returns even when
   assert.equal(h.document.body.classList.contains('plaque-active'), false);
   assert.deepEqual(h.camera.position, before);
   assert.match(h.context.runtimeStatus.textContent, /Mouse look is unavailable/);
+});
+
+const artwork = () => ({
+  userData: {},
+  getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+  getWorldQuaternion(out) { return out; },
+});
+function mouse(h, type, button) {
+  const event = { button, prevented: false, preventDefault() { this.prevented = true; } };
+  (type === 'click' ? h.canvas : h.document).emit(type, event);
+  return event;
+}
+
+test('equipped mouse buttons attack without focusing art or zooming, including stow before mouseup', async () => {
+  const h = await createControls();
+  h.context.artMeshes.push(artwork());
+  mouse(h, 'mousedown', 2);
+  assert.equal(h.api.zoomHeld, true);
+  h.key('Digit3', true);
+  assert.equal(h.api.zoomHeld, false, 'equipping clears an already held zoom');
+  mouse(h, 'mouseup', 2);
+  assert.equal(mouse(h, 'mousedown', 0).prevented, true);
+  h.key('Digit1', true);
+  mouse(h, 'mouseup', 0);
+  assert.equal(mouse(h, 'click', 0).prevented, true);
+  assert.equal(h.api.focusState, null, 'an attack release must not focus a painting after stowing');
+  h.key('Digit3', true);
+  mouse(h, 'mousedown', 2);
+  mouse(h, 'mouseup', 2);
+  assert.equal(h.api.zoomHeld, false);
+  assert.deepEqual(h.museumKnife.attacks, ['light', 'heavy']);
+  assert.equal(h.museumKnife.heldAttacks.size, 0);
+  mouse(h, 'mousedown', 1);
+  assert.equal(h.museumKnife.attacks.length, 2, 'middle button has no knife action');
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'mouseup', 0);
+  mouse(h, 'click', 0);
+  assert.equal(h.api.focusState, null);
+  h.key('KeyE', true);
+  assert.ok(h.api.focusState, 'E still opens a painting while equipped');
+  assert.equal(h.museumKnife.heldAttacks.size, 0);
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'click', 0);
+  assert.equal(h.api.focusState.phase, 'returning', 'click can still leave a focused painting');
+});
+
+test('empty-hand controls stay available and attacks clear on pause, focus, blur and hidden tabs', async () => {
+  const h = await createControls();
+  h.context.artMeshes.push(artwork());
+  mouse(h, 'mousedown', 2);
+  assert.equal(h.api.zoomHeld, true);
+  mouse(h, 'mouseup', 2);
+  assert.equal(h.api.zoomHeld, false);
+  mouse(h, 'mousedown', 0);
+  mouse(h, 'click', 0);
+  assert.ok(h.api.focusState);
+  h.lock(false);
+  h.lock(true);
+  h.key('Digit3', true);
+  for (const interrupt of [
+    () => h.lock(false),
+    () => h.api.focusOn(artwork()),
+    () => h.window.emit('blur'),
+    () => { h.document.hidden = true; h.document.emit('visibilitychange'); },
+  ]) {
+    mouse(h, 'mousedown', 0);
+    assert.equal(h.museumKnife.heldAttacks.size, 1);
+    interrupt();
+    assert.equal(h.museumKnife.heldAttacks.size, 0);
+    const count = h.museumKnife.attacks.length;
+    mouse(h, 'mousedown', 2);
+    assert.equal(h.museumKnife.attacks.length, count);
+    h.document.hidden = false;
+    h.lock(false);
+    h.lock(true);
+  }
+  h.context.plaqueSession = { id: 'reading' };
+  const count = h.museumKnife.attacks.length;
+  assert.equal(mouse(h, 'mousedown', 0).prevented, false);
+  assert.equal(h.museumKnife.attacks.length, count);
 });

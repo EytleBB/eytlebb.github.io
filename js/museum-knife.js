@@ -148,7 +148,7 @@ class KnifeDemo {
   const a = k[i], b = k[i + 1], u = (t - a.t) / (b.t - a.t);
   const u2 = u * u, u3 = u2 * u;
   const interpolate = prop => a[prop].map((v, j) => {
-    // Inspection holds settle completely before the next wrist turn.
+    // Held poses settle completely before the next movement.
     if (clip.settle) return lerp(v, b[prop][j], u3 * (u * (u * 6 - 15) + 10));
     const prev = k[Math.max(0, i - 1)], next = k[Math.min(k.length - 1, i + 2)];
     const s0 = i === 0 ? 0 : (b[prop][j] - prev[prop][j]) / (b.t - prev.t);
@@ -162,6 +162,7 @@ class KnifeDemo {
   let pose;
   if (this.state === 'drawing') pose = this.sample(this.time);
   else if (this.state === 'inspecting') pose = this.sample(this.time, this.inspectClip);
+  else if (this.state === 'attacking') pose = this.sample(this.time, this.attackClip);
   else if (this.state === 'holstering') {
     const t = smooth(this.time / .18), s = this.lowerFrom || this.sample(this.clip.duration);
     pose = { p: s.p.map((v, i) => lerp(v, [.54, -.90, -.42][i], t)),
@@ -224,6 +225,25 @@ class KnifeDemo {
   this.paused = false;
   this.setState('inspecting');
  }
+ attack(kind) {
+  const clip = ATTACK_ANIMATIONS[kind];
+  if (!this.loaded || !clip || (this.state !== 'idle' && this.state !== 'inspecting')) return false;
+  // Give an interrupted inspection time to turn the wrist back into the swing.
+  const leadIn = this.state === 'inspecting' ? .16 : 0;
+  const amount = this.reduceMotion ? .12 : 1;
+  this.attackClip = {
+    ...clip, duration: clip.duration + leadIn,
+    keys: [{ t: 0, ...this.pose() }, ...clip.keys.slice(1).map(key => ({
+      ...key, t: key.t + leadIn,
+      p: key.p.map((v, i) => lerp(REST_POSE.p[i], v, amount)),
+      r: key.r.map((v, i) => lerp(REST_POSE.r[i], v, amount)),
+    }))],
+  };
+  this.pendingInspect = false;
+  this.paused = false;
+  this.setState('attacking');
+  return true;
+ }
  update(dt) {
   if (this.paused) return;
   this.time += dt * this.speed;
@@ -232,7 +252,8 @@ class KnifeDemo {
     this.setState('idle');
     this.idleTime = 0;
     if (this.pendingInspect) this.inspect();
-  } else if (this.state === 'inspecting' && this.time >= this.inspectClip.duration) {
+  } else if ((this.state === 'inspecting' && this.time >= this.inspectClip.duration) ||
+             (this.state === 'attacking' && this.time >= this.attackClip.duration)) {
     this.setState('idle');
     this.idleTime = 0;
   } else if (this.state === 'holstering' && this.time >= .18) {
@@ -403,6 +424,31 @@ const REDUCED_INSPECT_ANIMATION = {
   ],
 };
 
+// Short cross-body slash and a heavier forward thrust, each with its own recovery.
+const ATTACK_ANIMATIONS = {
+  light: {
+    duration: .54, settle: true,
+    keys: [
+      { ...REST_POSE, t: 0 },
+      { t: .09, p: [.32, -.19, -.60], r: [12, 24, -279], grip: 1 },
+      { t: .21, p: [.075, -.20, -.73], r: [0, -28, -186], grip: 1 },
+      { t: .29, p: [.085, -.25, -.69], r: [-6, -20, -181], grip: 1 },
+      { ...REST_POSE, t: .54 },
+    ],
+  },
+  heavy: {
+    duration: .96, settle: true,
+    keys: [
+      { ...REST_POSE, t: 0 },
+      { t: .23, p: [.315, -.225, -.54], r: [18, 58, -230], grip: 1 },
+      { t: .35, p: [.10, -.06, -.80], r: [12, 52, -220], grip: 1 },
+      { t: .46, p: [.11, -.065, -.79], r: [12, 52, -220], grip: 1 },
+      { t: .68, p: [.285, -.215, -.60], r: [18, 35, -243], grip: 1 },
+      { ...REST_POSE, t: .96 },
+    ],
+  },
+};
+
 const KNIFE_MODEL_URL = new URL('../models/classic-knife-v6-right-hand.glb', import.meta.url);
 
 export function createMuseumKnifeController(canvas) {
@@ -410,6 +456,22 @@ export function createMuseumKnifeController(canvas) {
   let loading = null;
   let equipped = false;
   let inspectRequested = false;
+  const heldAttacks = new Set();
+  let queuedAttack = null;
+
+  function clearAttackInput() {
+    heldAttacks.clear();
+    queuedAttack = null;
+  }
+
+  function attackIfReady() {
+    if (!equipped || !demo) return;
+    const kind = heldAttacks.has('heavy') ? 'heavy' : heldAttacks.has('light') ? 'light' : queuedAttack;
+    if (kind && demo.attack(kind)) {
+      queuedAttack = null;
+      inspectRequested = false;
+    }
+  }
 
   function draw() {
     if (!demo) return;
@@ -447,6 +509,7 @@ export function createMuseumKnifeController(canvas) {
     if (!equipped) return;
     equipped = false;
     inspectRequested = false;
+    clearAttackInput();
     if (!demo) return;
     if (demo.reduceMotion) {
       demo.setState('hidden');
@@ -458,6 +521,16 @@ export function createMuseumKnifeController(canvas) {
     get equipped() { return equipped; },
     equip,
     stow,
+    clearAttackInput,
+    setAttackHeld(kind, held) {
+      if (kind !== 'light' && kind !== 'heavy') return;
+      if (!held) { heldAttacks.delete(kind); return; }
+      if (!equipped || heldAttacks.has(kind)) return;
+      heldAttacks.add(kind);
+      // Buffer one click during the initial load/draw, never a backlog of swings.
+      if (!demo || demo.state !== 'attacking') queuedAttack = kind;
+      attackIfReady();
+    },
     inspect() {
       if (!equipped) return;
       if (demo) demo.inspect();
@@ -465,8 +538,10 @@ export function createMuseumKnifeController(canvas) {
     },
     toggle() { if (equipped) stow(); else equip(); },
     update(dt, visible) {
-      if (!visible || !demo || demo.state === 'hidden') return;
+      if (!visible) { clearAttackInput(); return; }
+      if (!demo || demo.state === 'hidden') return;
       demo.update(dt);
+      attackIfReady();
       demo.render();
     },
     destroy() { demo?.destroy(); },
