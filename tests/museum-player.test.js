@@ -219,3 +219,38 @@ test('analog movement scales speed, respects yaw and cannot exceed keyboard diag
   assert.equal(advance({ moveRight: NaN, moveForward: Infinity }).speed, 0);
   assert.ok(advance({ moveForward: 1 }, Math.PI).position.z > 0);
 });
+
+test('a finite front wall blocks forward motion and jumping while still allowing side sliding', async () => {
+  const { createMuseumPlayer } = await playerModule;
+  const player = createMuseumPlayer({ frontLimitZ: -2, rearLimitZ: 2 });
+  simulate(player, 2, { forward: true, right: true, jump: true });
+  near(player.state.position.z, -2);
+  near(player.state.velocity.z, 0);
+  near(player.state.position.x, 2.6);
+  simulate(player, 2, { back: true });
+  near(player.state.position.z, 2);
+  player.reset({ z: -100 });
+  near(player.state.position.z, -2);
+});
+
+test('dynamic front bounds clamp simulation, interpolation and stopped poses immediately', async () => {
+  const { createMuseumPlayer } = await playerModule;
+  let front = -Infinity;
+  const player = createMuseumPlayer({ frontLimitZ: () => front });
+  simulate(player, 1, { forward: true });
+  assert.ok(player.state.position.z < -3);
+  front = -2;
+  player.advance(1 / 1000, { forward: true });
+  near(player.state.position.z, front, 1e-10);
+  near(player.state.velocity.z, 0);
+  for (let i = 0; i < 40; i++) {
+    player.advance(1 / 480, { forward: true });
+    assert.ok(player.state.position.z >= front, 'interpolation cannot expose a view past the new front wall');
+  }
+  front = -1;
+  player.stop();
+  near(player.state.position.z, front);
+  front = -Infinity;
+  simulate(player, 1, { forward: true });
+  assert.ok(player.state.position.z < -4, 'removing the limit restores the original open hallway');
+});

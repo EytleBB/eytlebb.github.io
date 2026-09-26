@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Knife shader verification</title>
+<style>body{margin:0;background:#15171a;color:#bfbcbc;font:14px monospace}canvas{width:100vw;height:100vh;display:block}nav{position:absolute;top:18px;left:18px;display:flex;gap:10px;align-items:center}button,input{padding:10px}output{margin-left:12px}</style>
+<canvas id="knife"></canvas><nav><button id="normal">Normal</button><button id="matte">Matte</button><button id="inspect">Inspect</button><button id="dark">Darken</button><button id="black">Black</button><output id="state">Loading</output></nav>
+<script type="module">
+import { createMuseumKnifeController } from '../js/museum-knife.js';
+const knife = createMuseumKnifeController(document.querySelector('#knife'));
+const state = document.querySelector('#state');
+knife.equip();
+state.textContent = 'Normal · intensity 1';
+document.querySelector('#normal').onclick = () => { knife.setHorror(false); knife.setIntensity(1); state.textContent = 'Normal · intensity 1'; };
+document.querySelector('#matte').onclick = () => { knife.setHorror(true); knife.setIntensity(1); state.textContent = 'Matte · intensity 1'; };
+document.querySelector('#dark').onclick = () => { knife.setHorror(true); knife.setIntensity(.2); state.textContent = 'Matte · intensity .2'; };
+document.querySelector('#black').onclick = () => { knife.setHorror(true); knife.setIntensity(0); state.textContent = 'Matte · intensity 0'; };
+document.querySelector('#inspect').onclick = () => knife.inspect();
+let last = performance.now();
+function tick(now) { knife.update(Math.min((now - last) / 1000, .1), !document.hidden); last = now; requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
+</script></html>

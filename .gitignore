@@ -8,3 +8,9 @@ eytle-redesign-concept.html
 eytle-redesign-spec.md
 tomerge.html
 eyt_web_repo/
+
+# Personal content is maintained in separate repositories.
+/logs/
+/images/gallery/
+/images/gallery-preview/
+/audio/museum.mp3

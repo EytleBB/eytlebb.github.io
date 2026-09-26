@@ -20,6 +20,7 @@ export const MUSEUM_PLAYER_DEFAULTS = Object.freeze({
   halfWidth: 3,
   wallMargin: 0.4,
   rearLimitZ: 71.4,
+  frontLimitZ: -Infinity,
   fixedStep: 1 / 120,
   maxFrameTime: 0.1,
 });
@@ -28,7 +29,7 @@ export const MUSEUM_PLAYER_DEFAULTS = Object.freeze({
  * Input: { forward, back, left, right, walk, crouch, jump } (booleans).
  * Optional moveForward/moveRight add analog joystick axes in [-1, 1].
  * Optional jumpPressed preserves keydown edges when release/repress occurs between frames.
- * rearLimitZ may be a number or a function for the hall's moving rear wall.
+ * rearLimitZ and frontLimitZ may be numbers or functions for the hall's walls.
  * Returned state and its position/velocity objects are reused; no per-frame GC.
  */
 export function createMuseumPlayer(options = {}) {
@@ -54,6 +55,13 @@ export function createMuseumPlayer(options = {}) {
     return Number.isFinite(value) ? value : Infinity;
   }
 
+  function frontLimit() {
+    const value = typeof config.frontLimitZ === 'function'
+      ? config.frontLimitZ()
+      : config.frontLimitZ;
+    return Number.isFinite(value) ? value : -Infinity;
+  }
+
   function clampToHall() {
     if (position.x > xLimit) {
       position.x = xLimit;
@@ -61,6 +69,11 @@ export function createMuseumPlayer(options = {}) {
     } else if (position.x < -xLimit) {
       position.x = -xLimit;
       if (velocity.x < 0) velocity.x = 0;
+    }
+    const front = frontLimit();
+    if (position.z < front) {
+      position.z = front;
+      if (velocity.z < 0) velocity.z = 0;
     }
     const back = rearLimit();
     if (position.z > back) {
@@ -93,6 +106,7 @@ export function createMuseumPlayer(options = {}) {
     accumulator = 0;
     jumpWasDown = jumpPending = false;
     state.speed = 0;
+    clampToHall();
     Object.assign(previous, position);
     Object.assign(viewPosition, position);
     return state;
@@ -100,6 +114,7 @@ export function createMuseumPlayer(options = {}) {
 
   function advance(dt, input = {}, yaw = 0) {
     if (!Number.isFinite(dt) || dt <= 0) return state;
+    clampToHall();
     const jumpDown = Boolean(input.jump);
     if (input.jumpPressed || (jumpDown && !jumpWasDown)) jumpPending = true;
     jumpWasDown = jumpDown;
@@ -191,7 +206,7 @@ export function createMuseumPlayer(options = {}) {
     const alpha = Math.min(1, accumulator / step);
     viewPosition.x = previous.x + (position.x - previous.x) * alpha;
     viewPosition.y = previous.y + (position.y - previous.y) * alpha;
-    viewPosition.z = Math.min(previous.z + (position.z - previous.z) * alpha, rearLimit());
+    viewPosition.z = Math.max(frontLimit(), Math.min(previous.z + (position.z - previous.z) * alpha, rearLimit()));
     state.speed = Math.hypot(velocity.x, velocity.z);
     return state;
   }

@@ -25,3 +25,8 @@ shots/
 /eyt_web_repo/
 /.worktrees/
 /_shots/
+
+# Repository metadata and pinned content configuration are never public.
+.git
+/content-sources.json
+*.bundle

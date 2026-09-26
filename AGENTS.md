@@ -42,6 +42,23 @@ The home section (`about`) is a custom overview: hero + a two-column grid (lates
 
 Main-site UI state lives in `main.js`; `forest-scene.js` independently manages the optional background animation. There is no framework or build step. Forest and particle rendering stop off the hero, on other sections, in hidden tabs, or under reduced motion; retain the static CSS fallback.
 
+### Content repositories (2026-09-26)
+
+Personal content is no longer tracked here. `Eytle-Patch-Log` owns `logs/` and its index generator;
+`Eytle-Museum` owns `images/gallery/`, `images/gallery-preview/`, `audio/museum.mp3`, their
+maintenance scripts and content tests. Website code and interface assets remain here;
+`files/730.zip` is intentionally retained by the user. `content-sources.json` pins both repositories
+to full commit SHAs. Do not add personal content back to this repository.
+
+Read `docs/maintenance/content-repositories.md` before content updates or deployment.
+Use `python3 scripts/assemble-site.py --output /tmp/NEW-PREVIEW` with sibling content clones
+(or explicit `--logs-repo`/`--museum-repo` paths), then
+`python3 scripts/preview.py --root /tmp/NEW-PREVIEW --port 8000` for a complete preview.
+Assembly preserves the public URLs below. A plain source preview has no logs/artwork.
+The release thread must seed the server's private content repositories and install
+`scripts/production/post-receive` before publishing the first split version. The previous
+static-only rsync hook is insufficient. Historical Git content is not rewritten.
+
 ### Data flow
 
 `DATA` (top of `main.js`) is the single source of truth for static content (projects, tools, downloads, about). Dynamic sections load their data at render time:
@@ -49,15 +66,17 @@ Main-site UI state lives in `main.js`; `forest-scene.js` independently manages t
 - **Patch Log** — `loadLogs()` fetches `./logs/index.json` (newest-first list of `YYYY-MM-DD`) then fetches individual `./logs/YYYY-MM-DD.txt` when a calendar day or the home "read more" is clicked. The home overview shows the most recent entry's real first lines.
 - **Gallery** — `loadGallery()` fetches `./images/gallery/index.json` (list of original filenames) plus `./images/gallery-preview/index.json` (generated lightweight WebP mapping), then builds `DATA.gallery`. Grid/home cards use previews; the lightbox keeps the originals. Both loaders cache after first call.
 
-The log, gallery, and gallery-preview `index.json` files are auto-generated locally — never edit them by hand.
+The log, gallery, and gallery-preview `index.json` files are generated in their owning content repositories — never edit them by hand. These paths exist in assembled previews and production, not in this source tree.
 
 ### Local automation
 
-| Script / hook | Trigger | Output |
-|---------------|---------|--------|
-| `scripts/gallery-renamer.js` | run continuously, or with `--once` | normalizes gallery names and refreshes `images/gallery/index.json` |
-| `scripts/gallery-previews.py` | after gallery names/index change | generates 2048px WebP previews and refreshes `images/gallery-preview/index.json` |
-| `.githooks/pre-commit` | `git commit` | refreshes the gallery filename index and log index; gallery previews remain an explicit generation step |
+| Script / hook | Repository | Role |
+|---|---|---|
+| `scripts/update-index.py` | Eytle-Patch-Log | regenerate the newest-first log index |
+| `scripts/gallery-renamer.js` | Eytle-Museum | normalize image names and gallery index |
+| `scripts/gallery-previews.py` | Eytle-Museum | generate WebP previews and manifest |
+| `.githooks/pre-commit` | this website | reject personal content accidentally staged here |
+| `scripts/assemble-site.py` | this website | validate pinned content and compose a separate public directory |
 
 ### Trilingual support
 
@@ -76,8 +95,9 @@ Home overview has a "给 Eytle 留言" box (140-char limit + live count, fixed h
 - **New project**: add an entry to `DATA.projects` in `main.js`. Set `sub: []` for direct GitHub link, or populate `sub` for a sub-project list.
 - **New tool**: add to `DATA.tools`. Set `external: false` for internal pages (e.g. `mc-calc.html`). `icon` (e.g. the Eye of Ender) is shown only on the tool row — keep that image scoped to tools.
 - **New download**: add to `DATA.downloads`.
-- **New gallery image**: run `node scripts/gallery-renamer.js`, then drop the file into `images/gallery/`. It is renamed to the next `0xNNNN.ext` name and `index.json` is refreshed. After the rename settles, run `python scripts/gallery-previews.py` so the grid and museum do not fall back to the large original.
-- **New patch log entry**: create `logs/YYYY-MM-DD.txt`; the pre-commit hook updates `logs/index.json`. The year → month → day calendar is data-driven; no fixed start date needs updating.
+- **New gallery image**: use the scripts and `images/gallery/` in **Eytle-Museum**, then commit originals, previews and generated indexes there.
+- **New patch log entry**: create `logs/YYYY-MM-DD.txt` in **Eytle-Patch-Log**, run its index generator and commit there.
+- **Publish content changes**: update `content-sources.json` to the desired content commits; the release thread publishes content before the site. Do not copy material into the website repository.
 
 ## `mc-calc.html`
 
@@ -90,7 +110,8 @@ to `0.186.0`). Reads `images/gallery/index.json` for order and the generated
 `images/gallery-preview/index.json` for lightweight textures. On the
 gallery nav click, `main.js` routes WebGL2-capable devices here via `isMuseumCapable()`;
 coarse pointers use `js/museum-touch.js` and `css/museum-touch.css` for joystick / drag
-controls without pointer lock, with bounded resolution and textures. Unsupported
+controls without pointer lock, using the same render quality as desktop. The first
+entry click requests fullscreen; entrance and touch HUD buttons allow retry and exit. Unsupported
 browsers keep the grid + lightbox; `/gallery` is also the explicit lightweight fallback. The museum
 is a fixed dark dramatic hall — it does NOT follow the night/day theme. Exit
 returns to `/` (never `/gallery`, to avoid a relaunch loop). The public URL is `/museum`; `/museum.html` redirects there. No shared JS

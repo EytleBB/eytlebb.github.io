@@ -1,0 +1,81 @@
+/* This original tiny pixel face is requested only by the activated mode. */
+@font-face {
+  font-family:MuseumObfuscated; src:url('../fonts/museum-obfuscated.woff?v=pixel-20260926') format('woff');
+  font-style:normal; font-weight:100 900; font-display:swap;
+}
+/* Nothing in this file applies before the hidden exhibition state is activated. */
+body.museum-horror {
+  --ivory:#bc8c86;
+  --champagne:#8c5148;
+  --muted:#906e6d;
+  --line:rgba(144,77,69,.3);
+  --horror-text:#a35a54;
+}
+body.museum-horror::after {
+  content:''; position:fixed; inset:0; z-index:9; pointer-events:none;
+  background:radial-gradient(ellipse at 50% 46%,transparent 33%,rgba(18,0,3,.13) 70%,rgba(8,0,2,.42)),
+    repeating-linear-gradient(0deg,transparent 0 3px,rgba(27,0,0,.035) 3px 4px);
+}
+body.museum-horror .museum-horror-copy {
+  position:relative; display:inline-block; max-width:100%; vertical-align:baseline;
+}
+body.museum-horror .museum-horror-original {
+  opacity:0; color:transparent !important; text-shadow:none !important;
+}
+body.museum-horror :is(.museum-horror-copy,.museum-horror-original) {
+  -webkit-user-select:none; user-select:none; -webkit-user-drag:none; -webkit-touch-callout:none;
+}
+body.museum-horror :is(.museum-horror-copy,.museum-horror-original)::selection {
+  color:transparent!important; background:transparent!important; text-shadow:none!important;
+}
+body.museum-horror img {
+  -webkit-user-drag:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+body.museum-horror .museum-horror-visual {
+  position:absolute; inset:0; overflow:hidden; pointer-events:none; user-select:none;
+  display:block; width:100%; height:100%; image-rendering:pixelated;
+}
+body.museum-horror :is(select,option) { font-family:MuseumObfuscated,monospace; }
+body.museum-horror :is(input,textarea)::placeholder { font-family:MuseumObfuscated,monospace; }
+body.museum-horror #title { border-color:#794d45; }
+body.museum-horror #enter {
+  background:linear-gradient(90deg,rgba(9,3,7,.84),rgba(9,3,7,.46) 55%,rgba(9,3,7,.28)),
+    linear-gradient(0deg,rgba(9,2,5,.7),transparent 75%);
+}
+body.museum-horror #museum-settings { background:rgba(16,8,11,.94); }
+body.museum-horror :is(.key,.wide-key,#exit-btn,.touch-inspect,.touch-menu) {
+  border-color:rgba(143,83,75,.4); background-color:rgba(24,9,12,.65);
+}
+body.museum-horror #enter .go:hover { background:#311518; border-color:#976057; }
+body.museum-horror :is(button,summary,input,select):focus-visible { outline-color:#bc8c86; }
+body.museum-horror :is(select,option) { color:var(--horror-text); background:#170c10; }
+body.museum-horror .museum-guestbook {
+  --paper:#180e12; --paper-light:#201116; --ink:#bc8c86; --ink-soft:#946e6a;
+  --bronze:#95625a; --hairline:rgba(151,89,78,.23);
+  border-color:#553832; color:var(--ink); background:var(--paper);
+  box-shadow:0 24px 80px rgba(0,0,0,.65),0 0 0 4px rgba(112,43,38,.07);
+}
+body.museum-horror .museum-guestbook::backdrop { background:rgba(5,0,3,.6); }
+body.museum-horror .guestbook-sheet { background:linear-gradient(125deg,rgba(88,23,32,.09),transparent 65%),var(--paper); }
+body.museum-horror .guestbook-art-frame { border-color:#51312e; background:#10090c; box-shadow:inset 0 0 0 4px rgba(80,33,37,.16); }
+body.museum-horror .guestbook-art { grid-area:1 / 1; filter:grayscale(1) sepia(.65) hue-rotate(316deg) brightness(.5); }
+body.museum-horror .guestbook-art { opacity:0!important; }
+body.museum-horror .guestbook-art.museum-horror-art-covered { opacity:0; }
+body.museum-horror .museum-horror-art {
+  grid-area:1 / 1; z-index:1; display:block; width:100%; height:100%; min-height:0;
+  object-fit:contain; pointer-events:none; image-rendering:pixelated;
+}
+body.museum-horror .guestbook-input { color:#b08e88; background:rgba(25,11,16,.7); border-color:#56322e; caret-color:#bc8c86; }
+body.museum-horror .guestbook-input::placeholder { color:var(--horror-text); }
+body.museum-horror .guestbook-input:focus { background:#231116; border-color:#8c5148; }
+body.museum-horror .guestbook-submit { background:#35191d; border-color:#77453e; }
+body.museum-horror .guestbook-submit:not(:disabled):hover { background:#462125; border-color:#99564c; }
+body.museum-horror .guestbook-connection { background:rgba(118,28,34,.07); border-color:#74463e; }
+@media (prefers-reduced-motion:reduce) {
+  body.museum-horror::after { background:radial-gradient(ellipse at center,transparent 40%,rgba(8,0,2,.32)); }
+}
+
+body.museum-horror-finale #knife-canvas,
+body.museum-horror-finale #hud,
+body.museum-horror-finale #art-hint,
+body.museum-horror-finale #touch-controls { visibility:hidden; }
