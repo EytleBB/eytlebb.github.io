@@ -30,3 +30,8 @@ shots/
 .git
 /content-sources.json
 *.bundle
+
+# Historical local drafts must never enter an assembled public site.
+/eytle-redesign-concept.html
+/eytle-redesign-spec.md
+/tomerge.html
