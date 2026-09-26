@@ -5,7 +5,7 @@ body.touch-mode #hud, body.touch-mode #exit-btn { display:none; }
 body.touch-mode #title {
   top:calc(env(safe-area-inset-top,0px) + 22px);
   left:calc(env(safe-area-inset-left,0px) + 20px);
-  max-width:calc(100vw - 130px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));
+  max-width:calc(100vw - 220px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));
   font-size:11px; line-height:1.6;
 }
 body.touch-mode #enter {
@@ -34,7 +34,7 @@ body.touch-mode #art-hint .hint-divider, body.touch-mode #art-hint .hint-icon:nt
 }
 .touch-button:active, .touch-button.held, .touch-button[aria-pressed="true"] { background:rgba(159,126,78,.65); border-color:var(--champagne); }
 .touch-button:disabled { opacity:.4; cursor:default; }
-.touch-pause { position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:calc(env(safe-area-inset-right,0px) + 16px); }
+.touch-top-actions { display:flex; gap:8px; position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:calc(env(safe-area-inset-right,0px) + 16px); }
 .touch-movement { position:absolute; left:calc(env(safe-area-inset-left,0px) + 22px); bottom:calc(env(safe-area-inset-bottom,0px) + 24px); text-align:center; }
 .touch-caption { display:block; margin-bottom:12px; font-size:11px; letter-spacing:.16em; color:var(--champagne); }
 .touch-stick { position:relative; display:grid; place-items:center; width:126px; height:126px; border:1px solid rgba(226,212,186,.28); border-radius:50%; background:rgba(8,15,22,.46); pointer-events:auto; touch-action:none; }
@@ -67,3 +67,12 @@ body.touch-mode #art-hint .hint-divider, body.touch-mode #art-hint .hint-icon:nt
   .museum-guestbook .guestbook-close { min-width:44px; min-height:44px; }
   .museum-guestbook .guestbook-vote, .museum-guestbook .guestbook-submit { min-height:44px; }
 }
+
+.enter-options { display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-top:8px; }
+.enter-options .gallery-fallback { margin-top:0; }
+#enter-fullscreen[hidden] { display:none; }
+#fullscreen-status { max-width:42em; margin-top:10px; color:var(--champagne); font-size:12px; line-height:1.7; }
+#fullscreen-status:empty { display:none; }
+.touch-fullscreen-status { position:absolute; top:calc(env(safe-area-inset-top,0px) + 72px); right:calc(env(safe-area-inset-right,0px) + 16px); max-width:min(310px,calc(100vw - 32px)); padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:rgba(8,15,22,.88); color:var(--champagne); font-size:12px; line-height:1.6; }
+.touch-fullscreen-status[hidden] { display:none; }
+@media (max-width:480px) { body.touch-mode #title { display:none; } }

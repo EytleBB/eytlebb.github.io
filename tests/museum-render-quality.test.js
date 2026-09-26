@@ -61,7 +61,7 @@ function setup(pixelRatio = 2, touch = false) {
     addEventListener(name, handler) { listeners[name] = handler; } };
   const scene = { background: {} };
   const sandbox = {
-    TOUCH_MODE: touch, touchControls: null, resizeTouchFocus() {}, museumPixelRatio: (mobile, ratio) => Math.min(ratio, mobile ? 1.25 : 2),
+    TOUCH_MODE: touch, touchControls: null, resizeTouchFocus() {},
     renderer, window, scene, camera: { layers: { set() {} }, updateProjectionMatrix() {} },
     THREE: { WebGLRenderTarget: Target, Vector2: class {}, Color: class {}, HalfFloatType: 'half' },
     EffectComposer: Composer, ShaderPass, RenderPass, UnrealBloomPass: Bloom, SMAAPass, OutputPass,
@@ -139,12 +139,12 @@ test('new debris participates in bloom occlusion and removed debris releases its
   occlusion.dispose();
 });
 
-test('touch render targets omit scene MSAA and keep the capped density after rotation', () => {
-  const app = setup(1.25, true);
-  assert.equal(app.sceneTarget.samples, 0);
+test('touch render targets use the same MSAA and pixel density as desktop after rotation', () => {
+  const app = setup(2, true);
+  assert.equal(app.sceneTarget.samples, 4);
   app.window.innerWidth = 844; app.window.innerHeight = 390; app.window.devicePixelRatio = 3;
   app.listeners.resize();
-  assert.equal(app.renderer.getPixelRatio(), 1.25);
-  assert.equal(app.sceneTarget.width, 1055);
-  assert.equal(app.sceneTarget.height, 488);
+  assert.equal(app.renderer.getPixelRatio(), 2);
+  assert.equal(app.sceneTarget.width, 1688);
+  assert.equal(app.sceneTarget.height, 780);
 });

@@ -1,5 +1,7 @@
 # 展馆手机模式 · 2026-09-26
 
+> 后续修订已移除手机专用画质限制，并加入自动全屏及按钮。当前行为参见 [画质与全屏修订](2026-09-26-museum-fullscreen.md)；下面保留初版实现与验收记录。
+
 基于 `main` 的 `ebb1650`，功能分支 `codex/museum-mobile`，独立工作树 `/home/yeom/.codex/worktrees/museum-mobile/thisIsEytle`。本任务只提交功能，不推送或部署；由“Eytle 网站发布会话”审查并集成。
 
 ## 交互与入口

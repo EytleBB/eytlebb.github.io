@@ -90,7 +90,8 @@ to `0.186.0`). Reads `images/gallery/index.json` for order and the generated
 `images/gallery-preview/index.json` for lightweight textures. On the
 gallery nav click, `main.js` routes WebGL2-capable devices here via `isMuseumCapable()`;
 coarse pointers use `js/museum-touch.js` and `css/museum-touch.css` for joystick / drag
-controls without pointer lock, with bounded resolution and textures. Unsupported
+controls without pointer lock, using the same render quality as desktop. The first
+entry click requests fullscreen; entrance and touch HUD buttons allow retry and exit. Unsupported
 browsers keep the grid + lightbox; `/gallery` is also the explicit lightweight fallback. The museum
 is a fixed dark dramatic hall — it does NOT follow the night/day theme. Exit
 returns to `/` (never `/gallery`, to avoid a relaunch loop). The public URL is `/museum`; `/museum.html` redirects there. No shared JS

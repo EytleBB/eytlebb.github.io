@@ -6,9 +6,10 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { createMuseumArchitecture } from './museum-architecture.js?v=museum-mobile-20260926';
+import { createMuseumArchitecture } from './museum-architecture.js?v=museum-fullscreen-20260926';
 import { createMuseumPlayer } from './museum-player.js?v=museum-mobile-20260926';
-import { createMuseumTouchControls, museumPixelRatio, museumTextureSize, museumFocusDistance } from './museum-touch.js?v=museum-mobile-20260926';
+import { createMuseumTouchControls, museumFocusDistance } from './museum-touch.js?v=museum-fullscreen-20260926';
+import { createMuseumFullscreen } from './museum-fullscreen.js?v=museum-fullscreen-20260926';
 import { createMuseumFrameScheduler } from './museum-performance.js?v=museum-source-20260922';
 import { createMuseumBloomOcclusion } from './museum-bloom-occlusion.js?v=destruction-20260926';
 import { createMuseumFixtureBatch } from './museum-fixture-batch.js?v=nocturne-20260912';
@@ -132,6 +133,22 @@ hudEl.className = 'control-guide';
 hudEl.innerHTML = controlGuide;
 exitBtn.addEventListener('click', () => { location.href = '/'; });
 enterBack.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/'; });
+
+const fullscreenButton = document.getElementById('enter-fullscreen');
+const fullscreenStatus = document.getElementById('fullscreen-status');
+function showFullscreenState(state) {
+  fullscreenButton.textContent = state.label;
+  fullscreenButton.disabled = state.pending;
+  fullscreenButton.setAttribute('aria-pressed', String(state.active));
+  fullscreenStatus.textContent = state.message;
+  touchControls?.setFullscreen(state);
+}
+const museumFullscreen = TOUCH_MODE ? createMuseumFullscreen({ document, T, onChange: showFullscreenState }) : null;
+if (museumFullscreen) {
+  fullscreenButton.hidden = false;
+  showFullscreenState(museumFullscreen.state());
+  fullscreenButton.addEventListener('click', () => { void museumFullscreen.toggle(); });
+}
 
 const runtimeStatus = document.getElementById('runtime-status');
 const sensitivityInput = document.getElementById('look-sensitivity');
@@ -336,7 +353,7 @@ const museumKnife = createMuseumKnifeController(document.getElementById('knife-c
 const audioListener = new THREE.AudioListener();
 audioListener.setMasterVolume(0);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(museumPixelRatio(TOUCH_MODE, window.devicePixelRatio));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.info.autoReset = false;
@@ -456,7 +473,7 @@ bloomComposer.addPass(bloom);
 const sceneTarget = new THREE.WebGLRenderTarget(
   Math.round(window.innerWidth * renderer.getPixelRatio()),
   Math.round(window.innerHeight * renderer.getPixelRatio()), {
-  type: THREE.HalfFloatType, samples: TOUCH_MODE ? 0 : Math.min(4, renderer.capabilities.maxSamples),
+  type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples),
 });
 const finalComposer = new EffectComposer(renderer);
 // Allocate every post target at drawing-buffer resolution on the very first frame.
@@ -530,7 +547,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   if (TOUCH_MODE) resizeTouchFocus();
-  renderer.setPixelRatio(museumPixelRatio(TOUCH_MODE, window.devicePixelRatio));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   sceneTarget.setSize(Math.round(window.innerWidth * renderer.getPixelRatio()),
     Math.round(window.innerHeight * renderer.getPixelRatio()));
@@ -546,7 +563,6 @@ window.addEventListener('resize', () => {
    no external files, keeping the no-build constraint)
    ============================================================ */
 const architecture = createMuseumArchitecture({
-  mobile: TOUCH_MODE,
   scene, renderer, camera, halfWidth: HALL_HALF_WIDTH, ceilingY: CEIL_Y,
   springY: VAULT_SPRING_Y, chunkLength: CHUNK_LEN,
 });
@@ -982,20 +998,13 @@ async function galleryImageSource(url, imageIndex) {
   }
 }
 
-async function decodeGalleryTexture(source, meta) {
+async function decodeGalleryTexture(source) {
   if (source.blob && typeof createImageBitmap === 'function') {
     try {
-      let bitmap = await createImageBitmap(source.blob, {
+      const bitmap = await createImageBitmap(source.blob, {
         imageOrientation: 'flipY',
         premultiplyAlpha: 'none',
-        ...(TOUCH_MODE ? museumTextureSize(meta?.width, meta?.height) : {}),
       });
-      // Missing preview metadata must not leave a full-size original resident.
-      if (TOUCH_MODE && Math.max(bitmap.width, bitmap.height) > 1024) {
-        const original = bitmap;
-        try { bitmap = await createImageBitmap(original, museumTextureSize(original.width, original.height)); }
-        finally { original.close(); }
-      }
       const texture = new THREE.Texture(bitmap);
       texture.flipY = false;
       texture.needsUpdate = true;
@@ -1013,17 +1022,6 @@ async function decodeGalleryTexture(source, meta) {
   return new Promise(resolve => {
     const finish = texture => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      if (TOUCH_MODE && texture?.image) {
-        const { width, height } = texture.image;
-        if (Math.max(width, height) > 1024) {
-          const size = museumTextureSize(width, height);
-          const reduced = document.createElement('canvas');
-          reduced.width = size.resizeWidth; reduced.height = size.resizeHeight;
-          reduced.getContext('2d').drawImage(texture.image, 0, 0, reduced.width, reduced.height);
-          texture.image = reduced;
-          texture.needsUpdate = true;
-        }
-      }
       resolve(texture);
     };
     texLoader.load(loadUrl, finish, undefined, () => finish(null));
@@ -1075,14 +1073,14 @@ function loadTexture(i) {
   if (texCache[i]) return Promise.resolve(texCache[i]);
   if (textureLoads[i]) return textureLoads[i];
   const promise = galleryImageSource(TEXTURE_IMAGES[i] || IMAGES[i], i)
-    .then(source => decodeGalleryTexture(source, IMAGE_META[i]))
+    .then(decodeGalleryTexture)
     .then(async (tex) => {
       if (!tex) {
         texCache[i] = null;
         return null;
       }
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = Math.min(TOUCH_MODE ? 4 : Infinity, renderer.capabilities.getMaxAnisotropy());
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       const uploaded = await scheduleTextureUpload(i, tex);
       if (!uploaded) {
         disposeGalleryTexture(tex);
@@ -2137,8 +2135,10 @@ document.addEventListener('pointerlockerror', () => {
 // Only the button enters: sliders, disclosure and keyboard settings never capture the pointer.
 function enterPlay() {
   if (!preloaded) return;
+  const firstEntry = !entered;
   entered = true;
   startMuseumTrack();
+  if (firstEntry) void museumFullscreen?.enter();
   lockPointer();
 }
 enterGo.addEventListener('click', enterPlay);
@@ -2153,7 +2153,9 @@ if (TOUCH_MODE) {
     onZoom: setZoomHeld,
     onInspect: inspectArtwork,
     onPause: pauseVisit,
+    onFullscreen: () => { void museumFullscreen.toggle(); },
   });
+  touchControls.setFullscreen(museumFullscreen.state());
   updaters.push(syncTouchControls);
 }
 

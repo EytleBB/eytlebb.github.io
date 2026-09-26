@@ -18,8 +18,8 @@ function element() {
 }
 function harness() {
   const root = element(), canvas = element();
-  const nodes = Object.fromEntries(['stick','pause','inspect','jump','zoom','crouch','thumb'].map(name => [name, element()]));
-  root.querySelector = selector => nodes[selector === '.touch-stick-thumb' ? 'thumb' : selector.match(/"(\w+)"/)[1]];
+  const nodes = Object.fromEntries(['stick','pause','fullscreen','fullscreen-status','inspect','jump','zoom','crouch','thumb'].map(name => [name, element()]));
+  root.querySelector = selector => nodes[selector === '.touch-stick-thumb' ? 'thumb' : selector.match(/"([\w-]+)"/)[1]];
   const context = { document: { createElement: () => root, body: { append() {} } } };
   vm.runInNewContext(source.replaceAll('export function', 'function') + '\nthis.create = createMuseumTouchControls;', context);
   const state = { moves: [], looks: [], jump: false, zoom: false, crouch: false, inspected: 0, paused: 0 };
@@ -90,14 +90,8 @@ test('releasing a zoom finger or clearing a rotated viewport never leaves a held
   assert.equal(h.nodes.jump.hasPointerCapture(2), false);
 });
 
-test('mobile memory budgets preserve aspect ratio and desktop pixel density', async () => {
-  const { museumPixelRatio, museumTextureSize, museumFocusDistance } = await import('../js/museum-touch.js');
-  assert.equal(museumPixelRatio(true, 3), 1.25);
-  assert.equal(museumPixelRatio(false, 3), 2);
-  assert.equal(museumPixelRatio(true, 1), 1);
-  assert.deepEqual(museumTextureSize(2048, 1024), { resizeWidth: 1024, resizeHeight: 512 });
-  assert.deepEqual(museumTextureSize(512, 256), { resizeWidth: 512, resizeHeight: 256 });
-  assert.deepEqual(museumTextureSize(null, null), {});
+test('portrait artwork framing fits its aspect ratio and stays inside the hall', async () => {
+  const { museumFocusDistance } = await import('../js/museum-touch.js');
   assert.ok(museumFocusDistance({ width: 2.6, height: 1.52 }, 390 / 844) > 3.5);
   assert.ok(museumFocusDistance({ width: 20, height: 1 }, 0.3) <= 5);
 });
@@ -114,4 +108,17 @@ test('gallery entry admits touch WebGL2 without pointer lock and keeps unsupport
   assert.equal(supported(false, true, true), true);
   assert.equal(supported(true, false, false), false);
   assert.equal(supported(false, false, true), false);
+});
+
+test('touch fullscreen button reflects active, pending and error states', () => {
+  const h = harness();
+  h.controls.setFullscreen({ active: true, pending: false, message: '', label: 'Exit fullscreen' });
+  assert.equal(h.nodes.fullscreen.textContent, 'Exit fullscreen');
+  assert.equal(h.nodes.fullscreen.attrs['aria-pressed'], 'true');
+  assert.equal(h.nodes['fullscreen-status'].hidden, true);
+  h.controls.setFullscreen({ active: false, pending: true, message: '', label: 'Fullscreen' });
+  assert.equal(h.nodes.fullscreen.disabled, true);
+  h.controls.setFullscreen({ active: false, pending: false, message: 'Retry fullscreen', label: 'Fullscreen' });
+  assert.equal(h.nodes.fullscreen.disabled, false);
+  assert.equal(h.nodes['fullscreen-status'].hidden, false);
 });

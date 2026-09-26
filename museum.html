@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/museum.css?v=museum-knife-20260924" />
   <link rel="stylesheet" href="css/museum-guestbook.css?v=guestbook-20260922-r3" />
-  <link rel="stylesheet" href="css/museum-touch.css?v=museum-mobile-20260926" />
+  <link rel="stylesheet" href="css/museum-touch.css?v=museum-fullscreen-20260926" />
   <script type="importmap">
   {
     "imports": {
@@ -64,7 +64,11 @@
         <button class="go" id="enter-go" disabled></button>
         <div class="prog" id="enter-prog" role="status" aria-live="polite"></div>
       </div>
-      <a class="gallery-fallback" id="gallery-fallback" href="/gallery">浏览图片</a>
+      <div class="enter-options">
+        <button type="button" class="touch-button" id="enter-fullscreen" aria-pressed="false" hidden>全屏</button>
+        <a class="gallery-fallback" id="gallery-fallback" href="/gallery">浏览图片</a>
+      </div>
+      <p id="fullscreen-status" role="status" aria-live="polite"></p>
       <p id="runtime-status" role="status" aria-live="polite"></p>
     </div>
     <details id="museum-settings">
@@ -92,7 +96,7 @@
   </div>
 
   <script type="module">
-    import('./js/museum.js?v=museum-mobile-20260926').catch(() => {
+    import('./js/museum.js?v=museum-fullscreen-20260926').catch(() => {
       let lang = 'zh';
       try { lang = localStorage.getItem('lang') || 'zh'; } catch {}
       const copy = lang === 'en'
