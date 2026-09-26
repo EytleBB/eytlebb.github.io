@@ -135,14 +135,16 @@ const sectionPaths = Object.freeze({
   patchlog: '/patchlog', gallery: '/gallery', downloads: '/downloads'
 });
 
-/* Desktop capability gate for the 3D museum (mobile/unsupported → grid). */
+/* Touch devices use the mobile controls; unsupported browsers keep the grid. */
 function isMuseumCapable() {
   try {
-    if (!window.matchMedia('(pointer: fine)').matches) return false;
-    if (window.innerWidth < 900) return false;
-    if (!('requestPointerLock' in Element.prototype)) return false;
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    if (!touch && !('requestPointerLock' in Element.prototype)) return false;
     const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2'));
+    const gl = c.getContext('webgl2');
+    const supported = Boolean(gl);
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return supported;
   } catch { return false; }
 }
 
@@ -294,7 +296,6 @@ async function renderAbout() {
       </div>
       <div class="col-right">
         <div class="gallery-heading"><h2>${t('图画展览会','Pictures At An Exhibition','전람회의 그림')}</h2></div>
-        <p class="gallery-description">${t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.')}</p>
         <div class="gal" id="home-gal" aria-busy="true">
           <span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span><span class="gal-placeholder" aria-hidden="true"></span>
           <span class="gallery-loading-label" role="status">${t('正在加载图片…','Loading pictures…','이미지를 불러오는 중…')}</span>
@@ -365,11 +366,9 @@ async function renderHomeGallery(epoch) {
   if (DATA.gallery.length) {
     gal.innerHTML = selectHomeGallery().map(({ index }) => {
       const image = DATA.gallery[index];
-      const caption = t(`图片 ${index + 1}`, `Picture ${index + 1}`, `이미지 ${index + 1}`);
       const label = t(`查看图片 ${index + 1}`, `View picture ${index + 1}`, `이미지 ${index + 1} 보기`);
       return `<button class="gal-item" type="button" data-idx="${index}" aria-label="${escapeHtml(label)}">
-        <span class="gal-image-frame"><img src="${escapeHtml(image.preview || image.src)}" alt="" width="${image.width || 1}" height="${image.height || 1}" loading="lazy" decoding="async" /></span>
-        <span class="gal-caption">${escapeHtml(caption)}</span>
+        <img src="${escapeHtml(image.preview || image.src)}" alt="" width="${image.width || 1}" height="${image.height || 1}" loading="lazy" decoding="async" />
       </button>`;
     }).join('');
     wireGalleryImages(gal);
@@ -381,8 +380,8 @@ async function renderHomeGallery(epoch) {
 /* ============================================================
    RENDER — projects (with inline sub-projects)
    ============================================================ */
-function sectionHeading(title, description) {
-  return `<header class="section-heading"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></header>`;
+function sectionHeading(title, description = '') {
+  return `<header class="section-heading"><h1>${escapeHtml(title)}</h1>${description ? `<p>${escapeHtml(description)}</p>` : ''}</header>`;
 }
 
 function renderProjects() {
@@ -739,7 +738,7 @@ async function renderGallery() {
   const epoch = stageRenderEpoch;
   const loaded = await loadGallery();
   if (epoch !== stageRenderEpoch) return;
-  const heading = sectionHeading(t('图画展览会','Pictures At An Exhibition','전람회의 그림'), t('点击图片查看原图。','Click a picture to view the original.','이미지를 클릭하면 원본을 볼 수 있습니다.'));
+  const heading = sectionHeading(t('图画展览会','Pictures At An Exhibition','전람회의 그림'));
   if (loaded === false) {
     stage.innerHTML = `<div>${heading}<p class="placeholder-text" role="status">${t('图片加载失败，请重新打开此栏目重试。','Pictures could not be loaded. Reopen this section to try again.','이미지를 불러오지 못했습니다. 이 메뉴를 다시 열어 주세요.')}</p></div>`;
     return;

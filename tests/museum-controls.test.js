@@ -47,14 +47,14 @@ function classList() {
   };
 }
 
-async function createControls() {
+async function createControls(touch = false) {
   const { createMuseumPlayer } = await playerModule;
   const document = { ...eventTarget(), hidden: false, body: { classList: classList() } };
   const window = eventTarget();
   const canvas = { ...eventTarget(), requestPointerLock: async () => {} };
   const camera = {
     position: new Vector(0, 1.65, 0), quaternion: new Quaternion(), up: new Vector(0, 1, 0),
-    fov: 74, rotation: { set(...values) { this.last = values; } }, updateProjectionMatrix() {},
+    fov: 74, aspect: 390 / 844, rotation: { set(...values) { this.last = values; } }, updateProjectionMatrix() {},
   };
   const loops = [];
   const museumKnife = {
@@ -72,13 +72,19 @@ async function createControls() {
     stow() { this.equipped = false; },
     toggle() { this.equipped = !this.equipped; },
   };
-  document.pointerLockElement = canvas;
+  document.pointerLockElement = touch ? null : canvas;
   document.exitPointerLock = () => {
     document.pointerLockElement = null;
     document.emit('pointerlockchange');
   };
   const context = vm.createContext({
     createMuseumPlayer, document, window, canvas, camera, museumKnife,
+    TOUCH_MODE: touch, touchControls: null,
+    museumFocusDistance: (await import('../js/museum-touch.js')).museumFocusDistance,
+    createMuseumTouchControls(options) {
+      context.touchOptions = options;
+      return { reset() {}, update(state) { context.touchState = state; } };
+    },
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
     plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48,
@@ -102,6 +108,7 @@ async function createControls() {
   });
   vm.runInContext(controls, context);
   const api = vm.runInContext(`({ player, keys, clearInput, focusOn, unfocus, closeGuestPlaque, lockPointer, enterPlay,
+    pauseVisit, inspectArtwork, isLocked, resizeTouchFocus,
     get focusState() { return focusState; }, get zoomHeld() { return zoomHeld; },
     get yaw() { return yaw; }, get pitch() { return pitch; } })`, context);
   function key(code, down, repeat = false, modifiers = {}) {
@@ -511,4 +518,82 @@ test('equipping hides the painting hint immediately, and intact art remains disc
   assert.equal(h.context.artHintEl.classList.contains('show'), false);
   h.key('KeyE', true);
   assert.equal(h.api.focusState, null, 'destroyed paintings cannot open a ghost focus target');
+});
+
+test('touch entry and pause never request pointer lock and cancel all motion and zoom', async () => {
+  const h = await createControls(true);
+  let requests = 0;
+  h.canvas.requestPointerLock = () => { requests++; throw new Error('unsupported'); };
+  h.api.enterPlay();
+  assert.equal(h.api.isLocked(), true);
+  assert.equal(requests, 0);
+  assert.equal(h.context.enterEl.inert, true);
+  assert.equal(h.context.touchState.playing, true);
+  h.context.touchOptions.onMove(0, 1);
+  h.context.touchOptions.onLook(60, 0);
+  h.context.touchOptions.onZoom(true);
+  h.tick(30);
+  assert.ok(h.api.player.state.speed > 0);
+  assert.ok(h.api.yaw < 0);
+  assert.ok(h.camera.fov < 74);
+  h.context.touchOptions.onPause();
+  assert.equal(h.api.isLocked(), false);
+  assert.equal(h.context.touchState.playing, false);
+  assert.equal(h.context.enterEl.inert, false);
+  assert.equal(h.api.zoomHeld, false);
+  h.api.enterPlay(); h.tick(30);
+  assert.equal(h.api.player.state.speed, 0);
+  assert.equal(h.api.keys.moveForward, false);
+  assert.equal(requests, 0);
+});
+
+test('touch drags do not inspect art through synthetic mouse clicks; the View button returns correctly', async () => {
+  const h = await createControls(true);
+  h.api.enterPlay();
+  h.context.artMeshes.push(artwork());
+  h.canvas.emit('click', { button: 0 });
+  assert.equal(h.api.focusState, null);
+  h.context.touchOptions.onInspect(); h.tick(40);
+  assert.equal(h.context.touchState.focus, true);
+  h.context.touchOptions.onInspect(); h.tick(40);
+  assert.equal(h.api.focusState, null);
+  assert.equal(h.api.isLocked(), true);
+  h.context.touchOptions.onMove(0, 1); h.tick(30);
+  assert.ok(h.api.player.state.speed > 0);
+});
+
+test('touch plaque input stays free and returns without pointer lock; backgrounding pauses', async () => {
+  const h = await createControls(true);
+  h.document.exitPointerLock = () => assert.fail('Touch must never release a nonexistent pointer lock');
+  h.api.enterPlay();
+  h.api.focusOn({ ...artwork(), userData: { kind: 'plaque', artworkId: 'test', slot: { imageIndex: 0 } } });
+  h.tick(40);
+  assert.equal(h.context.guestbook.isOpen(), true);
+  assert.equal(h.context.touchState.plaque, true);
+  assert.equal(h.key('KeyW', true).prevented, false);
+  h.api.closeGuestPlaque(); h.tick(40);
+  assert.equal(h.api.focusState, null);
+  assert.equal(h.context.touchState.plaque, false);
+  h.context.touchOptions.onMove(1, 0);
+  h.document.hidden = true; h.document.emit('visibilitychange');
+  assert.equal(h.api.isLocked(), false);
+  assert.equal(h.loops.at(-1), null);
+  h.document.hidden = false; h.document.emit('visibilitychange');
+  assert.equal(h.api.isLocked(), false, 'returning to the tab requires Resume');
+  h.api.enterPlay(); h.tick(30);
+  assert.equal(h.api.player.state.speed, 0);
+});
+
+test('rotating a touch view reframes the focused picture without losing the return position', async () => {
+  const h = await createControls(true);
+  h.api.enterPlay();
+  h.camera.aspect = 844 / 390;
+  h.api.focusOn({ ...artwork(), geometry: { parameters: { width: 2.16, height: 1.52 } } });
+  h.tick(40);
+  const landscape = h.camera.position.z;
+  h.camera.aspect = 390 / 844;
+  h.api.resizeTouchFocus(); h.tick(40);
+  assert.ok(h.camera.position.z > landscape, 'portrait view backs away to fit the artwork width');
+  h.api.unfocus(); h.tick(40);
+  near(h.camera.position.x, 0); near(h.camera.position.z, 0);
 });
