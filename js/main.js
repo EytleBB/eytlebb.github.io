@@ -264,7 +264,7 @@ async function renderAbout() {
       <div class="hero-topline"><span class="hero-status"><i></i>${t('Eytle 的个人网站','Eytle’s personal website','Eytle의 개인 웹사이트')}</span></div>
       <div class="hero-copy">
         <h1><span>This is</span><em>Eytle<span class="hero-period">.</span></em></h1>
-        <p class="hero-description">${t('这里放我的项目、工具、日志和图片。','My projects, tools, logs and pictures.','제 프로젝트, 도구, 일지와 이미지를 모아 둔 곳입니다.')}</p>
+        <p class="hero-description">${t('上传一些灵感。','My projects, tools, logs and pictures.','제 프로젝트, 도구, 일지와 이미지를 모아 둔 곳입니다.')}</p>
         <button class="hero-link" id="home-explore"><span>${t('查看内容','View content','내용 보기')}</span>${siteIcon('chevron-down', '', 'arrow-down')}</button>
       </div>
       <div class="hero-bottom"><span class="hero-scroll">${t('向下浏览','Scroll down','아래로 스크롤')} <i>↓</i></span></div>
