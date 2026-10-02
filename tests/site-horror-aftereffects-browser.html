@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="night" data-horror-surface="qa">
+<head>
+  <base href="/">
+  <script src="js/site-horror-state.js?v=aftereffects-20261003"></script>
+  <script src="js/site-horror-interaction.js?v=horror-immersion-20260926"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>This is Eytle</title>
+  <link rel="icon" href="images/favicon.png" />
+  <meta name="theme-color" content="#080f14" />
+  <meta name="description" content="Eytle 的个人网站，包含项目、工具、日志和图片。" />
+  <script>try { var savedTheme = localStorage.getItem('theme'); if (savedTheme === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}</script>
+  <link rel="stylesheet" href="css/style.css?v=aftereffects-20261003" />
+  <link rel="stylesheet" href="css/site-horror.css?v=horror-intensity-20261003" />
+</head>
+<body>
+
+  <!-- The photograph is also the fallback when WebGL or motion is unavailable. -->
+  <div class="bg" aria-hidden="true"></div>
+  <canvas id="forest-scene" class="forest-scene" aria-hidden="true"></canvas>
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <canvas class="ambient-motes" id="ambient-motes" aria-hidden="true"></canvas>
+
+  <div class="app">
+
+    <!-- Masthead; legacy .rail selectors preserve the navigation contract. -->
+    <header class="rail">
+
+      <button class="brand" id="home-btn" title="This is Eytle">
+        <img src="images/logo.png" alt="" />
+        <b>This is <em>Eytle</em></b>
+      </button>
+
+      <div class="lang">
+        <button class="lang-btn on" data-lang="zh">中文</button>
+        <button class="lang-btn" data-lang="en">Eng</button>
+        <button class="lang-btn" data-lang="ko">한국어</button>
+      </div>
+
+      <nav id="nav">
+        <button class="nav-i on" data-section="about"    data-zh="首页"      data-en="Home"  data-ko="홈"><span></span></button>
+        <button class="nav-i"    data-section="projects" data-zh="项目"      data-en="Projects"  data-ko="프로젝트"><span></span></button>
+        <button class="nav-i"    data-section="tools"    data-zh="工具"      data-en="Tools"     data-ko="도구"><span></span></button>
+        <button class="nav-i"    data-section="patchlog" data-zh="斑驳日志" data-en="Patch Log" data-ko="패치 로그"><span></span></button>
+        <button class="nav-i"    data-section="gallery"  data-zh="图画展览会" data-en="Pictures At An Exhibition" data-ko="전람회의 그림"><span></span></button>
+        <button class="nav-i"    data-section="downloads"data-zh="下载"      data-en="Downloads" data-ko="다운로드"><span></span></button>
+      </nav>
+
+      <div class="rail-foot">
+        <button class="lamp" id="lamp">
+          <span id="lamp-ico" aria-hidden="true"></span>
+          <span id="lamp-tx"></span>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- ============ STAGE (re-rendered per section) ============ -->
+    <main class="stage" id="stage"></main>
+
+    <footer class="site-footer">
+      <a class="footer-brand" href="/" data-copy data-zh="返回首页" data-en="Home" data-ko="홈으로">返回首页</a>
+      <div class="contact">
+        <a href="mailto:3035986089@qq.com" title="3035986089@qq.com" data-copy data-zh="邮箱" data-en="Email" data-ko="이메일">邮箱</a>
+        <a href="https://github.com/EytleBB" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Lightbox / reader overlays mount here -->
+  <div id="overlay-root"></div>
+
+  <script src="js/site-icons.js?v=morphicons-20260918"></script>
+  <script src="js/main.js?v=home-copy-20260929"></script>
+  <script src="js/forest-scene.js?v=site-horror-20260926" defer></script>
+  <script type="module" src="js/site-horror.js?v=aftereffects-20261003"></script>
+
+
+  <!-- Local-only controls. scripts/deploy-excludes.txt excludes all /tests/. -->
+  <aside id="aftereffects-qa" style="position:fixed;left:12px;bottom:12px;z-index:9999;max-width:420px;padding:12px;background:#10161f;color:#ddd;border:1px solid #526;font:12px/1.5 monospace">
+    <b>余波模式本地验证（不发布）</b>
+    <p><a href="/tests/site-horror-browser.html" target="_blank" rel="noopener">恐怖经历触发页（仅测试）</a></p>
+    <p id="qa-status">等待控制器</p>
+    <button id="qa-unlock">解锁声音</button>
+    <button data-kind="glimpse">树间闪现</button>
+    <button data-kind="reflection">水中倒影</button>
+    <button data-kind="whisper">耳边低语</button>
+    <button data-kind="step">身后脚步</button>
+    <button data-kind="rush">鬼脸与原尖叫</button>
+    <button id="qa-freeze">定格突袭画面（仅测试）</button>
+    <button id="qa-stop">停止事件</button>
+    <output id="qa-result" style="display:block"></output>
+  </aside>
+  <script type="module">
+    import { createSiteAftereffects } from './js/site-horror-aftereffects.js?v=aftereffects-20261003';
+    import { createAftereffectsAudio } from './js/site-horror-aftereffects-audio.js?v=aftereffects-20261003';
+    import { createAftereffectsScheduler } from './js/site-horror-aftereffects-scheduler.js?v=aftereffects-20261003';
+    let audio, visual, callbacks, controller, events = [], audioPlays = [], updates = 0;
+    const report = () => {
+      document.getElementById('qa-status').textContent = `history=${window.eytleHorror.hasHistory()} full=${window.eytleHorror.isActive()} eligible=${callbacks?.canRun()} audio=${audio?.ready} scream=${audio?.hasScream}`;
+      document.getElementById('qa-result').textContent = JSON.stringify({events,audioPlays,updates,active:visual?.active,canRun:callbacks?.canRun()});
+    };
+    controller = createSiteAftereffects({ window, document,
+      makeAudio() {
+        audio = createAftereffectsAudio();
+        return {get ready(){return audio.ready;},get hasScream(){return audio.hasScream;},
+          unlock(){const pending=audio.unlock();pending.then(report);return pending;},
+          play(kind,options){const ok=audio.play(kind,options);audioPlays.push({kind,ok});report();return ok;},
+          stop(){audio.stop();report();},dispose(){audio.dispose();}};
+      },
+      makeScheduler(options){callbacks=options;report();return createAftereffectsScheduler(options);},
+      async loadVisual(){
+        const module = await import('./js/site-horror-aftereffects-visual.js?v=aftereffects-20261003');
+        return {createAftereffectsVisual(options){
+          visual=module.createAftereffectsVisual(options);
+          return {show(...args){return visual.show(...args);},update(seconds){updates++;return visual.update(seconds);},
+            stop(){visual.stop();report();},dispose(){visual.dispose();}};
+        }};
+      }
+    });
+    window.addEventListener('eytle:aftereffect', event => {events.push(event.detail.kind);report();});
+    document.getElementById('qa-unlock').onclick = async () => {if(audio)await audio.unlock();report();};
+    const durations={glimpse:1.05,reflection:1.45,whisper:1.2,step:.65,rush:1.3};
+    for(const button of document.querySelectorAll('[data-kind]'))button.onclick=()=>{
+      const kind=button.dataset.kind;
+      if(!callbacks?.canRun())return report();
+      if(['whisper','step','rush'].includes(kind)&&!callbacks.getAudioReady())return report();
+      callbacks.onEvent({kind,identity:2,side:1,duration:durations[kind]});
+    };
+    document.getElementById('qa-freeze').onclick=()=>{
+      if(!callbacks?.canRun()||!visual)return;
+      audio.stop();visual.show('rush',{identity:2,side:1});visual.update(.25);report();
+      setTimeout(()=>{visual.stop();report();},8000);
+    };
+    document.getElementById('qa-stop').onclick=()=>{visual?.stop();audio?.stop();report();};
+    report();
+  </script>
+</body>
+</html>

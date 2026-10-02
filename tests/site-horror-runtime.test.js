@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'js/site-horror.js'), 'utf8');
+const portraitSource = fs.readFileSync(path.join(root, 'js/site-horror-portraits.js'), 'utf8');
+const createHorrorPortraits = vm.runInNewContext(`${portraitSource.replace('export function', 'function')}\ncreateHorrorPortraits;`);
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function target() {
@@ -30,7 +32,8 @@ function runtime({ active = false, wait = false, reject = false } = {}) {
     loadModule(url) {
       imports.push(url);
       if (reject) return Promise.reject(new Error('offline optional module'));
-      const module = url.includes('glyphs') ? { createPixelGlyphPainter() {} } : { createMuseumHorrorUI() {} };
+      const module = url.includes('glyphs') ? { createPixelGlyphPainter() {} }
+        : url.includes('portraits') ? { createHorrorPortraits() {} } : { createMuseumHorrorUI() {} };
       return wait ? new Promise(resolve => pending.push(() => resolve(module))) : Promise.resolve(module);
     },
     makePresentation() {
@@ -60,13 +63,13 @@ test('ordinary pages stay inert across normal visibility and navigation events',
 test('activation loads optional drawing modules once and coalesces repeated events while loading or running', async () => {
   const h = runtime({ wait: true });
   h.activate(); h.activate(); h.window.emit('pageshow');
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   assert.equal(h.presentations.length, 0);
   h.resolveImports(); await settle();
   assert.equal(h.presentations.length, 1);
   assert.equal(h.presentations[0].resumes, 1);
   h.activate(); h.activate(); await settle();
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   assert.equal(h.presentations.length, 1);
   assert.equal(h.presentations[0].resumes, 1);
 });
@@ -103,9 +106,9 @@ test('optional renderer import failure leaves the synchronous CSS theme and nati
   assert.equal(h.document.documentElement.className, 'site-horror');
   assert.equal(h.window.eytleHorror.isActive(), true);
   assert.equal(h.presentations.length, 0);
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   h.window.emit('pageshow'); await settle();
-  assert.equal(h.imports.length, 4, 'a later page restoration may retry transient network failure');
+  assert.equal(h.imports.length, 6, 'a later page restoration may retry transient network failure');
   assert.equal(h.document.documentElement.className, 'site-horror');
 });
 
@@ -151,6 +154,7 @@ function presentationClock({ reducedMotion = false, admin = false, galleryCount 
   const presentation = createPresentation({
     createPixelGlyphPainter: () => ({ line: noop }),
     createMuseumHorrorUI: () => { uiFactories++; return { enable: noop, update: noop, dispose: noop }; },
+    createHorrorPortraits,
   });
   return { presentation, canvases, callbacks, galleries, get uiFactories() { return uiFactories; },
     tick(now) {
