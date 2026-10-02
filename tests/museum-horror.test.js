@@ -90,6 +90,7 @@ test('the 24th break switches existing pictures, plaques, debris and lighting ex
   assert.equal(h.HORROR_BREAK_THRESHOLD, 24);
   h.activate();
   assert.equal(h.controller.active, true);
+  assert.equal(h.controller.artTexture, h.made.art[0].artTexture);
   assert.equal(h.controller.brokenCount, 24);
   assert.equal(h.activations(), 1);
   assert.equal(h.made.art.length, 1); assert.equal(h.made.ui.length, 1);

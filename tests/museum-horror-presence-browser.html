@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Horror presence browser verification</title>
+<style>body{margin:0;background:#09060a;color:#dbb7af;font:14px system-ui}canvas{display:block;width:100%;height:74vh}button{margin:12px;padding:12px;background:#32131c;color:inherit;border:1px solid #7e4851}pre{margin:12px;white-space:pre-wrap}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}</script>
+</head><body><canvas id="scene"></canvas><button id="show">Show presence and play cues</button><button id="pause">Pause</button><button id="dispose">Dispose</button><pre id="result">Loading…</pre>
+<script type="module">
+import * as THREE from 'three';
+import { createMuseumHorrorArt } from '../js/museum-horror-art.js';
+import { createMuseumHorrorPresence } from '../js/museum-horror-presence.js';
+import { createMuseumHorrorPresenceAudio } from '../js/museum-horror-presence-audio.js';
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x09060a); scene.fog = new THREE.Fog(0x0c070b,9,48);
+const camera = new THREE.PerspectiveCamera(74,innerWidth/(innerHeight*.74),.1,60); camera.position.set(0,1.65,0);
+const renderer = new THREE.WebGLRenderer({canvas:document.querySelector('canvas'),antialias:true}); renderer.setSize(innerWidth,innerHeight*.74); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const wallMaterial = new THREE.MeshBasicMaterial({color:0x161018});
+const floorMaterial = new THREE.MeshBasicMaterial({color:0x0c0810});
+for (const x of [-3,3]) { const wall=new THREE.Mesh(new THREE.BoxGeometry(.1,6.7,44),wallMaterial); wall.position.set(x,3.35,-17); scene.add(wall); }
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(6,44),floorMaterial); floor.rotation.x=-Math.PI/2; floor.position.z=-17; scene.add(floor);
+for(let z=-7;z>-35;z-=7) for(const x of [-2.9,2.9]) { const pier=new THREE.Mesh(new THREE.BoxGeometry(.3,6.7,.35),new THREE.MeshBasicMaterial({color:0x292028}));pier.position.set(x,3.35,z);scene.add(pier); }
+const art=createMuseumHorrorArt({reducedMotion:true});
+const bounds={frontZ:-38,rearZ:7,progress:.75}; const cues=[];
+let presence=null,audio=null,context=null;
+const result=document.getElementById('result');
+function report(status){result.textContent=JSON.stringify({status,state:presence?.state,cues,drawCalls:renderer.info.render.calls},null,2);}
+function render(){renderer.render(scene,camera);}
+document.getElementById('show').onclick=async()=>{
+  presence?.dispose(); audio?.dispose(); cues.length=0;
+  context ||= new AudioContext(); await context.resume();
+  audio=createMuseumHorrorPresenceAudio({context,output:context.destination}); audio.setEnabled(true);
+  presence=createMuseumHorrorPresence({scene,camera,artTexture:art.artTexture,getBounds:()=>bounds,onCue(kind,position){cues.push(kind);audio.cue(kind,position);}});
+  for(let i=0;i<30;i++){audio.update(.1,{progress:bounds.progress});presence.update(.1);}
+  render();
+  const s=presence.state; const good=s.visible&&s.phase==='watching'&&s.distance>=8&&s.position.z>bounds.frontZ+.9&&s.position.z<bounds.rearZ-.9;
+  report(good?'PASS':'FAIL');
+};
+document.getElementById('pause').onclick=()=>{presence?.setEnabled(false);audio?.setEnabled(false);render();report(presence&&!presence.state.visible?'PAUSED':'FAIL');};
+document.getElementById('dispose').onclick=()=>{presence?.dispose();audio?.dispose();render();report(!scene.getObjectByName('Horror corridor presence')?'DISPOSED':'FAIL');};
+render();report('READY');
+</script></body></html>

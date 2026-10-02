@@ -20,7 +20,9 @@ import { createMuseumGuestbook } from './museum-guestbook.js?v=museum-release-20
 import { createMuseumKnifeController } from './museum-knife.js?v=museum-release-20260927';
 import { createMuseumSounds } from './museum-sounds.js?v=museum-release-20260927';
 import { createMuseumDestruction } from './museum-destruction.js?v=museum-release-20260927';
-import { createMuseumHorror } from './museum-horror.js?v=museum-release-20260927';
+import { createMuseumHorror } from './museum-horror.js?v=horror-intensity-20261003';
+import { createMuseumHorrorPresence } from './museum-horror-presence.js?v=horror-intensity-20261003';
+import { createMuseumHorrorPresenceAudio } from './museum-horror-presence-audio.js?v=horror-intensity-20261003';
 import { createMuseumHorrorEnding } from './museum-horror-ending.js?v=museum-release-20260927';
 import { createMuseumHorrorAudio, MUSEUM_HORROR_PLAYBACK_RATE } from './museum-horror-audio.js?v=museum-release-20260927';
 
@@ -349,7 +351,7 @@ const ART_INTERACT_DISTANCE = 3.5;
 const SPAWN_Z = 0;
 
 const canvas = document.getElementById('scene-canvas');
-let museumHorror = null, horrorEnding = null;
+let museumHorror = null, horrorEnding = null, horrorPresence = null, horrorPresenceAudio = null;
 const museumKnife = createMuseumKnifeController(document.getElementById('knife-canvas'), {
   onSwing(kind) {
     if (isLocked() && !focusState && !plaqueSession) museumSounds.swing(kind);
@@ -374,6 +376,8 @@ let contextLost = false;
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   contextLost = true;
+  horrorPresence?.setEnabled(false);
+  horrorPresenceAudio?.setEnabled(false);
   looping = false;
   renderer.setAnimationLoop(null);
   while (textureUploadQueue.length) textureUploadQueue.shift().resolve(false);
@@ -459,6 +463,7 @@ function frame(timestamp) {
   renderGalleryFrame();
   presentedFrames++;
   if (PERF_CAPTURE) canvas.dataset.presented = presentedFrames;
+  if (PERF_CAPTURE && horrorPresence) canvas.dataset.horrorPresence = JSON.stringify(horrorPresence.state);
   const retargetedChunkArtwork = processChunkRetargetQueue(frameStartedAt);
   if (!retargetedChunkArtwork) processTextureUploadQueue(frameStartedAt);
   recordPerformanceFrame(rawDelta * 1000, performance.now() - frameStartedAt);
@@ -756,11 +761,14 @@ museumHorror = createMuseumHorror({ scene, renderer, architecture, atmosphere, f
       removeSlotDebris: slot => destruction.removeSlotDebris(slot),
       onStart() {
         clearInput(); roamEnabled = false; museumKnife.stow();
+        horrorPresence?.setEnabled(false);
+        horrorPresenceAudio?.setEnabled(false);
         document.body.classList.add('museum-horror-finale');
         setArtHintVisible(false);
       },
       onImpact() { museumSounds.finale(); },
       onComplete() {
+        horrorPresence?.dispose(); horrorPresenceAudio?.dispose();
         museumSounds.setEnabled(false); museumTrack.pause(); audioListener.setMasterVolume(0);
         location.assign('/');
       },
@@ -768,6 +776,13 @@ museumHorror = createMuseumHorror({ scene, renderer, architecture, atmosphere, f
     // Register the lazily created matte floor as an opaque bloom occluder.
     bloomOcclusion?.addObject(floorRig);
     horrorEnding.advance();
+    horrorPresenceAudio = createMuseumHorrorPresenceAudio({ context: audioListener.context, output: audioListener.getInput() });
+    horrorPresence = createMuseumHorrorPresence({ scene, camera, artTexture: museumHorror.artTexture,
+      getBounds: () => horrorEnding.state,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      onCue(kind, position) { horrorPresenceAudio.cue(kind, position); },
+    });
+    syncHorrorPresenceState();
     void enableHorrorMusic();
     requestSceneFrame();
   },
@@ -1845,6 +1860,15 @@ function syncMuseumAudioState() {
   const audible = entered && (isLocked() || guestbook.isOpen()) && !document.hidden;
   audioListener.setMasterVolume(audible ? 1 : 0);
   museumSounds.setEnabled(audible);
+  syncHorrorPresenceState();
+}
+
+function syncHorrorPresenceState() {
+  const roaming = Boolean(museumHorror?.active && entered && (PERF_AUTOWALK || isLocked())
+    && !focusState && !plaqueSession && !horrorEnding?.active && !document.hidden && !contextLost);
+  horrorPresence?.setEnabled(roaming);
+  horrorPresenceAudio?.setEnabled(roaming);
+  return roaming;
 }
 
 function clearInput() {
@@ -1948,6 +1972,10 @@ updaters.push((dt) => {
   updateTextureStreaming();
   if (!focusState && !plaqueSession && (PERF_AUTOWALK || isLocked())) horrorEnding?.advance();
   horrorEnding?.update(dt);
+  if (syncHorrorPresenceState()) {
+    horrorPresenceAudio.update(dt, { progress: horrorEnding.state.progress });
+    horrorPresence.update(dt);
+  }
 });
 
 /* ============================================================
@@ -2016,6 +2044,7 @@ function focusOn(mesh) {
     toPos, toQuat,
   };
   roamEnabled = false;
+  syncHorrorPresenceState();
 }
 
 function closeGuestPlaque() {
@@ -2162,6 +2191,10 @@ window.addEventListener('blur', () => {
   // Focusing an input in the visitor dialog must not dismiss that dialog.
   if (plaqueSession) { clearInput(); return; }
   pauseVisit();
+});
+window.addEventListener('pagehide', () => {
+  horrorPresence?.setEnabled(false);
+  horrorPresenceAudio?.setEnabled(false);
 });
 document.addEventListener('visibilitychange', () => {
   clearInput();

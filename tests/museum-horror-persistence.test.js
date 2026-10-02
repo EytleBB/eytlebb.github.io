@@ -69,12 +69,17 @@ test('the museum activation callback latches the website synchronously before co
   const activationSource = source.slice(open + 1, end - 1);
   const calls = [], chunks = [{ pendingRetarget: {} }];
   const context = vm.createContext({
-    window: { eytleHorror: { activate: () => calls.push('latch') } },
+    window: { eytleHorror: { activate: () => calls.push('latch') }, matchMedia: () => ({ matches: false }) },
     museumSounds: { prepareHorror: () => calls.push('prepare-sound'), breakObject() { throw new Error('restoration cannot fake destruction'); } },
     streamBatchQueue: [1], queuedBatchStarts: new Set([1]), chunkRetargetQueue: [1], chunks,
     museumKnife: { setHorror: value => assert.equal(value, true) },
     scene: {}, camera: {}, architecture: {}, rearWall: {}, ART_SPACING: 7, CHUNK_LEN: 14,
-    horrorEnding: null, museumHorror: {}, destruction: {}, floorRig: {},
+    horrorEnding: null, horrorPresence: null, horrorPresenceAudio: null,
+    museumHorror: { artTexture: {} }, destruction: {}, floorRig: {},
+    audioListener: { context: {}, getInput: () => ({}) },
+    createMuseumHorrorPresenceAudio: () => ({}),
+    createMuseumHorrorPresence: options => { assert.equal(options.artTexture, context.museumHorror.artTexture); return {}; },
+    syncHorrorPresenceState() {},
     bloomOcclusion: { addObject() {} },
     createMuseumHorrorEnding() {
       assert.equal(calls[0], 'latch'); calls.push('corridor');

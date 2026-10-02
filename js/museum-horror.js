@@ -139,6 +139,7 @@ export function createMuseumHorror({ scene, renderer, architecture, atmosphere, 
 
   return {
     get active() { return active; },
+    get artTexture() { return art?.artTexture ?? null; },
     get brokenCount() { return breaks; },
     recordBreak() {
       if (disposed) return;
