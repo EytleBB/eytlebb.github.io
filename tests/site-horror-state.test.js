@@ -6,12 +6,14 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../js/site-horror-state.js'), 'utf8');
 
 function page({ storage = new Map(), denyAccess = false, failRead = false, failWrite = false,
+  persistent = new Map(), denyPersistent = false,
   existingClasses = [], theme = 'day' } = {}) {
   const classes = new Set(existingClasses);
   const handlers = new Map();
   const events = [];
   const writes = [];
   let reads = 0, localReads = 0;
+  const persistentWrites = [];
   const document = { documentElement: { dataset: { theme }, classList: {
     toggle(name, value) { if (value) classes.add(name); else classes.delete(name); },
   } } };
@@ -34,22 +36,30 @@ function page({ storage = new Map(), denyAccess = false, failRead = false, failW
       setItem(key, value) { if (failWrite) throw new Error('Quota exhausted'); writes.push([key, value]); storage.set(key, value); },
     };
   } });
-  Object.defineProperty(window, 'localStorage', { get() { localReads++; throw new Error('Must not access persistent preferences'); } });
+  Object.defineProperty(window, 'localStorage', { get() {
+    if (denyPersistent) throw new Error('Persistent storage denied');
+    return {
+      getItem(key) { assert.equal(key, 'eytle-horror-history'); localReads++; return persistent.get(key) ?? null; },
+      setItem(key, value) { assert.equal(key, 'eytle-horror-history'); persistentWrites.push([key, value]); persistent.set(key, value); },
+    };
+  } });
   vm.runInNewContext(source, { window, document, CustomEvent });
-  return { api: window.eytleHorror, window, document, classes, events, writes, storage,
+  return { api: window.eytleHorror, window, document, classes, events, writes, storage, persistent, persistentWrites,
     get reads() { return reads; }, get localReads() { return localReads; },
     pageshow(persisted = true) { window.dispatchEvent({ type: 'pageshow', persisted }); },
     horrorEvents() { return events.filter(event => event.type === 'eytle:horror'); } };
 }
 
-test('a normal visit has no horror class, writes, activation event or persistent preference access', () => {
+test('a normal visit reads only history and has no horror class, writes or activation event', () => {
   const p = page({ existingClasses: ['existing'], theme: 'day' });
   assert.equal(p.api.isActive(), false);
   assert.deepEqual([...p.classes], ['existing']);
   assert.equal(p.reads, 1);
   assert.equal(p.writes.length, 0);
   assert.equal(p.horrorEvents().length, 0);
-  assert.equal(p.localReads, 0);
+  assert.equal(p.localReads, 1);
+  assert.equal(p.api.hasHistory(), false);
+  assert.equal(p.persistentWrites.length, 0);
   assert.equal(p.document.documentElement.dataset.theme, 'day');
   p.pageshow(false);
   assert.equal(p.api.isActive(), false);
@@ -83,7 +93,8 @@ test('activation persists exactly the tab flag, updates the class before notific
   assert.equal(p.classes.has('existing'), true);
   assert.equal(p.writes.length, 1);
   assert.equal(p.horrorEvents().length, 1);
-  assert.equal(p.localReads, 0);
+  assert.equal(p.localReads, 1);
+  assert.equal(p.persistentWrites.length, 1);
 });
 
 test('ordinary cross-page navigation inherits the session flag without changing the theme preference', () => {
@@ -129,6 +140,50 @@ test('denied storage access, reads and writes still allow an in-memory activatio
     assert.equal(p.api.isActive(), true, 'failed persistence must not erase this page’s memory state');
     assert.equal(p.classes.has('site-horror'), true);
     assert.equal(p.horrorEvents().length, 2);
-    assert.equal(p.localReads, 0);
+    assert.equal(p.localReads, 2);
   }
+});
+
+test('a fresh tab sees shared history while keeping its theme, controls and full-horror state normal', () => {
+  const persistent = new Map();
+  const original = page({ persistent });
+  original.api.activate();
+  const fresh = page({ persistent, theme: 'day' });
+  assert.equal(original.api.isActive(), true);
+  assert.equal(fresh.api.hasHistory(), true);
+  assert.equal(fresh.api.isActive(), false);
+  assert.equal(fresh.classes.has('site-horror'), false);
+  assert.equal(fresh.document.documentElement.dataset.theme, 'day');
+  assert.equal(fresh.horrorEvents().length, 0);
+  assert.equal(fresh.writes.length, 0);
+  assert.equal(fresh.persistentWrites.length, 0);
+});
+
+test('other tabs react to history changes and clearing without acquiring the tab horror latch', () => {
+  const persistent = new Map(), fresh = page({ persistent }), original = page({ persistent });
+  original.api.activate();
+  fresh.window.dispatchEvent({ type: 'storage', key: 'eytle-horror-history' });
+  assert.equal(fresh.api.hasHistory(), true);
+  assert.equal(fresh.api.isActive(), false);
+  assert.equal(fresh.events.filter(e => e.type === 'eytle:aftereffects').length, 1);
+  const reads = fresh.localReads;
+  fresh.window.dispatchEvent({ type: 'storage', key: 'theme' });
+  assert.equal(fresh.localReads, reads, 'theme preference storage never changes horror history');
+  persistent.clear(); fresh.window.dispatchEvent({ type: 'storage', key: null });
+  assert.equal(fresh.api.hasHistory(), false);
+  assert.equal(fresh.classes.has('site-horror'), false);
+});
+
+test('invalid history records remain normal and denied persistence does not break full horror', () => {
+  for (const record of ['broken', '1', '{"version":2,"triggeredAt":123}', '{"version":1,"triggeredAt":0}']) {
+    const fresh = page({ persistent: new Map([['eytle-horror-history', record]]) });
+    assert.equal(fresh.api.hasHistory(), false);
+    assert.equal(fresh.api.isActive(), false);
+  }
+  const blocked = page({ denyPersistent: true });
+  assert.doesNotThrow(() => blocked.api.activate());
+  assert.equal(blocked.api.hasHistory(), true);
+  assert.equal(blocked.api.isActive(), true);
+  blocked.pageshow();
+  assert.equal(blocked.api.isActive(), true);
 });

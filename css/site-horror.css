@@ -35,7 +35,8 @@ html.site-horror .bg {
 }
 html.site-horror .bg::after {
   content:''; position:absolute; inset:0; pointer-events:none;
-  background:linear-gradient(145deg,rgba(18,0,7,.26),transparent 50%,rgba(33,2,9,.4));
+  background:linear-gradient(145deg,rgba(18,0,7,.3),transparent 50%,rgba(33,2,9,.4)),
+    radial-gradient(ellipse at 79% 43%,transparent 20%,rgba(2,0,4,.46) 88%);
 }
 html.site-horror :is(.forest-scene,.ambient-motes) { visibility:hidden; }
 html.site-horror #site-horror-field {
@@ -53,7 +54,7 @@ html.site-horror .grain { opacity:.043; mix-blend-mode:soft-light; }
 html.site-horror body::before {
   content:''; position:fixed; inset:0; z-index:2; pointer-events:none;
   background:radial-gradient(ellipse at 70% 57%,rgba(120,16,37,.085),transparent 60%),
-    radial-gradient(ellipse at center,transparent 30%,rgba(10,0,4,.28) 100%),
+    radial-gradient(ellipse at center,transparent 36%,rgba(5,0,3,.42) 100%),
     repeating-linear-gradient(0deg,transparent 0 3px,rgba(4,0,2,.105) 3px 4px);
 }
 
@@ -152,6 +153,12 @@ html.site-horror .site-horror-image {
   max-width:100%; max-height:100%; border-radius:inherit; object-fit:cover;
   pointer-events:none; user-select:none; image-rendering:pixelated;
 }
+html.site-horror .site-horror-image-host::after {
+  content:''; position:absolute; inset:0; z-index:6; border-radius:inherit;
+  pointer-events:none;
+  background:radial-gradient(ellipse at 51% 42%,transparent 30%,rgba(3,0,4,.64) 100%),
+    repeating-linear-gradient(90deg,transparent 0 3px,rgba(3,0,4,.07) 3px 4px);
+}
 html.site-horror .gallery-masonry > .site-horror-image-host {
   display:block; break-inside:avoid; margin:0 0 22px;
 }
@@ -243,6 +250,7 @@ html.site-horror #edit-dialog::backdrop { background:rgba(12,1,8,.78); }
   html.site-horror .gallery-masonry > .site-horror-image-host { margin-bottom:12px; }
   html.site-horror body::before {
     background:radial-gradient(ellipse at 70% 57%,rgba(120,16,37,.07),transparent 65%),
+      radial-gradient(ellipse at center,transparent 42%,rgba(5,0,3,.32) 100%),
       repeating-linear-gradient(0deg,transparent 0 3px,rgba(4,0,2,.07) 3px 4px);
   }
 }

@@ -60,6 +60,11 @@ a { color:inherit; }
 .forest-scene { z-index:0; opacity:0; transition:opacity 1.2s; }
 .forest-scene.ready { opacity:1; }
 .forest-scene[hidden] { display:none; }
+#site-horror-aftereffects-field {
+  position:fixed; inset:0; width:100%; height:100%; z-index:1;
+  pointer-events:none; image-rendering:pixelated;
+}
+#site-horror-aftereffects-field[hidden] { display:none; }
 .scrim { z-index:1; background:var(--scrim); }
 .grain {
   z-index:2; opacity:.034; mix-blend-mode:soft-light;

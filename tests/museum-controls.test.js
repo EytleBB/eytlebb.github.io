@@ -90,6 +90,7 @@ async function createControls(touch = false) {
     EYE_Y: 1.65, CAMERA_FOV: 74, ZOOM_FOV: 28, ZOOM_FOV_SPEED: 78,
     PERF_AUTOWALK: false, ART_INTERACT_DISTANCE: 3.5,
     plaqueSession: null, PLAQUE_FOCUS_DISTANCE: 0.48, horrorEnding: null,
+    museumHorror: null, horrorPresence: null, horrorPresenceAudio: null, contextLost: false,
     IMAGES: ['images/gallery/0x0000.jpg'], TEXTURE_IMAGES: ['images/gallery-preview/0x0000.webp'],
     guestbook: { opened: false, open() { this.opened = true; }, close() { this.opened = false; }, isOpen() { return this.opened; } },
     settings: { sensitivity: 1 }, updaters: [], artMeshes: [],
@@ -131,6 +132,32 @@ async function createControls(touch = false) {
 }
 
 const near = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a - b) < tolerance, `${a} should be near ${b}`);
+
+test('horror presence follows real touch pause, artwork focus, visibility and finale transitions', async () => {
+  const h = await createControls(true);
+  const owner = () => ({ enabled: false, updates: 0,
+    setEnabled(value) { this.enabled = value; }, update() { this.updates++; } });
+  const visual = owner(), audio = owner();
+  Object.assign(h.context, { museumHorror: { active: true }, horrorPresence: visual, horrorPresenceAudio: audio,
+    horrorEnding: { active: false, state: { progress: .5 }, advance() {}, update() {} } });
+  h.api.enterPlay(); h.tick();
+  assert.equal(visual.enabled, true); assert.equal(audio.updates, 1);
+  h.api.pauseVisit(); h.tick(5);
+  assert.equal(visual.enabled, false); assert.equal(audio.enabled, false); assert.equal(audio.updates, 1);
+  h.api.enterPlay(); h.tick();
+  h.api.focusOn({ userData: {}, visible: true, parent: { visible: true },
+    getWorldPosition(out) { return out.copy({ x: 2.8, y: 1.65, z: -3 }); },
+    getWorldQuaternion(out) { return out; } });
+  assert.equal(visual.enabled, false); assert.equal(audio.enabled, false);
+  h.tick(60); assert.equal(audio.updates, 2, 'focused artwork never advances ambience');
+  h.api.unfocus(); h.tick(60); assert.equal(audio.enabled, true);
+  h.document.hidden = true; h.document.emit('visibilitychange');
+  assert.equal(audio.enabled, false); assert.equal(visual.enabled, false);
+  h.document.hidden = false; h.api.enterPlay(); h.tick();
+  h.context.horrorEnding.active = true; h.tick();
+  assert.equal(audio.enabled, false); assert.equal(visual.enabled, false);
+  assert.equal(audio.updates, visual.updates, 'visual and audio active clocks stay together');
+});
 
 test('real keyboard handlers preserve overlapping bindings and ignore unlocked input', async () => {
   const h = await createControls();

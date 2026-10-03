@@ -123,6 +123,7 @@ async function museumLoopHarness() {
     clearInput() {}, cancelFocus() {}, syncMuseumAudioState() {}, fail() {}, enterEl: {},
     pauseVisit() { document.exitPointerLock(); },
     audioListener: { setMasterVolume() {} },
+    horrorPresence: null, horrorPresenceAudio: null,
   };
   vm.runInNewContext(`${loopSource}\n${visibilitySource}\n${lostSource}\n${uploadSource}
     globalThis.runtime = { frame, startLoop, requestSceneFrame, resetFrameTiming, scheduleTextureUpload,

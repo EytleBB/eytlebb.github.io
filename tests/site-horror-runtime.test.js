@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'js/site-horror.js'), 'utf8');
+const portraitSource = fs.readFileSync(path.join(root, 'js/site-horror-portraits.js'), 'utf8');
+const createHorrorPortraits = vm.runInNewContext(`${portraitSource.replace('export function', 'function')}\ncreateHorrorPortraits;`);
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function target() {
@@ -30,7 +32,8 @@ function runtime({ active = false, wait = false, reject = false } = {}) {
     loadModule(url) {
       imports.push(url);
       if (reject) return Promise.reject(new Error('offline optional module'));
-      const module = url.includes('glyphs') ? { createPixelGlyphPainter() {} } : { createMuseumHorrorUI() {} };
+      const module = url.includes('glyphs') ? { createPixelGlyphPainter() {} }
+        : url.includes('portraits') ? { createHorrorPortraits() {} } : { createMuseumHorrorUI() {} };
       return wait ? new Promise(resolve => pending.push(() => resolve(module))) : Promise.resolve(module);
     },
     makePresentation() {
@@ -60,13 +63,13 @@ test('ordinary pages stay inert across normal visibility and navigation events',
 test('activation loads optional drawing modules once and coalesces repeated events while loading or running', async () => {
   const h = runtime({ wait: true });
   h.activate(); h.activate(); h.window.emit('pageshow');
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   assert.equal(h.presentations.length, 0);
   h.resolveImports(); await settle();
   assert.equal(h.presentations.length, 1);
   assert.equal(h.presentations[0].resumes, 1);
   h.activate(); h.activate(); await settle();
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   assert.equal(h.presentations.length, 1);
   assert.equal(h.presentations[0].resumes, 1);
 });
@@ -103,27 +106,40 @@ test('optional renderer import failure leaves the synchronous CSS theme and nati
   assert.equal(h.document.documentElement.className, 'site-horror');
   assert.equal(h.window.eytleHorror.isActive(), true);
   assert.equal(h.presentations.length, 0);
-  assert.equal(h.imports.length, 2);
+  assert.equal(h.imports.length, 3);
   h.window.emit('pageshow'); await settle();
-  assert.equal(h.imports.length, 4, 'a later page restoration may retry transient network failure');
+  assert.equal(h.imports.length, 6, 'a later page restoration may retry transient network failure');
   assert.equal(h.document.documentElement.className, 'site-horror');
 });
 
 // Run the shipped presentation/tick, not a rewritten timing approximation.
-function presentationClock({ reducedMotion = false, admin = false } = {}) {
+function presentationClock({ reducedMotion = false, admin = false, galleryCount = 0 } = {}) {
   const callbacks = new Map();
   const canvases = [];
   let nextId = 1, uiFactories = 0;
   const noop = () => {};
+  const galleries = Array.from({ length: galleryCount }, () => {
+    const host = { isConnected: true, classList: { add: noop }, append: canvas => { host.canvas = canvas; } };
+    const image = { classList: { add: noop }, closest: () => host };
+    host.querySelector = () => image;
+    return { host, image };
+  });
   const document = {
     hidden: false, documentElement: { clientWidth: 1280, classList: { remove() {} } },
     getElementById: () => admin ? {} : null,
-    querySelector: () => null, querySelectorAll: () => [],
+    querySelector: () => null, querySelectorAll: () => galleries.map(record => record.image),
     body: { prepend: noop },
     createElement() {
-      const ctx = { fillRect: noop, clearRect: noop, beginPath: noop, moveTo: noop, lineTo: noop,
-        closePath: noop, fill: noop, drawImage: noop };
-      const canvas = { dataset: {}, setAttribute: noop, getContext: () => ctx };
+      const ctx = { fills: 0, paint: [], clearRect: noop, beginPath: noop, moveTo: noop, lineTo: noop,
+        closePath: noop, fill: noop,
+        fillRect(...args) {
+          this.fills++;
+          if (args.join(',') === '0,0,192,256') this.paint = [];
+          this.paint.push([this.fillStyle, ...args]);
+        },
+        drawImage(...args) { this.lastDraw = { args, alpha: this.globalAlpha }; },
+      };
+      const canvas = { dataset: {}, context: ctx, setAttribute: noop, getContext: () => ctx };
       canvases.push(canvas); return canvas;
     },
   };
@@ -138,8 +154,9 @@ function presentationClock({ reducedMotion = false, admin = false } = {}) {
   const presentation = createPresentation({
     createPixelGlyphPainter: () => ({ line: noop }),
     createMuseumHorrorUI: () => { uiFactories++; return { enable: noop, update: noop, dispose: noop }; },
+    createHorrorPortraits,
   });
-  return { presentation, canvases, callbacks, get uiFactories() { return uiFactories; },
+  return { presentation, canvases, callbacks, galleries, get uiFactories() { return uiFactories; },
     tick(now) {
       const entry = callbacks.entries().next().value;
       if (!entry) return;
@@ -163,6 +180,31 @@ test('the actual renderer remains at 24 Hz with fractional animation timestamps 
   }
 });
 
+test('the reveal and approach follow elapsed time consistently across display refresh rates', () => {
+  const snapshots = [];
+  for (const fps of [30, 60, 120, 144]) {
+    const h = presentationClock();
+    h.presentation.resume();
+    const cues = [];
+    for (let i = 0; i <= fps * 24; i++) {
+      h.tick(1000 + i * 1000 / fps);
+      if (i === fps * 12 || i === fps * 24) {
+        const { args, alpha } = h.canvases[0].context.lastDraw;
+        cues.push({ alpha, geometry: args.slice(1), identity: h.canvases.indexOf(args[0]) });
+      }
+    }
+    snapshots.push({ fps, cues });
+    h.presentation.pause();
+  }
+  const baseline = snapshots[0].cues;
+  assert.ok(baseline[0].alpha > 0, 'the twelve-second sample is in the approach');
+  assert.equal(baseline[1].alpha, 0, 'the twenty-four-second sample is between appearances');
+  assert.notEqual(baseline[0].identity, baseline[1].identity, 'the new cycle has a different portrait');
+  for (const { fps, cues } of snapshots.slice(1)) {
+    assert.deepEqual(cues, baseline, `${fps} Hz must reach the same scale, visibility and portrait at twelve and twenty-four seconds`);
+  }
+});
+
 test('reduced motion redraws at two Hz and administration avoids text corruption and an ongoing animation loop', () => {
   const reduced = presentationClock({ reducedMotion: true });
   reduced.presentation.resume();
@@ -173,6 +215,55 @@ test('reduced motion redraws at two Hz and administration avoids text corruption
   assert.equal(admin.uiFactories, 0);
   admin.presentation.resume(); admin.tick(1000);
   assert.equal(admin.callbacks.size, 0, 'admin remains a static background, preserving functional labels');
+});
+
+test('the forest figure reveals slowly, approaches, disappears, and returns with a different portrait', () => {
+  const h = presentationClock();
+  const field = h.canvases[0].context;
+  assert.equal(field.lastDraw.alpha, 0, 'the opening leaves the forest empty');
+  h.presentation.resume();
+  let now = 1000;
+  h.tick(now);
+  const advance = seconds => {
+    for (let i = 0; i < seconds * 60; i++) { now += 1000 / 60; h.tick(now); }
+  };
+  advance(5);
+  const revealing = field.lastDraw.alpha;
+  assert.ok(revealing > 0 && revealing < 0.76, 'arrival takes several seconds');
+  const distant = field.lastDraw.args[3];
+  advance(12);
+  assert.ok(field.lastDraw.args[3] > distant * 2.5, 'the figure looms gradually rather than jumping forward');
+  assert.ok(field.lastDraw.alpha <= 0.76, 'arrival never becomes an opaque bright frame');
+  const firstPortrait = field.lastDraw.args[0];
+  advance(4);
+  assert.equal(field.lastDraw.alpha, 0, 'the figure leaves a measured empty interval');
+  advance(9);
+  assert.ok(field.lastDraw.alpha > 0);
+  assert.notEqual(field.lastDraw.args[0], firstPortrait, 'the next return changes its face');
+  const beforePause = field.lastDraw.args[3];
+  h.presentation.pause();
+  now += 600000;
+  h.presentation.resume(); h.tick(now);
+  assert.ok(Math.abs(field.lastDraw.args[3] - beforePause) < 1, 'background time does not advance while paused');
+});
+
+test('gallery faces have persistent distinct identities and reduced motion keeps their paint and pose fixed', () => {
+  const h = presentationClock({ reducedMotion: true, galleryCount: 3 });
+  const canvases = h.galleries.map(record => record.host.canvas);
+  const identities = canvases.map(canvas => canvas.context.lastDraw.args[0]);
+  assert.equal(new Set(identities).size, 3, 'neighboring artworks do not share one repeated face');
+  assert.equal(new Set(identities.map(canvas => JSON.stringify(canvas.context.paint))).size, 3,
+    'the identities have different facial details');
+  const fills = identities.map(canvas => canvas.context.fills);
+  const poses = canvases.map(canvas => canvas.context.lastDraw.args.slice(1));
+  const backgroundPose = h.canvases[0].context.lastDraw.args.slice(1);
+  h.presentation.resume();
+  for (let i = 0; i < 1200; i++) h.tick(1000 + i * 1000 / 60);
+  assert.deepEqual(identities.map(canvas => canvas.context.fills), fills,
+    'the two-Hz loop never reshuffles static portrait grain, eyes, or scars');
+  assert.deepEqual(canvases.map(canvas => canvas.context.lastDraw.args.slice(1)), poses);
+  assert.deepEqual(h.canvases[0].context.lastDraw.args.slice(1), backgroundPose);
+  assert.deepEqual(canvases.map(canvas => canvas.context.lastDraw.args[0]), identities);
 });
 
 test('all public HTML entries read tab state synchronously before CSS, with one appropriate renderer', () => {
