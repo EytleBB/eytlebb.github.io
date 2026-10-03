@@ -105,7 +105,7 @@ html:not([data-section="about"]) .scrim { background:linear-gradient(90deg,var(-
 html:not([data-section="about"]) .stage { padding:72px var(--gutter) 100px; max-width:1540px; margin:auto; }
 
 /* A quiet forest cover, followed by an editorial spread. */
-.hero { position:relative; min-height:520px; height:calc(91svh - var(--header-height)); max-height:850px; padding:32px var(--gutter) 0; display:flex; flex-direction:column; }
+.hero { position:relative; min-height:520px; height:calc(100svh - var(--header-height)); padding:32px var(--gutter) 0; display:flex; flex-direction:column; }
 .hero-topline { display:flex; align-items:center; color:var(--dim); font-size:11px; letter-spacing:.12em; }
 .hero-status { display:flex; align-items:center; gap:10px; }
 .hero-status i { width:4px; height:4px; border-radius:50%; background:var(--amber); }
@@ -570,7 +570,7 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
   .rail nav::-webkit-scrollbar { display:none; }
   .nav-i { font-size:12px; padding-top:10px; padding-bottom:10px; }
   .nav-i::after { bottom:5px; }
-  .hero { height:calc(92svh - var(--header-height)); min-height:465px; max-height:700px; padding-top:28px; }
+  .hero { min-height:465px; padding-top:28px; }
   .hero-topline { font-size:11px; }
   .hero-copy { padding:48px 0 45px; }
   .hero h1 > span { font-size:39px; margin-left:3px; margin-bottom:8px; }
