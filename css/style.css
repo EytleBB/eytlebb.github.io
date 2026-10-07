@@ -374,10 +374,11 @@ html.theme-changing::view-transition-new(root) { z-index:2; }
   display:block; columns:4 190px; column-gap:12px;
 }
 .gallery-masonry img {
-  width:100%; height:auto; aspect-ratio:auto; margin:0 0 12px;
+  /* Keep the reserved ratio after decoding, including missing-metadata fallbacks. */
+  width:100%; height:auto; aspect-ratio:var(--gallery-ratio, 1); object-fit:contain;
+  background:var(--field); margin:0 0 12px;
   break-inside:avoid; display:block;
 }
-.gallery-sentinel { height:2px; }
 
 /* ============================================================
    OVERLAYS (patch reader + gallery lightbox)
