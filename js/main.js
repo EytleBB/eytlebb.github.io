@@ -124,8 +124,6 @@ let patchlogSelection = { year: null, month: null };
 let patchlogLoadError = false;
 let logLoadRequest = 0;
 let lastReadLog = null;
-const GALLERY_BATCH_SIZE = 18;
-const GALLERY_CACHE = 'eytle-gallery-v1';
 const GALLERY_PREVIEW_INDEX = './images/gallery-preview/index.json';
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -218,19 +216,6 @@ function selectHomeGallery() {
     selected.push({ index: available.splice(choice, 1)[0] });
   }
   return selected;
-}
-
-async function cacheGalleryImages(images) {
-  if (!('caches' in window)) return;
-  try {
-    const cache = await caches.open(GALLERY_CACHE);
-    await Promise.all(images.map(async ({ src, preview }) => {
-      const resource = preview || src;
-      if (await cache.match(resource)) return;
-      const response = await fetch(resource);
-      if (response.ok) await cache.put(resource, response);
-    }));
-  } catch {}
 }
 
 function wireGalleryImages(root) {
@@ -748,38 +733,30 @@ async function renderGallery() {
       ${placeholder(t('暂无图片','No images yet','이미지 없음'))}</div>`;
     return;
   }
+  // Reserve the complete layout up front: adding batches to CSS columns
+  // rebalances earlier pictures, even when their dimensions are already known.
+  const pictures = DATA.gallery.map((img, index) => {
+    const validSize = Number.isFinite(img.width) && img.width > 0
+      && Number.isFinite(img.height) && img.height > 0;
+    const width = validSize ? img.width : 1;
+    const height = validSize ? img.height : 1;
+    return `<img src="${escapeHtml(img.preview || img.src)}" alt="" loading="lazy" decoding="async"
+      width="${width}" height="${height}" style="--gallery-ratio:${width} / ${height}" data-idx="${index}"
+      role="button" tabindex="0" aria-label="${t('查看展览图片','View exhibition picture','전시 이미지 보기')} ${index + 1}" />`;
+  }).join('');
   stage.innerHTML = `
     <div>${heading}
-    <div class="gallery-grid gallery-masonry" id="gallery-grid"></div>
-    <div class="gallery-sentinel" id="gallery-sentinel" aria-hidden="true"></div></div>`;
+    <div class="gallery-grid gallery-masonry" id="gallery-grid">${pictures}</div></div>`;
   const grid = document.getElementById('gallery-grid');
-  const sentinel = document.getElementById('gallery-sentinel');
-  let shown = 0;
-  let observer;
-  const appendBatch = () => {
-    const batch = DATA.gallery.slice(shown, shown + GALLERY_BATCH_SIZE);
-    if (!batch.length) { observer?.disconnect(); sentinel.remove(); return; }
-    grid.insertAdjacentHTML('beforeend', batch.map((img, offset) =>
-      `<img src="${img.preview || img.src}" alt="" loading="lazy" data-idx="${shown + offset}"
-        role="button" tabindex="0" aria-label="${t('查看展览图片','View exhibition picture','전시 이미지 보기')} ${shown + offset + 1}" />`).join(''));
-    const newImages = [...grid.querySelectorAll('img[data-idx]')].slice(-batch.length);
-    newImages.forEach(im => {
-      im.addEventListener('click', () => openLightbox(Number(im.dataset.idx)));
-      im.addEventListener('keydown', event => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        im.click();
-      });
+  grid.querySelectorAll('img[data-idx]').forEach(im => {
+    im.addEventListener('click', () => openLightbox(Number(im.dataset.idx)));
+    im.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      im.click();
     });
-    cacheGalleryImages(batch);
-    shown += batch.length;
-    enhanceMotion(grid);
-  };
-  appendBatch();
-  observer = new IntersectionObserver(entries => {
-    if (entries.some(entry => entry.isIntersecting)) appendBatch();
-  }, { rootMargin: '700px 0px' });
-  observer.observe(sentinel);
+  });
+  enhanceMotion(grid);
 }
 
 /* ============================================================
