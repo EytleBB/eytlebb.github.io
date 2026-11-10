@@ -3,7 +3,7 @@
   "repositories": {
     "patchlog": {
       "url": "https://github.com/EytleBB/Eytle-Patch-Log.git",
-      "commit": "59ede3df21ba0da4d096d8082d33a44e7bd58bcd"
+      "commit": "658adf46aa2e9eef40378e2bbc6f2254b9978e85"
     },
     "museum": {
       "url": "https://github.com/EytleBB/Eytle-Museum.git",
